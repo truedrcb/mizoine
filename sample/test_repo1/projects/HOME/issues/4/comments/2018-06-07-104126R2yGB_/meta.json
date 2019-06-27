@@ -1,0 +1,11 @@
+{
+  "title" : "Re: Mail comment",
+    "creator" : "Mizoine <mizoine@my.mizoine>",
+    "creationDate" : "07-06-2018 10:41:26+0200",
+  "messageId" : "ABC209aeEsVEST",
+  "messageHeaders" : {
+    "cc" : "User1 <1@test.test>; User2 <u2@test.test>",
+    "from" : "Mizoine <mizoine@my.mizoine>",
+    "to" : "Artem <artem@gratchev.com>"
+  }
+}

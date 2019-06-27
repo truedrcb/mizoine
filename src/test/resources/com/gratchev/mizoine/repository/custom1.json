@@ -1,0 +1,7 @@
+{
+  "title" : "Some custom title", // Element should be recognized correctly
+  "creationDate" : "14-12-2017 17:13:00",
+  "icon" : "fas fa-flask",
+  "badgeStyle" : "warning",
+  "testAttributeUnmapped1" : "42§"
+}

@@ -1,0 +1,10 @@
+{
+  "title" : "PDF Invoice title",
+  "fileName" : "file Invoice _ 251217.pdf",
+  "upload" : {
+    "originalFileName" : "Invoice _ 251217.pdf",
+    "name" : "uploadFilesInput",
+    "contentType" : "application/pdf",
+    "size" : 14261
+  }
+}

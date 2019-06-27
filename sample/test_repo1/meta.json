@@ -1,0 +1,33 @@
+{
+  "title" : "Test Sample",
+  "creationDate" : "09-03-2018 10:52:22",
+  "tags" : {
+    "start" : {
+      "icon" : "fas fa-play-circle",
+      "badgeStyle" : "danger"
+    },
+    "second" : {
+      "icon" : "fas fa-recycle",
+      "badgeStyle" : "secondary"
+    },
+    "run" : {
+      "icon" : "fas fa-location-arrow",
+      "badgeStyle" : "success"
+    },
+    "tag" : {
+      "icon" : "fas fa-tag",
+      "badgeStyle" : "info"
+    }
+  },
+  "statuses" : {
+    "done" : {
+      "icon" : "fas fa-clipboard-check",
+      "badgeStyle" : "secondary",
+      "synonyms" : ["finished"]
+    },
+    "canceled" : {
+      "icon" : "fas fa-trash",
+      "badgeStyle" : "secondary"
+    }
+  }
+}

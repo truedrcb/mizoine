@@ -1,0 +1,61 @@
+#issueDescriptionHtml img, .limit-images img {
+	max-width: 100%;
+}
+
+.limit-images img.miz-md-thumbnail {
+	max-width: 10em;
+	max-height: 10em;
+}
+
+img.thumbnail {
+	max-width: 5em;
+	max-height: 7em;
+}
+
+blockquote {
+	margin-left: 1em;
+	padding-left: 1em;
+	border-left: 1px solid #AAA;
+}
+
+.truncate {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.mizoine-title .project-badge {
+	float: left;
+}
+
+.project-badge, .comment-badge {
+	padding: 0.5ex;
+}
+
+.project-badge .fas, .comment-badge .far {
+	display: block;
+	margin-bottom: 0.5ex;
+}
+
+
+.comment-badge .far {
+	font-size: 5em;
+}
+
+.comment-badge {
+}
+
+.mizoine-title {
+	padding: 1rem 0 2rem 0;
+}
+
+footer {
+	margin: 1em;
+}
+
+.git-commit-name {
+	width: 5em;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	display: inline-block;
+}

@@ -1,0 +1,6 @@
+/target/
+**/.mizoine
+**/.factorypath
+/.classpath
+/.settings/
+.project

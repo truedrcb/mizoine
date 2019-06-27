@@ -1,0 +1,10 @@
+{
+  "title" : "A PNG file",
+  "fileName" : "file bootstrap-stack.png",
+  "upload" : {
+    "originalFileName" : "bootstrap-stack.png",
+    "name" : "uploadFilesInput",
+    "contentType" : "image/png",
+    "size" : 52160
+  }
+}
