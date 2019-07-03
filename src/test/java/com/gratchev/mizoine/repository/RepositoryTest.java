@@ -76,7 +76,7 @@ public class RepositoryTest {
 		final GitComponent gitC = new GitComponent(repo);
 		final String repoRootPrefix = gitC.getRepoRootPrefix();
 		LOGGER.info(repoRootPrefix);
-		final String path1 = "mizoine/sample/test_repo1/projects/HOME/tags/private";
+		final String path1 = "sample/test_repo1/projects/HOME/tags/private";
 		
 		assertTrue(path1.startsWith(repoRootPrefix));
 		
@@ -96,7 +96,7 @@ public class RepositoryTest {
 
 		final GitFileInfo info = new GitFileInfo();
 				
-		gitC.identifyFile("mizoine/sample/test_repo1/projects/DEV/description.md", info);
+		gitC.identifyFile("sample/test_repo1/projects/DEV/description.md", info);
 		LOGGER.info(info.toString());
 		assertEquals("DEV", info.project);
 		assertNull(info.issueNumber);
@@ -104,7 +104,7 @@ public class RepositoryTest {
 		assertNull(info.attachmentId);
 		//assertEquals("Development", info.title);
 
-		gitC.identifyFile("mizoine/sample/test_repo1/projects/DEV/issues", info);
+		gitC.identifyFile("sample/test_repo1/projects/DEV/issues", info);
 		LOGGER.info(info.toString());
 		assertEquals("DEV", info.project);
 		assertNull(info.issueNumber);
@@ -112,7 +112,7 @@ public class RepositoryTest {
 		assertNull(info.attachmentId);
 		//assertEquals("Development", info.title);
 
-		gitC.identifyFile("mizoine/sample/test_repo1/projects/DEV/issues/500", info);
+		gitC.identifyFile("sample/test_repo1/projects/DEV/issues/500", info);
 		LOGGER.info(info.toString());
 		assertEquals("DEV", info.project);
 		assertEquals("500", info.issueNumber);
@@ -120,7 +120,7 @@ public class RepositoryTest {
 		assertNull(info.attachmentId);
 		//assertNull(info.title);
 
-		gitC.identifyFile("mizoine/sample/test_repo1/projects/HOME/issues/3", info);
+		gitC.identifyFile("sample/test_repo1/projects/HOME/issues/3", info);
 		LOGGER.info(info.toString());
 		assertEquals("HOME", info.project);
 		assertEquals("3", info.issueNumber);
@@ -128,7 +128,7 @@ public class RepositoryTest {
 		assertNull(info.attachmentId);
 		//assertEquals("Issue without description, comments and attachments", info.title);
 
-		gitC.identifyFile("mizoine/sample/test_repo1/projects/DEV/issues/0/attachments/hQzzR1/file bootstrap-stack.png", info);
+		gitC.identifyFile("sample/test_repo1/projects/DEV/issues/0/attachments/hQzzR1/file bootstrap-stack.png", info);
 		LOGGER.info(info.toString());
 		assertEquals("DEV", info.project);
 		assertEquals("0", info.issueNumber);
@@ -136,7 +136,7 @@ public class RepositoryTest {
 		assertEquals("hQzzR1", info.attachmentId);
 		//assertEquals("A PNG file", info.title);
 
-		gitC.identifyFile("mizoine/sample/test_repo1/projects/DEV/issues/0/attachments/SphSp0/file icon-spring-boot.svg", info);
+		gitC.identifyFile("sample/test_repo1/projects/DEV/issues/0/attachments/SphSp0/file icon-spring-boot.svg", info);
 		LOGGER.info(info.toString());
 		assertEquals("DEV", info.project);
 		assertEquals("0", info.issueNumber);
