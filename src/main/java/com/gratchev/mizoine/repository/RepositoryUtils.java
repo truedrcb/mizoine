@@ -3,6 +3,7 @@ package com.gratchev.mizoine.repository;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,13 +47,17 @@ public class RepositoryUtils {
 			if (!dir.mkdirs()) {
 				throw new IOException("Cannot create " + dir.getAbsolutePath());
 			}
-			// https://stackoverflow.com/questions/1999437/how-to-make-a-folder-hidden-using-java
-			// https://docs.oracle.com/javase/tutorial/essential/io/fileAttr.html
-			try {
-				Files.setAttribute(dir.toPath(), "dos:hidden", true);
-			} catch (IOException | UnsupportedOperationException e) {
-				LOGGER.warn("Setting directory to hidden failed: " + dir.getAbsolutePath(), e);
-			}
+			makeDirHidden(dir.toPath());
+		}
+	}
+
+	public static void makeDirHidden(final Path dir) {
+		// https://stackoverflow.com/questions/1999437/how-to-make-a-folder-hidden-using-java
+		// https://docs.oracle.com/javase/tutorial/essential/io/fileAttr.html
+		try {
+			Files.setAttribute(dir, "dos:hidden", true);
+		} catch (IOException | UnsupportedOperationException e) {
+			LOGGER.warn("Setting directory to hidden failed: " + dir, e);
 		}
 	}
 

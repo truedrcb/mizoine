@@ -1,7 +1,7 @@
 package com.gratchev.mizoine.repository;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.File;
 import java.io.IOException;
@@ -30,9 +30,9 @@ import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.internal.util.collections.Sets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,7 +48,7 @@ public class LuceneTest {
 	Path indexPath;
 
 
-	@Before
+	@BeforeEach
 	public void setUp() throws Exception {
 		repo = TempRepository.create();
 		LOGGER.debug("||| All set up ||||||||||||||| " + this.toString());
@@ -56,7 +56,7 @@ public class LuceneTest {
 		indexPath = repo.getLuceneDir().toPath();
 	}
 
-	@After
+	@AfterEach
 	public void tearDown() throws IOException {
 		LOGGER.debug("||| Tearing down ||||||||||||||| " + this.toString());
 		repo.dispose();
@@ -171,7 +171,7 @@ public class LuceneTest {
 					Document hitDoc = isearcher.doc(hits[i].doc);
 					final String hitText = hitDoc.get("content");
 					LOGGER.debug("Found: "  + hitText);
-					assertTrue(hitText.toLowerCase().contains("mizoine"));
+					assertThat(hitText.toLowerCase()).contains("mizoine");
 
 					assertEquals("HOME", hitDoc.get("project"));
 				}
@@ -218,7 +218,7 @@ public class LuceneTest {
 					Document hitDoc = isearcher.doc(hits[i].doc);
 					final String hitText = hitDoc.get("content");
 					LOGGER.debug("Found: "  + hitText);
-					assertTrue(hitText.toLowerCase().contains("mizoine"));
+					assertThat(hitText.toLowerCase()).contains("mizoine");
 
 					assertEquals("HOME", hitDoc.get("project"));
 				}

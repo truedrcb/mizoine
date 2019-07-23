@@ -31,7 +31,7 @@ public class AttachmentApiController extends BaseDescriptionController {
 	private static final Logger LOGGER = LoggerFactory.getLogger(AttachmentApiController.class);
 
 	public static String getPageBaseUri(final String project, final String issueNumber) {
-		return "/attachment/" + project + "-" + issueNumber + "/";
+		return "/issue/" + project + "-" + issueNumber + "/attachment/";
 	}
 	
 	@GetMapping("")

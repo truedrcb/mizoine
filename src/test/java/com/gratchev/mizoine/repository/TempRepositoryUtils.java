@@ -1,6 +1,8 @@
 package com.gratchev.mizoine.repository;
 
-import static org.junit.Assert.*;
+import com.google.common.base.Strings;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -10,21 +12,30 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.google.common.base.Strings;
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class TempRepositoryUtils {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TempRepositoryUtils.class);
 
-	public static void assertDirExists(final File dir) {
-		assertTrue("Directory must exist to continue: " + dir.getAbsolutePath(), dir.exists());
-		assertTrue(dir.isDirectory());
+	public static File assertDirExists(final File dir, final String... children) {
+		assertThat(dir).exists().isDirectory();
+		File subdir = dir;
+		for (final String child : children) {
+			subdir = new File(subdir, child);
+			assertThat(dir).exists().isDirectory();
+		}
+		return subdir;
+	}
+
+	public static File assertFileExists(final File dir, final String fileName) {
+		assertDirExists(dir);
+		final File file = new File(dir, fileName);
+		assertThat(file).exists().isFile();
+		return file;
 	}
 
 	public static void assertDirNotExists(final File dir) {
-		assertFalse("Unexpected existing directory: " + dir.getAbsolutePath(), dir.exists());
+		assertThat(dir).doesNotExist();
 	}
 	
 	public static void printDirectory(final File dir, final int level) {
@@ -51,32 +62,32 @@ public class TempRepositoryUtils {
 	
 	public static void removeDirectory(final File root) throws IOException {
 		LOGGER.info("Removing directory: " + root.getAbsolutePath());
-		Files.walkFileTree(root.toPath(), new FileVisitor<Path>() {
+		Files.walkFileTree(root.toPath(), new FileVisitor<>() {
 
 			@Override
-			public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+			public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
 				return FileVisitResult.CONTINUE;
 			}
 
 			@Override
-			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-				assertTrue(file.toFile().getAbsolutePath(), file.toFile().delete());
+			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+				assertThat(file.toFile().delete()).as(file.toFile().getAbsolutePath()).isTrue();
 				return FileVisitResult.CONTINUE;
 			}
 
 			@Override
-			public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
+			public FileVisitResult visitFileFailed(Path file, IOException exc) {
 				return FileVisitResult.CONTINUE;
 			}
 
 			@Override
-			public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-				assertTrue(dir.toFile().getAbsolutePath(), dir.toFile().delete());
+			public FileVisitResult postVisitDirectory(Path dir, IOException exc) {
+				assertThat(dir.toFile().delete()).as(dir.toFile().getAbsolutePath()).isTrue();
 				return FileVisitResult.CONTINUE;
 			}
 		});
 		assertDirNotExists(root);
-		LOGGER.info("Directory suscessfully removed.");
+		LOGGER.info("Directory successfully removed.");
 	}
 	
 	public static class TempRepository extends Repository {
@@ -96,7 +107,7 @@ public class TempRepositoryUtils {
 			
 			for(final String subfolder : subfolders) {
 				tempRepoRoot = new File(tempRepoRoot, subfolder);
-				assertTrue(subfolder, tempRepoRoot.mkdir());
+				assertThat(tempRepoRoot.mkdir()).as(subfolder).isTrue();
 			}
 		
 			final TempRepository repo = new TempRepository(tempRepoRoot);
@@ -108,7 +119,6 @@ public class TempRepositoryUtils {
 			
 			repo.createInitialRepositoryDirectories();
 			assertDirExists(repo.getProjectsRoot());
-			assertDirExists(repo.getUsersRoot());
 			printDirectory(repo.getRoot());
 
 			return repo;

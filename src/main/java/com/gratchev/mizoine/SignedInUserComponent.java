@@ -9,8 +9,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.WebApplicationContext;
 
-import com.gratchev.mizoine.WebSecurityConfig.BasicUsersConfiguration;
-import com.gratchev.mizoine.WebSecurityConfig.UserCredentials;
+import com.gratchev.mizoine.Application.BasicUsersConfiguration;
+import com.gratchev.mizoine.Application.UserCredentials;
 
 /**
  * See http://www.baeldung.com/get-user-in-spring-security
@@ -21,17 +21,10 @@ public class SignedInUserComponent implements SignedInUser {
 	@SuppressWarnings("unused")
 	private static final Logger LOGGER = LoggerFactory.getLogger(SignedInUserComponent.class);
 
-	/* (non-Javadoc)
-	 * @see com.gratchev.mizoine.SignedInUser#getName()
-	 */
 	@Override
 	public String getName() {
 		return SecurityContextHolder.getContext().getAuthentication().getName();
 	}
-
-	/* (non-Javadoc)
-	 * @see com.gratchev.mizoine.SignedInUser#getEmail()
-	 */
 	@Override
 	public String getEmail() {
 		return getName() + "@mizoine.test";
@@ -40,9 +33,6 @@ public class SignedInUserComponent implements SignedInUser {
 	@Autowired
 	private BasicUsersConfiguration usersConfiguration;
 
-	/* (non-Javadoc)
-	 * @see com.gratchev.mizoine.SignedInUser#getCredentials()
-	 */
 	@Override
 	public UserCredentials getCredentials() {
 		return usersConfiguration.getUsers().get(getName());

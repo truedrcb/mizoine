@@ -128,8 +128,8 @@ Vue.component('global-messages', {
 	}, 
 	template: `
 <div class="position-fixed w-100 p-4 d-flex flex-column align-items-end"
-	:key="messagesKey" style="top: 0; z-index: 9999; pointer-events: none;">
-	<div style="pointer-events: all;" v-for="(message, messageIndex) in messages" 
+	:key="messagesKey" style="top: 0; z-index: 9999; pointer-events: none; height: 7em;">
+	<div style="pointer-events: all;" v-for="(message, messageIndex) in messages"
 		v-if="message" :key="messageIndex" 
 		class="toast show">
 		<div class="toast-header">
@@ -187,7 +187,7 @@ Vue.component('i-tag', {
 	},
 	template: ` 
 <div v-if="tag" class="btn-group mr-1">
-	<router-link :to="'/search?tag=' + tag" :class="'btn btn-' + badgeStyle" :title="'Search by tag: ' + tag">
+	<router-link :to="'/search/tag/' + tag" :class="'btn btn-' + badgeStyle" :title="'Search by tag: ' + tag">
 			<i :class="icon"></i> <span>{{tag}}</span>
 	</router-link>
 	<button v-on:click='clickRemove' :class="'btn btn-' + badgeStyle" :title="'Remove tag: ' + tag">
@@ -224,7 +224,43 @@ Vue.component('project-link-badge', {
 	</router-link>`
 	});
 
-
+Vue.component('repository-tree', {
+	props: ['repository'],
+	template: 
+	`
+<div class="list-group" v-if="repository">
+	<template v-for="(projectMeta, project) in repository.projects">
+		<router-link 
+			class="list-group-item list-group-item-action" 
+			:to="'/issues/' + project">
+			<project-badge :meta="projectMeta" :text="project"/> {{projectMeta.title}}
+		</router-link>
+		<template v-for="(issueMeta, issueNumber) in projectMeta.issues">
+			<router-link 
+				class="list-group-item list-group-item-action" 
+				:to="'/issue/' + project + '-' + issueNumber">
+				<i-badge :meta="projectMeta" :text="project + '-' + issueNumber"/> {{issueMeta.title}}
+			</router-link>
+			<template v-for="ment in issueMeta.ments">
+				<router-link 
+					class="list-group-item list-group-item-action small"
+					v-if="ment.attachment" 
+					:to="'/issue/' + project + '-' + issueNumber + '/attachment-' + ment.attachment.id">
+					<icon name="file-image" /> {{ment.attachment.title}}<template v-if="ment.attachment.meta"> ({{ment.attachment.meta.fileName}})</template>
+				</router-link>
+				<router-link 
+					class="list-group-item list-group-item-action small"
+					v-if="ment.comment" 
+					:to="'/issue/' + project + '-' + issueNumber + '/comment-' + ment.comment.id">
+					<icon name="comment-alt" /> <template v-if="ment.comment.meta">{{ment.comment.meta.creator}}: {{ment.comment.meta.title}}</template>
+					<template v-if="!ment.comment.meta">{{ment.comment.id}}</template>
+				</router-link>
+			</template>
+		</template>
+	</template>
+</div>
+`	});
+	
 const routes = [
 { 
 	path: '/', 
@@ -277,11 +313,15 @@ gitRoute,
 viewerRoute,
 editorRoute,
 {
-	path: '/search/:query', 
+	path: '/search/q/:query', 
 	component: searchComponent 
 },
 {
-	path: '/search/:query/tag/:tag', 
+	path: '/search/q/:query/tag/:tag', 
+	component: searchComponent 
+},
+{
+	path: '/search/tag/:tag', 
 	component: searchComponent 
 }
 ]

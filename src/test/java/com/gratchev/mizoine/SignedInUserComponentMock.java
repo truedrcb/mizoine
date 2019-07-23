@@ -4,8 +4,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
-import com.gratchev.mizoine.WebSecurityConfig.ImapConnection;
-import com.gratchev.mizoine.WebSecurityConfig.UserCredentials;
+import com.gratchev.mizoine.Application.ImapConnection;
+import com.gratchev.mizoine.Application.UserCredentials;
 
 @Component
 @Primary

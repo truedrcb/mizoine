@@ -1,6 +1,9 @@
 package com.gratchev.mizoine;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
@@ -11,12 +14,9 @@ import java.util.Set;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.api.errors.GitAPIException;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,21 +31,15 @@ import com.gratchev.mizoine.repository.TempRepositoryUtils.TempRepository;
 import com.gratchev.utils.FileUtils;
 
 
-@RunWith(Parameterized.class)
-public class GitComponentTest {
+public abstract class GitComponentTest {
 	private static final Logger LOGGER = LoggerFactory.getLogger(GitComponentTest.class);
 	final String project = "TEST";
 	final SignedInUserComponentMock currentUser = new SignedInUserComponentMock();
 
-	abstract static class Initializer {
-
-		protected File createGitDir() throws IOException, GitAPIException {
-			final File gitDir = Files.createTempDirectory("Mizoine-test-git").toFile();
-			gitInit(gitDir);
-			return gitDir;
-		}
-
-		abstract void setup(GitComponentTest test) throws IOException, IllegalStateException, GitAPIException;
+	protected File createGitDir() throws IOException, GitAPIException {
+		final File gitDir = Files.createTempDirectory("Mizoine-test-git").toFile();
+		gitInit(gitDir);
+		return gitDir;
 	}
 
 	private static void gitInit(final File gitDir) throws GitAPIException {
@@ -56,56 +50,13 @@ public class GitComponentTest {
 	}
 	
 
-	@Parameters
-	public static Initializer[] settings() {
-		return new Initializer[] {
-				new Initializer() {
-
-					@Override
-					public void setup(final GitComponentTest test) throws IOException, IllegalStateException, GitAPIException {
-						final File gitDir = createGitDir();
-						test.repo = TempRepository.create(gitDir);
-
-						test.component = new GitComponent(test.repo);
-
-						assertEquals("", test.component.getRepoRootPrefix());
-					}
-
-
-				}, 
-				new Initializer() {
-
-					@Override
-					public void setup(final GitComponentTest test) throws IOException, IllegalStateException, GitAPIException {
-						final File gitDir = createGitDir();
-						test.repo = TempRepository.create(gitDir, "test", "subrepo");
-
-						test.component = new GitComponent(test.repo);
-
-						assertEquals("test/subrepo/", test.component.getRepoRootPrefix());
-					}
-				}, 
-		};
-	}
-
-
-	final Initializer initializer;
 	TempRepository repo;
 	GitComponent component;
 
+	@BeforeEach
+	public abstract void setup() throws IOException, IllegalStateException, GitAPIException;
 
-	public GitComponentTest(final Initializer initializer) throws IOException, IllegalStateException, GitAPIException {
-		LOGGER.info("TESTING: " + initializer);
-
-		this.initializer = initializer;
-	}
-
-	@Before
-	public void setUp() throws Exception {
-		initializer.setup(this);
-	}
-
-	@After
+	@AfterEach
 	public void tearDown() throws IOException {
 		repo.dispose();
 	}

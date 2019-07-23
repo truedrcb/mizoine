@@ -31,7 +31,7 @@ public class HTMLtoMarkdown {
 			"h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8", "h9");
 	private static final Set<String> NON_LINE_TAGS = ImmutableSet.of(
 			"table", "h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8", "h9", 
-			"ul", "ol", "dl", "pre", "code", "br", "blockquote", "tbody");
+			"ul", "ol", "dl", "pre", "code", "blockquote", "tbody");
 	private static final String SEPARATORS = " .\n\r\t;<>/\\&";
 	
 	/**
@@ -251,6 +251,17 @@ public class HTMLtoMarkdown {
 		}
 	};
 	
+	static final MDNode SPACE = new MDNode() {
+		@Override
+		public void build(FlatMDBuilder builder) {
+			builder.space();
+		}
+		
+		@Override
+		public boolean isEmpty() {
+			return false;
+		}
+	};
 	
 	static final MDNode HR = new MDNode() {
 		@Override
@@ -517,6 +528,44 @@ public class HTMLtoMarkdown {
 		};
 	}
 	
+	public static void removeEmptyRows(final ArrayList<ArrayList<MDNode>> table) {
+		for (final Iterator<ArrayList<MDNode>> iterator = table.iterator(); iterator.hasNext();) {
+			final ArrayList<MDNode> row = iterator.next();
+			if(row.stream().allMatch(MDNode::isEmpty)) {
+				iterator.remove();
+			}
+		}
+	}
+
+	public static int removeEmptyColumns(final ArrayList<ArrayList<MDNode>> table) {
+		long nonEmptyCols = 0;
+		// Check all cells. Set bit at column position if any cell is not empty.
+		for (final ArrayList<MDNode> row : table) {
+			long colBit = 1;
+			for (final MDNode cell : row) {
+				if (!cell.isEmpty()) nonEmptyCols |= colBit;
+				colBit <<= 1;
+			}
+		}
+
+		int colMax = 0;
+		for (final ArrayList<MDNode> row : table) {
+			long colBit = 1;
+			for (final Iterator<MDNode> iterator = row.iterator(); iterator.hasNext();) {
+				iterator.next();
+				if ((colBit & nonEmptyCols) == 0) {
+					iterator.remove();
+				}
+				colBit <<= 1;
+			}
+			if (colMax < row.size()) {
+				colMax = row.size();
+			}
+		}
+		
+		return colMax;
+	}
+	
 	private MDNode convertTable(final Node n, final boolean inLine) {
 		if (n instanceof Element) {
 			final Element e = (Element) n;
@@ -536,7 +585,6 @@ public class HTMLtoMarkdown {
 				}
 			}
 			
-			int colMax = 0;
 			
 			final ArrayList<ArrayList<MDNode>> table = new ArrayList<>();
 			for (final Element row : rows) {
@@ -555,11 +603,16 @@ public class HTMLtoMarkdown {
 						LOGGER.debug("Ignored non-td element: " + cell);
 					}
 				}
-				if (colMax < tableRow.size()) {
-					colMax = tableRow.size();
-				}
 			}
-			final int colCount = colMax;
+			
+			removeEmptyRows(table);
+			
+			final int colCount = removeEmptyColumns(table);
+
+			if (colCount == 1 && table.size() == 1) {
+				LOGGER.debug("Ignoring one cell table: " + n);
+				return convertChilds(n, inLine);
+			}
 			
 			if (colCount < 1) {
 				LOGGER.debug("Ignorig strange table with no columns: " + n);
@@ -582,10 +635,8 @@ public class HTMLtoMarkdown {
 				
 				@Override
 				public void build(FlatMDBuilder builder) {
-					builder.lflf().mark("|");
-					for (int i = 0; i < colCount; i++) {
-						builder.space().mark("----").space().mark("|");
-					}
+					int row = 0;
+					builder.lf();
 					for (final ArrayList<MDNode> tableRow : table) {
 						builder.lf();
 						for(final MDNode tableCell : tableRow) {
@@ -594,6 +645,12 @@ public class HTMLtoMarkdown {
 							builder.space();
 						}
 						builder.mark("|");
+						if (row++ == 0) {
+							builder.lf().mark("|");
+							for (int i = 0; i < colCount; i++) {
+								builder.space().mark("----").space().mark("|");
+							}
+						}
 					}
 					builder.lflf();
 				}
@@ -808,11 +865,11 @@ public class HTMLtoMarkdown {
 		
 
 		if ("hr".equals(name)) {
-			return inLine ? null : HR;
+			return inLine ? SPACE : HR;
 		}
 
 		if ("br".equals(name)) {
-			return  inLine ? null : BR;
+			return  inLine ? SPACE : BR;
 		}
 		
 		if ("b".equals(name) || "strong".equals(name)) {
@@ -863,7 +920,7 @@ public class HTMLtoMarkdown {
 			return convertList(n, inLine);
 		}
 		
-		if ("pre".equals(name) || "code".equals(name)) {
+		if ("pre".equals(name) || "code".equals(name) || "tt".equals(name)) {
 			final Element e = (Element) n;
 			final String innerHtml = e.html();
 			if (LOGGER.isTraceEnabled()) {
@@ -936,7 +993,8 @@ public class HTMLtoMarkdown {
 		}
 		
 		LOGGER.debug("Unknown name: " + name);
-		return convertChilds(name + ">[", n, "]< ", inLine);
+		//return convertChilds(name + ">[", n, "]< ", inLine);
+		return convertChilds(n, inLine);
 	}
 
 	private MDNode convertChildsOfInline(final String prefixAndSuffix, final Node n) {

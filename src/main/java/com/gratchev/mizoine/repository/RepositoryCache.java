@@ -9,6 +9,7 @@ import java.util.Set;
 
 import com.gratchev.mizoine.repository.Repository.Proxy;
 import com.gratchev.mizoine.repository.meta.BaseMeta;
+import com.gratchev.mizoine.repository.meta.ProjectMeta;
 import com.gratchev.mizoine.repository.meta.RepositoryMeta;
 import com.gratchev.mizoine.repository.meta.RepositoryMeta.TagMeta;;
 
@@ -27,29 +28,47 @@ public class RepositoryCache {
 		this.repo = repo;
 	}
 	
-	public Project getProject(final String project) {
-		Project meta = projects.get(project);
-		if (meta == null) {
-			meta = repo.readProjectInfo(project);
-			if (meta == null) {
-				meta = new Project();
+	public Project getProject(final String projectId) {
+		Project project = projects.get(projectId);
+		if (project == null) {
+			getRepositoryMeta();
+			project = repo.readProjectInfo(projectId);
+			if (project == null) {
+				project = new Project();
 			}
-			projects.put(project, meta);
+			if (project.meta == null) {
+				project.meta = new ProjectMeta();
+			}
+			projects.put(projectId, project);
+			repositoryMeta.putProject(projectId, project.meta);
 		}
-		return meta;
+		return project;
 	}
 
-	public Issue getIssue(final String project, final String issueNumber) {
-		final String issueKey = project + "-" + issueNumber;
+	public Issue getIssue(final String projectId, final String issueNumber) {
+		final String issueKey = projectId + "-" + issueNumber;
 		Issue issue = issues.get(issueKey);
 		if (issue == null) {
-			issue = repo.issue(project, issueNumber).readInfo();
+			issue = repo.issue(projectId, issueNumber).readInfo();
 			issues.put(issueKey, issue);
+
+			final Project project = getProject(projectId);
+			project.meta.putIssue(issueNumber, issue.meta);
 		}
 		
 		return issue;
 	}
 	
+	public Attachment getAttachment(final String projectId, final String issueNumber, final String attachmentId) {
+		final Issue issue = getIssue(projectId, issueNumber);
+		return issue.meta.putAttachment(attachmentId, repo.attachment(projectId, issueNumber, attachmentId).readMeta());
+	}
+
+	public Comment getComment(final String projectId, final String issueNumber, final String commentId) {
+		final Issue issue = getIssue(projectId, issueNumber);
+		return issue.meta.putComment(commentId, repo.comment(projectId, issueNumber, commentId).readMeta());
+	}
+
 	private void addAllTagMetas(final Map<String, TagMeta> newTags) {
 		for (final Entry<String, TagMeta> e : newTags.entrySet()) {
 			final TagMeta tag = e.getValue();

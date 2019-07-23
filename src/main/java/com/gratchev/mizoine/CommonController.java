@@ -13,6 +13,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import com.gratchev.mizoine.api.BaseController;
+import org.springframework.web.util.UriBuilder;
+import org.springframework.web.util.UriBuilderFactory;
+import org.springframework.web.util.UriComponentsBuilder;
 
 @Controller
 @EnableAutoConfiguration
@@ -35,6 +38,19 @@ public class CommonController extends BaseController {
 		return "redirect:/issues/{project}";
 	}
 	
+	@GetMapping("/attachment/{project}-{issueNumber}/{attachmentId}")
+	public String attachmentRedirect(@PathVariable final String project, 
+			@PathVariable final String issueNumber, @PathVariable final String attachmentId) {
+		return "redirect:/issue/{project}-{issueNumber}/attachment/{attachmentId}";
+	}
+
+	@GetMapping("/issue/{project}-{issueNumber}/{mentId}/{fileName:.+}")
+	public String issueAttachments(@PathVariable final String project,
+								   @PathVariable final String issueNumber, @PathVariable final String mentId, @PathVariable final String fileName) {
+		LOGGER.debug("attachments: {}-{}/{}/{}", project, issueNumber, mentId, fileName);
+		return "forward:" + UriComponentsBuilder.fromPath("/attachments/.mizoine").pathSegment(project, issueNumber, mentId, fileName).toUriString();
+	}
+
 	@GetMapping("/issue/**")
 	public String issueRoot() {
 		return "forward:/index.html";
@@ -66,9 +82,7 @@ public class CommonController extends BaseController {
 	@PostMapping("/shutdown")
 	@ResponseBody
 	public String shutdown() {
-		new Thread(() -> {
-			SpringApplication.exit(appContext, () -> 0);
-		}).start();
+		new Thread(() -> SpringApplication.exit(appContext, () -> 0)).start();
 		return "<html><body>Bye!<br/><a href=/>Mizoine</a></body></html>";
 	}
 	

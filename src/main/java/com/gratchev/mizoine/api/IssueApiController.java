@@ -1,144 +1,99 @@
 package com.gratchev.mizoine.api;
 
-import static com.gratchev.mizoine.FlexmarkUtils.generateMarkdownFooterRefs;
-import static com.gratchev.mizoine.api.AttachmentApiController.getPageBaseUri;
-
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.List;
-import java.util.stream.Collectors;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseBody;
-import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.multipart.MultipartHttpServletRequest;
-
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.google.common.base.Joiner;
+import com.gratchev.mizoine.mail.impl.MessageImpl;
 import com.gratchev.mizoine.repository.Attachment;
-import com.gratchev.mizoine.repository.BaseEntityInfo;
-import com.gratchev.mizoine.repository.Comment;
 import com.gratchev.mizoine.repository.Issue;
 import com.gratchev.mizoine.repository.Repository;
 import com.gratchev.mizoine.repository.Repository.AttachmentProxy;
 import com.gratchev.mizoine.repository.Repository.CommentProxy;
 import com.gratchev.mizoine.repository.Repository.IssueProxy;
 import com.gratchev.mizoine.repository.RepositoryCache;
-import com.gratchev.mizoine.repository.meta.AttachmentMeta;
-import com.gratchev.mizoine.repository.meta.BaseMeta;
+import com.gratchev.mizoine.repository.meta.IssueMeta;
 import com.gratchev.utils.FileUtils;
 import com.vladsch.flexmark.html.HtmlRenderer;
 import com.vladsch.flexmark.parser.Parser;
 import com.vladsch.flexmark.util.ast.Node;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.multipart.MultipartHttpServletRequest;
+
+import javax.mail.Session;
+import javax.mail.internet.MimeMessage;
+import java.io.File;
+import java.io.IOException;
+import java.time.ZonedDateTime;
+import java.util.*;
+import java.util.stream.Collectors;
+
+import static com.gratchev.mizoine.FlexmarkUtils.generateMarkdownFooterRefs;
+import static com.gratchev.mizoine.api.AttachmentApiController.getPageBaseUri;
 
 @Controller
 @EnableAutoConfiguration
 @RequestMapping("/api/issue/{project}-{issueNumber}")
 public class IssueApiController extends BaseDescriptionController {
-	private static final Logger LOGGER = LoggerFactory.getLogger(IssueApiController.class);
-	public static final Comparator<WithDescription> MENTS_COMPARATOR = new Comparator<WithDescription>() {
-		private Date getDate(final WithDescription o) {
-			if (o == null) return null;
-			final BaseEntityInfo<? extends BaseMeta> ment = o.ment();
-			if (ment == null) return null;
-			final BaseMeta meta = ment.meta;
-			if (meta == null) return null;
-			return meta.creationDate;
-		}
+	private static final Logger log = LoggerFactory.getLogger(IssueApiController.class);
 
-		private String getId(final WithDescription o) {
-			if (o == null) return null;
-			final BaseEntityInfo<? extends BaseMeta> ment = o.ment();
-			if (ment == null) return null;
-			return ment.id;
-		}
-		/**
-		 * Compare by creation date if possible. Otherwise by id (if possible).<br>
-		 * Objects come in following order:
-		 * <ol>
-		 * <li>Both dates present: Greatest date (most recent)</li>
-		 * <li>Only one date present: With date first</li>
-		 * <li>Both dates missing: Both ids present: Greatest id</li>
-		 * <li>Both dates missing: One id present: With id first</li>
-		 * <li>Both dates missing: Both ids missing: Incomparable, equal</li>
-		 * </ol>
-		 * 
-		 */
-		@Override
-		public int compare(final WithDescription o1, final WithDescription o2) {
-			final Date d1 = getDate(o1);
-			final Date d2 = getDate(o2);
-			if (d1 != null && d2 != null) {
-				return -d1.compareTo(d2);
-			}
-			if (d1 != null) {
-				return -1;
-			}
-			if (d2 != null) {
-				return 1;
-			}
-			final String id1 = getId(o1);
-			final String id2 = getId(o2);
-			if (id1 != null && id2 != null) {
-				return -id1.compareTo(id2);
-			}
-			if (id1 != null) {
-				return -1;
-			}
-			if (id2 != null) {
-				return 1;
-			}
-			return 0;
-		}
-	};
-	
 	@PostMapping("upload")
 	@ResponseBody
-	public List<AttachmentMeta> uploadAttachment(@PathVariable final String project, 
-			@PathVariable final String issueNumber, final MultipartHttpServletRequest request) {
-		//LOGGER.debug(request.getParameterMap().toString());
-		if (LOGGER.isDebugEnabled()) {
-			LOGGER.debug("Upload attachment(s) for: " + project + "-" + issueNumber);
+	public List<String> uploadAttachment(@PathVariable final String project,
+										 @PathVariable final String issueNumber,
+										 final MultipartHttpServletRequest request)
+			throws IOException {
+		if (log.isDebugEnabled()) {
+			log.debug("Upload attachment(s) for: " + project + "-" + issueNumber);
 		}
 
-		final List<AttachmentMeta> uploadedAttachments = new ArrayList<>();
+		final List<String> uploadedAttachmentIds = new ArrayList<>();
 
-		for (final Iterator<String> iterator = request.getFileNames(); iterator.hasNext();) {
-			final String fileName = iterator.next();
+		for (final Iterator<String> iterator = request.getFileNames(); iterator.hasNext(); ) {
+			final String fileShortName = iterator.next();
 
-			LOGGER.debug("File: " + fileName);
+			log.debug("File: {}", fileShortName);
 
-			final MultipartFile uploadfile = request.getFile(fileName);
+			final MultipartFile uploadFile = request.getFile(fileShortName);
+			final String originalFilename = uploadFile.getOriginalFilename();
+			log.debug("Original filename: {}", originalFilename);
 
 			try {
-				getRepo().issue(project, issueNumber).uploadAttachment(uploadfile, new Date());
-			} catch (IOException e) {
-				LOGGER.error("Upload failed for file: " + fileName + " " + uploadfile, e);
+				if (originalFilename.toLowerCase(Locale.ROOT).endsWith(".eml")) {
+					final MimeMessage message = new MimeMessage(Session.getDefaultInstance(new Properties()),
+							uploadFile.getInputStream());
+					final String[] idHeaders = message.getHeader("Message-ID");
+					MailApiController.createCommentFromMessage(getRepo(), currentUser,
+							idHeaders != null ? Joiner.on("|").join(idHeaders) : "",
+							new MessageImpl(message), project, issueNumber, null).attachments.forEach(attachment -> {
+								uploadedAttachmentIds.add(attachment.id);
+					});
+				} else {
+						final Attachment attachment = getRepo().issue(project, issueNumber).uploadAttachment(uploadFile);
+						uploadedAttachmentIds.add(attachment.id);
+				}
+			} catch (final Exception e) {
+				log.error("Upload failed for file: {} {}", fileShortName, uploadFile, e);
 			}
-
 		}
-		return uploadedAttachments;
+		uploadedAttachmentIds.forEach(attachmentId -> {
+			final AttachmentProxy proxy = getRepo().attachment(project, issueNumber, attachmentId);
+			proxy.updatePreviewAndLogErrors();
+			proxy.extractDescriptionAndLogErrors();
+		});
+		return uploadedAttachmentIds;
 	}
 
 	@PostMapping("description")
 	@ResponseBody
 	public DescriptionResponse updateDescription(@PathVariable final String project, 
 			@PathVariable final String issueNumber, final String description) throws IOException {
-		LOGGER.debug("Update description for: " + project + "-" + issueNumber);
-		LOGGER.debug(description);
+		log.debug("Update description for: " + project + "-" + issueNumber);
+		log.debug(description);
 		final Repository repo = getRepo();
 		final File descriptionFile = repo.issue(project, issueNumber).getDescriptionFile();
 		FileUtils.overwriteTextFile(description, descriptionFile);
@@ -152,7 +107,7 @@ public class IssueApiController extends BaseDescriptionController {
 	@ResponseBody
 	public DescriptionResponse getDescription(@PathVariable final String project, 
 			@PathVariable final String issueNumber) throws IOException {
-		LOGGER.debug("Get description for: " + project + "-" + issueNumber);
+		log.debug("Get description for: " + project + "-" + issueNumber);
 
 		final Repository repo = getRepo();
 		final File descriptionFile = repo.issue(project, issueNumber).getDescriptionFile();
@@ -166,22 +121,11 @@ public class IssueApiController extends BaseDescriptionController {
 	}
 
 	@JsonInclude(Include.NON_NULL)
-	public static class WithDescription {
+	public static class WithDescription extends IssueMeta.Ment {
 		public String descriptionMarkdown;
 		public String descriptionHtml;
 		public String descriptionPath;
 		public String metaPath;
-		
-		public Comment comment;
-		public Attachment attachment;
-		
-		private BaseEntityInfo<? extends BaseMeta> ment() {
-			if (comment != null) {
-				return comment;
-			} else {
-				return attachment;
-			}
-		}
 	}
 
 	public static class IssueInfo {
@@ -194,8 +138,8 @@ public class IssueApiController extends BaseDescriptionController {
 	@ResponseBody
 	public IssueInfo getInfo(@PathVariable final String project, @PathVariable final String issueNumber)
 			throws IOException {
-		if (LOGGER.isDebugEnabled()) {
-			LOGGER.debug("Reading project: " + project + " issue: " + issueNumber);
+		if (log.isDebugEnabled()) {
+			log.debug("Reading project: " + project + " issue: " + issueNumber);
 		}
 
 		final IssueInfo info = new IssueInfo();
@@ -204,8 +148,8 @@ public class IssueApiController extends BaseDescriptionController {
 		info.issue = proxy.readInfo();
 
 		final ArrayList<Attachment> attachments = proxy.readAttachments();
-		final String markdownFooterRefs = generateMarkdownFooterRefs(getPageBaseUri(project, issueNumber), attachments);
-		
+		// PERFORMANCE KILLER!!!
+		//final String markdownFooterRefs = generateMarkdownFooterRefs(getPageBaseUri(project, issueNumber), attachments);
 		info.ments = new ArrayList<>();
 		attachments.stream().map(attachment -> {
 			final WithDescription ment = new WithDescription();
@@ -229,17 +173,17 @@ public class IssueApiController extends BaseDescriptionController {
 		
 		final Parser parser = flexmark.getParser();
 		final HtmlRenderer renderer = flexmark.getRenderer();
-		
+		info.ments.sort(IssueMeta.MENTS_COMPARATOR);
+
 		for(final WithDescription ment: info.ments) {
 			if (ment.descriptionMarkdown != null) {
-				final Node document = parser.parse(ment.descriptionMarkdown + markdownFooterRefs);
+				final Node document = parser.parse(ment.descriptionMarkdown
+					/* + markdownFooterRefs*/); // PERFORMANCE KILLER!!!
 				ment.descriptionHtml = renderer.render(document);
 			} else {
 				ment.descriptionHtml = null;
 			}
 		}
-
-		info.ments.sort(MENTS_COMPARATOR);
 		return info;
 	}
 
@@ -267,14 +211,14 @@ public class IssueApiController extends BaseDescriptionController {
 	@ResponseBody
 	public String createComment(@PathVariable final String project, 
 			@PathVariable final String issueNumber, final String title) throws IOException {
-		final Date creationDate = new Date();
+		final ZonedDateTime creationDate = ZonedDateTime.now();
 		final Repository repo = getRepo();
-		final String commentId = repo.newCommentId(creationDate, title);
+		final String commentId = repo.issue(project, issueNumber).newCommentId(creationDate);
 		final CommentProxy comment = repo.comment(project, issueNumber, commentId);
 		comment.createDirs();
 		comment.updateMeta((meta) -> {
 			meta.title = title;
-			meta.creationDate = creationDate;
+			meta.creationDate = Date.from(creationDate.toInstant());
 			meta.creator = currentUser.getName();
 		}, currentUser);
 		return commentId;
@@ -284,9 +228,7 @@ public class IssueApiController extends BaseDescriptionController {
 	@ResponseBody
 	public String updateTitle(@PathVariable final String project, 
 			@PathVariable final String issueNumber, final String title) throws IOException {
-		getRepo().issue(project, issueNumber).updateMeta((meta) -> {
-			meta.title = title;
-		}, currentUser);
+		getRepo().issue(project, issueNumber).updateMeta(meta -> meta.title = title, currentUser);
 		return title;
 	}
 

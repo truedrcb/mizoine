@@ -27,7 +27,25 @@
     },
     "canceled" : {
       "icon" : "fas fa-trash",
+      "badgeStyle" : "secondary",
+      "synonyms" : ["withdrawn"]
+    },
+    "postponed" : {
+      "icon" : "fas fa-pause-circle",
       "badgeStyle" : "secondary"
+    },
+    "in progress" : {
+      "icon" : "fas fa-exclamation-triangle",
+      "badgeStyle" : "warning"
+    },
+    "pinned" : {
+      "icon" : "far fa-star",
+      "badgeStyle" : "success",
+      "synonyms" : ["starred", "favorite"]
+    },
+    "in use" : {
+      "icon" : "far fa-play-circle",
+      "badgeStyle" : "primary"
     }
   }
 }

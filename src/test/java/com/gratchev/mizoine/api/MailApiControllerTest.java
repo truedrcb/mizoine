@@ -1,52 +1,61 @@
 package com.gratchev.mizoine.api;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.util.Date;
-import java.util.Enumeration;
-
-import javax.activation.DataHandler;
-import javax.mail.Address;
-import javax.mail.Flags;
-import javax.mail.Header;
-import javax.mail.Message;
-import javax.mail.MessagingException;
-import javax.mail.Multipart;
-
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.mock.web.MockMultipartFile;
-
 import com.gratchev.mizoine.FlexmarkComponent;
 import com.gratchev.mizoine.ImapComponent;
+import com.gratchev.mizoine.ImapComponent.MessageReader;
 import com.gratchev.mizoine.SignedInUserComponentMock;
+import com.gratchev.mizoine.mail.Message;
+import com.gratchev.mizoine.mail.Part;
 import com.gratchev.mizoine.repository.Attachment;
 import com.gratchev.mizoine.repository.Issue;
 import com.gratchev.mizoine.repository.Repository;
+import com.gratchev.mizoine.repository.Repository.AttachmentProxy;
 import com.gratchev.mizoine.repository.Repository.CommentProxy;
 import com.gratchev.mizoine.repository.TempRepositoryUtils.TempRepository;
 import com.gratchev.mizoine.repository.meta.CommentMeta;
+import org.jetbrains.annotations.NotNull;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.MediaType;
+import org.springframework.util.FileCopyUtils;
+
+import javax.mail.Address;
+import javax.mail.Header;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.time.ZonedDateTime;
+import java.util.Collections;
+import java.util.Date;
+import java.util.Enumeration;
+import java.util.List;
+import java.util.stream.Stream;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class MailApiControllerTest {
+	final static String PROJECT = "TEST";
+	final static String MESSAGE_ID = "Me55a9e-1d";
 	private static final Logger LOGGER = LoggerFactory.getLogger(MailApiControllerTest.class);
-
 	TempRepository repo;
 	MailApiController controller;
-	final String project = "TEST";
 	Issue issue;
 	Attachment attachment;
 
-	@Before
+	@BeforeEach
 	public void setUp() throws Exception {
 		repo = TempRepository.create();
-		
+
 		controller = new MailApiController() {
 			@Override
 			public Repository getRepo() {
@@ -55,25 +64,29 @@ public class MailApiControllerTest {
 		};
 		controller.flexmark = new FlexmarkComponent();
 		controller.currentUser = new SignedInUserComponentMock();
-		
-		issue = repo.createIssue(repo.getProjectIssuesRoot(project), "Testing attachments refs", 
+		controller.imap = mock(ImapComponent.class);
+
+		issue = repo.createIssue(repo.getProjectIssuesRoot(PROJECT), "Testing attachments refs",
 				"", controller.currentUser);
 		assertNotNull(issue);
-		
-		final Date creationDate = new Date();
-		attachment = repo.issue(project, issue.issueNumber).uploadAttachment(new MockMultipartFile(
-				"test.png", "original-test.png", "image/png", 
-				this.getClass().getResourceAsStream("Mizoine-logo-transparent.png")), creationDate);
+
+		final ZonedDateTime creationDate = ZonedDateTime.now();
+		attachment = repo.issue(PROJECT, issue.issueNumber).uploadAttachment("original-test.png", "image/png", 123456,
+				creationDate,
+				dest -> Files.copy(MailApiControllerTest.class.getResourceAsStream("/com/gratchev/mizoine/Mizoine-logo" +
+						"-transparent.png"), dest.toPath()));
 
 		assertNotNull(attachment);
 		assertNotNull(attachment.id);
 		assertNotNull(attachment.meta);
-		assertEquals(creationDate, attachment.meta.creationDate);
-		
+		assertThat(attachment.meta.creationDate).hasYear(creationDate.getYear()).hasMonth(creationDate.getMonthValue())
+				.hasDayOfMonth(creationDate.getDayOfMonth()).hasHourOfDay(creationDate.getHour())
+				.hasMinute(creationDate.getMinute()).hasSecond(creationDate.getSecond());
+
 		LOGGER.info("Attachment uploaded: " + attachment);
 	}
-	
-	@After
+
+	@AfterEach
 	public void tearDown() throws IOException {
 		if (repo != null) {
 			repo.dispose();
@@ -82,224 +95,236 @@ public class MailApiControllerTest {
 	}
 
 	@Test
-	public void importMailText() throws IOException {
+	public void importMailText() throws Exception {
 		final String mailText = "1. Dupressoir A, Lavialle C, Heidmann T: From ancestral infectious retroviruses "
 				+ "to bona fide cellular genes: role of the captured syncytins in placentation.\n"
 				+ "Placenta 2012, 33(9):663-671.";
-		final String mailSubject = "6. Parrish NF, Tomonaga K: A Viral (Arc)hive for Metazoan Memory. Cell 2018, 172(1-2):8-10.";
+		final String mailSubject = "6. Parrish NF, Tomonaga K: A Viral (Arc)hive for Metazoan Memory. Cell 2018, 172" +
+				"(1-2):8-10.";
 		final Date mailSentDate = new Date();
-		
-		controller.imap = new ImapComponent() {
-			@Override
-			public String readMessage(final String messageId, final MessageReader reader) {
-				try {
-					return reader.read(new Message() {
+		whenMessage(MESSAGE_ID, new SimpleMessage(List.of(new TextPart(mailText, MediaType.TEXT_PLAIN_VALUE)),
+				mailSubject, mailSentDate));
 
-						@Override
-						public int getSize() throws MessagingException {
-							return 0;
-						}
+		final String commentId = controller.importMailToIssue(controller.encodeUri(MESSAGE_ID), "?", PROJECT,
+				issue.issueNumber);
 
-						@Override
-						public int getLineCount() throws MessagingException {
-							return 0;
-						}
+		final CommentProxy comment = repo.comment(PROJECT, issue.issueNumber, commentId);
 
-						@Override
-						public String getContentType() throws MessagingException {
-							return "text/plain";
-						}
+		assertThat(comment.readDescription()).isEqualTo(mailText);
 
-						@Override
-						public boolean isMimeType(String mimeType) throws MessagingException {
-							return "text/plain".equalsIgnoreCase(mimeType);
-						}
+		assertContentMeta(mailSubject, mailSentDate, comment);
+	}
 
-						@Override
-						public String getDisposition() throws MessagingException {
-							return null;
-						}
+	@Test
+	public void importMailHtml() throws Exception {
+		final String mailText = "We are uncovering better ways of developing\n" +
+				"software by doing it and helping others do it.\n" +
+				"Through this work we have come to value:";
+		final String mailSubject = "Manifesto for Agile Software Development";
+		final Date mailSentDate = new Date();
 
-						@Override
-						public void setDisposition(String disposition) throws MessagingException {
-						}
+		whenMessage(MESSAGE_ID, new SimpleMessage(List.of(new TextPart(mailText, MediaType.TEXT_PLAIN_VALUE),
+				new TextPart("<p>See <a href=https://agilemanifesto.org/>Manifesto</a></p>",
+						MediaType.TEXT_HTML_VALUE)), mailSubject, mailSentDate));
 
-						@Override
-						public String getDescription() throws MessagingException {
-							return null;
-						}
+		final String commentId = controller.importMailToIssue(controller.encodeUri(MESSAGE_ID), "part-1", PROJECT,
+				issue.issueNumber);
 
-						@Override
-						public void setDescription(String description) throws MessagingException {
-						}
+		final CommentProxy comment = repo.comment(PROJECT, issue.issueNumber, commentId);
 
-						@Override
-						public String getFileName() throws MessagingException {
-							return null;
-						}
+		assertThat(comment.readDescription()).isEqualTo("See [Manifesto](https://agilemanifesto.org/)");
 
-						@Override
-						public void setFileName(String filename) throws MessagingException {
-						}
+		assertContentMeta(mailSubject, mailSentDate, comment);
+	}
 
-						@Override
-						public InputStream getInputStream() throws IOException, MessagingException {
-							return null;
-						}
+	@Test
+	public void importMailAttachment() throws Exception {
+		final String mailText = "Our highest priority is to satisfy the customer\n" +
+				"through early and continuous delivery\n" +
+				"of valuable software.";
+		final String mailText2 = "Welcome changing requirements, even late in\n" +
+				"development. Agile processes harness change for\n" +
+				"the customer's competitive advantage.";
+		final String mailSubject = "We follow these principles:";
+		final Date mailSentDate = new Date();
 
-						@Override
-						public DataHandler getDataHandler() throws MessagingException {
-							return null;
-						}
+		final String fileName = "invoice.pdf";
+		whenMessage(MESSAGE_ID, new SimpleMessage(List.of(new TextPart(mailText, MediaType.TEXT_PLAIN_VALUE),
+				new TextPart(mailText2, MediaType.TEXT_PLAIN_VALUE),
+				new BinaryPart("/com/gratchev/utils/Invoice251217.pdf",
+						MediaType.APPLICATION_PDF_VALUE, fileName)), mailSubject, mailSentDate));
 
-						@Override
-						public Object getContent() throws IOException, MessagingException {
-							return mailText;
-						}
+		final String commentId = controller.importMailToIssue(controller.encodeUri(MESSAGE_ID), null, PROJECT,
+				issue.issueNumber);
 
-						@Override
-						public void setDataHandler(DataHandler dh) throws MessagingException {
-							
-						}
+		final CommentProxy comment = repo.comment(PROJECT, issue.issueNumber, commentId);
+		assertContentMeta(mailSubject, mailSentDate, comment);
 
-						@Override
-						public void setContent(Object obj, String type) throws MessagingException {
-							
-						}
+		final String descriptionPrefix = mailText + "\n\n---\n\n" + mailText2 + "\n\n---\n\n- [" + fileName + "]" +
+				"(attachment-";
+		final String description = comment.readDescription();
+		assertThat(description).startsWith(descriptionPrefix);
+		final String attachmentId = description.substring(descriptionPrefix.length()).substring(0, 5);
 
-						@Override
-						public void setText(String text) throws MessagingException {
-						}
+		final AttachmentProxy attachment = repo.attachment(PROJECT, issue.issueNumber, attachmentId);
+		assertThat(attachment.readInfo().files).hasSize(1).allSatisfy(file -> {
+			assertThat(file.fileName).isEqualTo(fileName);
+		});
+		assertThat(attachment.readDescription()).contains("Please do not pay.");
+	}
 
-						@Override
-						public void setContent(Multipart mp) throws MessagingException {
-						}
+	private void whenMessage(final String messageId, final SimpleMessage message) throws Exception {
+		when(controller.imap.readMessage(eq(messageId), any())).then(i -> ((MessageReader) i.getArgument(1)).read(message));
+	}
 
-						@Override
-						public void writeTo(OutputStream os) throws IOException, MessagingException {
-						}
-
-						@Override
-						public String[] getHeader(String header_name) throws MessagingException {
-							return null;
-						}
-
-						@Override
-						public void setHeader(String header_name, String header_value) throws MessagingException {
-						}
-
-						@Override
-						public void addHeader(String header_name, String header_value) throws MessagingException {
-						}
-
-						@Override
-						public void removeHeader(String header_name) throws MessagingException {
-						}
-
-						@Override
-						public Enumeration<Header> getAllHeaders() throws MessagingException {
-							return null;
-						}
-
-						@Override
-						public Enumeration<Header> getMatchingHeaders(String[] header_names) throws MessagingException {
-							return null;
-						}
-
-						@Override
-						public Enumeration<Header> getNonMatchingHeaders(String[] header_names) throws MessagingException {
-							return null;
-						}
-
-						@Override
-						public Address[] getFrom() throws MessagingException {
-							return null;
-						}
-
-						@Override
-						public void setFrom() throws MessagingException {
-						}
-
-						@Override
-						public void setFrom(Address address) throws MessagingException {
-						}
-
-						@Override
-						public void addFrom(Address[] addresses) throws MessagingException {
-						}
-
-						@Override
-						public Address[] getRecipients(RecipientType type) throws MessagingException {
-							return null;
-						}
-
-						@Override
-						public void setRecipients(RecipientType type, Address[] addresses) throws MessagingException {
-						}
-
-						@Override
-						public void addRecipients(RecipientType type, Address[] addresses) throws MessagingException {
-						}
-
-						@Override
-						public String getSubject() throws MessagingException {
-							return mailSubject;
-						}
-
-						@Override
-						public void setSubject(String subject) throws MessagingException {
-						}
-
-						@Override
-						public Date getSentDate() throws MessagingException {
-							return mailSentDate;
-						}
-
-						@Override
-						public void setSentDate(Date date) throws MessagingException {
-						}
-
-						@Override
-						public Date getReceivedDate() throws MessagingException {
-							return null;
-						}
-
-						@Override
-						public Flags getFlags() throws MessagingException {
-							return null;
-						}
-
-						@Override
-						public void setFlags(Flags flag, boolean set) throws MessagingException {
-						}
-
-						@Override
-						public Message reply(boolean replyToAll) throws MessagingException {
-							return null;
-						}
-
-						@Override
-						public void saveChanges() throws MessagingException {
-						}
-						
-					});
-				} catch (Exception e) {
-					LOGGER.error("Unexpected", e);
-				}
-				
-				return null;
-			}
-		};
-		
-		final String commentId = controller.importMailToIssue(controller.encodeUri("test-uri"), "0", project, issue.issueNumber);
-		
-		final CommentProxy comment = repo.comment(project, issue.issueNumber, commentId);
-		
-		assertEquals(mailText, comment.readDescription());
-		
+	private void assertContentMeta(String mailSubject, Date mailSentDate, CommentProxy comment) {
 		final CommentMeta meta = comment.readMeta();
-		assertEquals(controller.currentUser.getName(), meta.creator);
-		assertEquals(mailSentDate.toString(), meta.creationDate.toString());
-		assertEquals(mailSubject, meta.title);
+		assertThat(meta.creator).isEqualTo(controller.currentUser.getName());
+		assertThat(meta.creationDate.toString()).isEqualTo(mailSentDate.toString());
+		assertThat(meta.title).isEqualTo(mailSubject);
+	}
+
+	public static class SimpleMessage implements Message {
+
+		private final String mailSubject;
+		private final Date mailSentDate;
+		private final List<Part> parts;
+
+		public SimpleMessage(final List<Part> parts, final String mailSubject, final Date mailSentDate) {
+			this.parts = parts;
+			this.mailSubject = mailSubject;
+			this.mailSentDate = mailSentDate;
+		}
+
+		@Override
+		public String[] getHeader(String header_name) {
+			return null;
+		}
+
+		@Override
+		public Enumeration<Header> getAllHeaders() {
+			return null;
+		}
+
+		@Override
+		public Stream<Part> getParts() {
+			return parts.stream();
+		}
+
+		@Override
+		public int getMessageNumber() {
+			return 0;
+		}
+
+		@Override
+		public Address[] getAllRecipients() {
+			return new Address[0];
+		}
+
+		@Override
+		public Address[] getFrom() {
+			return null;
+		}
+
+		@Override
+		public String getSubject() {
+			return mailSubject;
+		}
+
+		@Override
+		public Date getSentDate() {
+			return mailSentDate;
+		}
+
+		@Override
+		public Date getReceivedDate() {
+			return null;
+		}
+
+	}
+
+	public static class TextPart implements Part {
+
+		private final String content;
+		private final String contentType;
+
+
+		public TextPart(final String content, final String contentType) {
+			this.content = content;
+			this.contentType = contentType;
+		}
+
+		@Override
+		public int getSize() {
+			return content.getBytes(StandardCharsets.UTF_8).length;
+		}
+
+		@Override
+		public String getFileName() {
+			return "simpleText-" + content.hashCode() + "-" + getSize();
+		}
+
+		@Override
+		public @NotNull InputStream getInputStream() {
+			return new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
+		}
+
+		@Override
+		public Object getContent() {
+			return content;
+		}
+
+		@Override
+		public String getContentType() {
+			return contentType;
+		}
+
+		@Override
+		public Enumeration<Header> getAllHeaders() {
+			return Collections.enumeration(List.of());
+		}
+	}
+
+	public static class BinaryPart implements Part {
+
+		private final byte[] content;
+		private final String contentType;
+		private final String fileName;
+
+		public BinaryPart(final String contentPath, final String contentType, final String fileName) throws IOException {
+			this.content = FileCopyUtils.copyToByteArray(MailApiControllerTest.class.getResourceAsStream(contentPath));
+			this.contentType = contentType;
+			this.fileName = fileName;
+		}
+
+		@Override
+		public int getSize() {
+			return content.length;
+		}
+
+		@Override
+		public String getFileName() {
+			return fileName;
+		}
+
+		@Override
+		public @NotNull InputStream getInputStream() {
+			return new ByteArrayInputStream(content);
+		}
+
+		@Override
+		public Object getContent() {
+			return content;
+		}
+
+		@Override
+		public String getContentType() {
+			return contentType;
+		}
+
+		@Override
+		public Enumeration<Header> getAllHeaders() {
+			return Collections.enumeration(List.of());
+		}
 	}
 }

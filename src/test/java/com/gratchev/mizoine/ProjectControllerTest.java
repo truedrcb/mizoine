@@ -2,9 +2,9 @@ package com.gratchev.mizoine;
 
 import static com.gratchev.mizoine.api.ProjectApiController.BY_ISSUE_NUMBER_DESCENDING;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

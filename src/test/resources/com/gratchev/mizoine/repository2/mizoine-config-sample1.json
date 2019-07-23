@@ -1,0 +1,16 @@
+{
+	"users": {
+		"amadeus": {
+			"password": "god"
+		}
+	},
+
+	"repositories": {
+		"home": {
+			"home": "sample/miz_home"
+		},
+		"work": {
+			"home": "sample/miz_work"
+		}
+	}
+}

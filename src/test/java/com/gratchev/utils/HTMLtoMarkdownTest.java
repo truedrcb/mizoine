@@ -1,63 +1,22 @@
 package com.gratchev.utils;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
-import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.slf4j.impl.StaticLoggerBinder;
 
-public class HTMLtoMarkdownTest {
-	private static final Logger LOGGER = LoggerFactory.getLogger(HTMLtoMarkdownTest.class);
-	
-	private String html;
-	private Document d;
-	private String md;
-	private HTMLtoMarkdown htmLtoMarkdown = new HTMLtoMarkdown();
-	
+public class HTMLtoMarkdownTest extends HtmlToMarkdownTestBase {
+	@BeforeEach
 	public void setup() {
 		htmLtoMarkdown.skipImg = true;
-	}
-	
-	private void whenHtml(final String htmlToConvert) {
-		this.html = htmlToConvert;
-		d = Jsoup.parse(this.html);
-		assertNotNull(htmlToConvert, d);
-		if (LOGGER.isTraceEnabled()) {
-			LOGGER.trace(d.toString());
-		}
-		assertEquals(1, d.children().size());
-	}
-	
-	private void whenHtmlRes(final String fileName) throws IOException {
-		if (LOGGER.isTraceEnabled()) {
-			LOGGER.trace("Loading resource: " + fileName);
-		}
-		d = Jsoup.parse(HTMLtoMarkdownTest.class.getResourceAsStream(fileName), "UTF-8" , "");
-		if (LOGGER.isTraceEnabled()) {
-			LOGGER.trace(d.toString());
-		}
-		assertEquals(1, d.children().size());
-	}
-	
-	private void thenMd(final String expectedMd) {
-		assertNotNull("Call 'whenHtml' before calling 'thenMd'", d);
-		md = htmLtoMarkdown.convert(d);
-		
-		assertEquals(expectedMd, md);
-		
-		// Just for fun (and for sequential calls to 'wnen/then')
-		d = null;
-		html = null;
-	}
-	
-	private void showMd() {
-		assertNotNull("Call 'whenHtml' before calling 'thenMd'", d);
-		md = htmLtoMarkdown.convert(d);
 	}
 	
 	@Test
@@ -203,98 +162,6 @@ public class HTMLtoMarkdownTest {
 	}
 
 	@Test
-	public void convertSimpleTable() {
-		whenHtml("<table><tr><td>one cell</td></tr></table>Hello");
-		thenMd("| ---- |\n| one cell |\n\nHello");
-	}
-
-	@Test
-	public void skipHrWithinSimpleTable() {
-		whenHtml("start<table><tr><td><hr/>one cell</td></tr></table>Hello");
-		thenMd("start\n\n| ---- |\n| one cell |\n\nHello");
-	}
-
-	@Test
-	public void keepHrOutsideSimpleTable() {
-		whenHtml("start<hr/><table><tr><td>one cell</td></tr></table>Hello");
-		thenMd("start\n\n---\n\n| ---- |\n| one cell |\n\nHello");
-	}
-	
-	@Test
-	public void convertTable2x1() {
-		whenHtml("<table><tr><td>first cell</td><td>second cell</td></tr></table>");
-		thenMd("| ---- | ---- |\n| first cell | second cell |");
-	}
-	
-	@Test
-	public void convertTable2x2() {
-		whenHtml("<h1>Table sample</h1><table>"
-				+ "<tr><td>first cell</td><td>second cell</td></tr>"
-				+ "<tr><td>third cell</td><td>fourth cell</td></tr>"
-				+ "</table>");
-		thenMd("# Table sample\n\n| ---- | ---- |\n"
-				+ "| first cell | second cell |\n"
-				+ "| third cell | fourth cell |"
-				);
-	}
-
-	@Test
-	public void convertTable3x2() {
-		whenHtml("<h1>Table sample</h1>Here comes a table<table>"
-				+ "<tr><td>first cell</td><td>second </td><td>cell</td></tr>"
-				+ "<tr><td>third cell</td><td>fourth</td><td> cell</td></tr>"
-				+ "</table>");
-		thenMd("# Table sample\n\n"
-				+ "Here comes a table\n\n"
-				+ "| ---- | ---- | ---- |\n"
-				+ "| first cell | second | cell |\n"
-				+ "| third cell | fourth | cell |"
-				);
-	}
-
-	@Test
-	public void convertTable3x2tbody() {
-		whenHtml("<h1>Table sample</h1>Here comes a table<table>"
-				+ "<tr><td>first cell</td><td>second </td><td>cell</td></tr>"
-				+ "<tr><td>third cell</td><td>fourth</td><td> cell</td></tr>"
-				+ "</table>");
-		thenMd("# Table sample\n\n"
-				+ "Here comes a table\n\n"
-				+ "| ---- | ---- | ---- |\n"
-				+ "| first cell | second | cell |\n"
-				+ "| third cell | fourth | cell |"
-				);
-	}
-
-	@Test
-	public void convertTable2x1withDivs() {
-		whenHtml("<b>Table test</b><table><tr><td><div>first cell</div></td><td><div>second</div><p>cell</p></td></tr></table>");
-		thenMd("**Table test**\n\n"
-				+ "| ---- | ---- |\n"
-				+ "| first cell | second cell |");
-	}
-
-	@Test
-	public void convertTable2x1withDivsInTable() {
-		whenHtml("<table><tr><td><b>Table test</b><table><tr><td><div>first cell</div></td><td><div>second</div><p>cell</p></td></tr></table></td></tr></table>");
-		thenMd("**Table test**\n\n"
-				+ "| ---- | ---- |\n"
-				+ "| first cell | second cell |");
-	}
-
-	@Test
-	public void convertTable2x1withDivsInTables() {
-		whenHtml("<table><tr><td>a header</td></tr><tr><td>"
-					+ "<table><tr><td><b>Table test</b></td></tr><tr><td>"
-						+ "<table><tr><td><div>first cell</div></td><td><div>second</div><p>cell</p></td></tr></table>"
-					+ "</td></tr></table>"
-				+ "</td></tr></table>");
-		thenMd("a header\n\n**Table test**\n\n"
-				+ "| ---- | ---- |\n"
-				+ "| first cell | second cell |");
-	}
-
-	@Test
 	public void convertSimpleMultilinePre() {
 		// JSoup trims text?
 		whenHtml("<pre>\n\n this is *code*\nwith line breaks</pre>");
@@ -320,28 +187,25 @@ public class HTMLtoMarkdownTest {
 		thenMd("Hello, `this is **code** without line breaks` !");
 	}
 	
-	@Test 
-	public void convertTableRes() throws IOException {
-		whenHtmlRes("paste-tables.html");
-		showMd();
-	}
-
 	@Test
 	public void convertMultilineStrong() {
-		whenHtml("<strong>Hello <i>indent</i><br>All strong skipped</strong>");
-		thenMd("Hello *indent*\nAll strong skipped");
+		whenHtml("<strong>Hello <i>italic</i><blockquote>Block quote</blockquote>All strong skipped</strong>");
+		thenMd("Hello *italic*\n"
+				+ "> Block quote\n"
+				+ "\n"
+				+ "All strong skipped");
 	}
 
 	@Test
-	public void convertMultilineStrongCollapse() {
-		whenHtml("Hello<strong><br>All strong skipped</strong>");
-		thenMd("Hello\nAll strong skipped");
+	public void convertMultilineStrongIgnoreBr() {
+		whenHtml("<strong>Hello <i>italic</i><br>BR skipped</strong>");
+		thenMd("**Hello *italic* BR skipped**");
 	}
 
-	@Test 
-	public void convertInheritedTableRes() throws IOException {
-		whenHtmlRes("paste-inherited-tables.html");
-		showMd();
+	@Test
+	public void convertMultilineItalicIgnoreHr() {
+		whenHtml("<i>Hello italic<hr>HR skipped</i>");
+		thenMd("*Hello italic HR skipped*");
 	}
 
 	@Test 
@@ -374,23 +238,6 @@ public class HTMLtoMarkdownTest {
 		thenMd("Hello mail link &lt;[Artem](mailto:artem@mizoine.info)&gt; End");
 	}
 	
-
-	@Test 
-	public void convertSimpleTableRes() throws IOException {
-		whenHtmlRes("paste-simple-table.html");
-		thenMd("**Muster Firma**\n" + 
-				"\n" + 
-				"Musterweg 123\n" + 
-				"68794 Oberhausen-Rheinhausen\n" + 
-				"\n" + 
-				"Deutschland\n" + 
-				"\n" + 
-				"Telefon 02345 - 24446667\n" + 
-				"\n" + 
-				"Telefax 012345 - 22 44 6666\n" + 
-				"\n" + 
-				"[info@muster-seite.de](mailto:info@muster-seite.de)");
-	}
 
 	@Test
 	public void convertBlockquote() {
@@ -454,9 +301,9 @@ public class HTMLtoMarkdownTest {
 		showMd();
 	}
 
-	@Test 
-	public void convertTable6x2() throws IOException {
-		whenHtmlRes("paste-table6x2.html");
-		showMd();
+	@Test
+	public void convertTeletype() {
+		whenHtml("<div>Hello <tt>code</tt></div>");
+		thenMd("Hello `code`");
 	}
 }

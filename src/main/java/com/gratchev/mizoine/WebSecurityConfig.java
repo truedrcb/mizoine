@@ -1,15 +1,12 @@
 package com.gratchev.mizoine;
 
-import java.util.HashMap;
 import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.authentication.configurers.provisioning.InMemoryUserDetailsManagerConfigurer;
@@ -35,104 +32,14 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(WebSecurityConfig.class);
 
 	@Autowired
-	private BasicUsersConfiguration usersConfiguration;
-
-	@Bean
-	@ConfigurationProperties
-	public BasicUsersConfiguration basicUserConfigurationBean() {
-		return new BasicUsersConfiguration();
-	}
-	
-	public static class LoginCredentials {
-		private String username;
-		private String password;
-		
-		public String getUsername() {
-			return username;
-		}
-		public void setUsername(String username) {
-			this.username = username;
-		}
-		public String getPassword() {
-			return password;
-		}
-		public void setPassword(String password) {
-			this.password = password;
-		}
-	}
-	
-	public static class ImapConnection extends LoginCredentials {
-		private String host;
-		private int port;
-		
-		public String getHost() {
-			return host;
-		}
-		public void setHost(String host) {
-			this.host = host;
-		}
-		public int getPort() {
-			return port;
-		}
-		public void setPort(int port) {
-			this.port = port;
-		}
-	}
-	
-	public static class UserCredentials {
-		private String password;
-		private LoginCredentials git;
-		private ImapConnection imap;
-		private String eMail;
-
-		public LoginCredentials getGit() {
-			return git;
-		}
-
-		public void setGit(LoginCredentials git) {
-			this.git = git;
-		}
-
-		public ImapConnection getImap() {
-			return imap;
-		}
-
-		public void setImap(ImapConnection imap) {
-			this.imap = imap;
-		}
-
-		public String geteMail() {
-			return eMail;
-		}
-
-		public void seteMail(String eMail) {
-			this.eMail = eMail;
-		}
-
-		public String getPassword() {
-			return password;
-		}
-
-		public void setPassword(String password) {
-			this.password = password;
-		}
-	}
-
-	public static class BasicUsersConfiguration {
-
-		private Map<String, UserCredentials> users = new HashMap<String, UserCredentials>();
-
-		public Map<String, UserCredentials> getUsers() {
-			return this.users;
-		}
-	}	
+	private Application.BasicUsersConfiguration usersConfiguration;
 
 	@Override
 	protected void configure(final HttpSecurity http) throws Exception {
 		http
 		.authorizeRequests()
 		// https://stackoverflow.com/questions/20673230/spring-boot-overriding-favicon
-		.antMatchers("/public/**", "/res/**").permitAll()
+		.antMatchers("/public/**", "/res/**", "/lib/**").permitAll()
 		.anyRequest().authenticated()
 		.and()
 		.formLogin()
@@ -158,7 +65,7 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
 		final InMemoryUserDetailsManagerConfigurer<AuthenticationManagerBuilder> authentication 
 		= auth.inMemoryAuthentication();
 
-		final Map<String, UserCredentials> users = usersConfiguration.getUsers();
+		final Map<String, Application.UserCredentials> users = usersConfiguration.getUsers();
 		if (users == null || users.size() < 1) {
 			@SuppressWarnings("deprecation")
 			final UserDetails user = User.withDefaultPasswordEncoder()

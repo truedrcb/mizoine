@@ -54,7 +54,7 @@ const gitRoute =
 	</nav>
 	<div class="row">
 	<div class="col" v-if="stage" v-for="aged in ['unstaged', 'staged']">
-		<h4>{{aged}}</h4>
+		<h4 v-if="Object.entries(stage[aged]).length > 0">{{aged}}</h4>
 		<ul class="list-group" v-if="stage[aged]">
 			<li class="list-group-item" v-for="(info, path) in stage[aged]">
 				<div v-if="info.project">
@@ -80,12 +80,13 @@ const gitRoute =
 			<h5><small class="git-commit-name" :title="item.name">{{item.name}}</small>
 			<span v-for="tag in item.tags" :key="tag" class="badge badge-warning mr-1">{{tag}}</span>
 			{{item.shortMessage}}</h5>
-			<div>
+			<div v-if="!item.repository">
 				<project-link-badge v-for="project in item.projects" :info="projectsMap[project]" />
 				<span v-for="issue in item.issues">
 					<router-link :to="'/issue/' + issue">{{issue}}</router-link>, 
 				</span>
 			</div>
+			<repository-tree :repository="item.repository" />
 		</li>
 	</ul>
 </div>

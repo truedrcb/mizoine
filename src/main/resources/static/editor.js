@@ -86,6 +86,7 @@ const editorRoute = {
 				<tool-button @click='putAroundSelection("~~","~~")' title="~~Strikethrough~~" icon='strikethrough' />
 				<tool-button @click='indentSelectionWith("- ")' title="- List" icon='list-ul' />
 				<tool-button @click='indentSelectionWith("1. ")' title="1. Numbered List" icon='list-ol' />
+				<tool-button @click='indentSelectionWith("> ")' title="> Blockquote" icon='quote-right' />
 				<tool-button @click='insertLink()' title="[Link sample](url/sample)" icon='link' />
 				<tool-button @click='insertImage()' title="![Image sample](url/image)" icon='image' />
 				<div class="dropdown">
@@ -101,14 +102,14 @@ const editorRoute = {
 				<tool-button @click='insert("\\n\\n---\\n")' title="Horisontal ruler ---" icon='window-minimize' />
 				<tool-button @click='putAroundSelection("<kbd>","</kbd>")' title="<kbd>Keyboard key</kbd>" icon='keyboard' />
 				<tool-button @click='insertCode()' title="Code" icon='code' />
-				<div class="btn-group btn-group-toggle mx-2" data-toggle="buttons">
+				<div class="btn-group mx-2">
 					<div class="input-group-prepend">
 						<div class="input-group-text"><icon name="paste"/></div>
 					</div>
-					<button type='button' :class="'btn btn-outline-secondary ' + (mdPasteMode == 'text' ? 'active' : '')"
+					<button type='button' :class="'btn btn-outline-secondary ' + (mdPasteMode === 'text' ? 'active' : '')"
 						data-original-title="Paste normal text"
 						@click="setPasteMode('text')">text</button>
-					<button type='button'title="" :class="'btn btn-outline-secondary ' + (mdPasteMode == 'html' ? 'active' : '')" 
+					<button type='button'title="" :class="'btn btn-outline-secondary ' + (mdPasteMode === 'html' ? 'active' : '')" 
 						data-original-title="Paste HTML if available"
 						@click="setPasteMode('html')">html</button>
 				</div>
@@ -160,6 +161,8 @@ const editorRoute = {
 						t.project = this.info.project;
 						t.projectInfo = null;
 						t.issueNumber = this.info.issueNumber;
+						t.attachmentId = this.info.attachmentId;
+						t.commentId = this.info.commentId;
 						t.issueInfo = null;
 						if (t.project && t.issueNumber) {
 							issuesInfo.clear(t.project, t.issueNumber);
@@ -176,7 +179,13 @@ const editorRoute = {
 			quit: function () {
 				if (this.project) {
 					if (this.issueNumber) {
-						this.$router.push({ path: `/issue/${this.project}-${this.issueNumber}` });
+						if(this.attachmentId) {
+							this.$router.push({ path: `/issue/${this.project}-${this.issueNumber}/attachment-${this.attachmentId}` });
+						} else if(this.commentId) {
+							this.$router.push({ path: `/issue/${this.project}-${this.issueNumber}/comment-${this.commentId}` });
+						} else {
+							this.$router.push({ path: `/issue/${this.project}-${this.issueNumber}` });
+						}
 					} else {
 						this.$router.push({ path: `/issues/${this.project}` });
 					}
@@ -320,7 +329,7 @@ const editorRoute = {
 			}
 			this.editor.session.setUseWrapMode(true);
 			this.editor.resize();
-			
+			this.editor.focus();
 			var t = this;
 
 			// https://stackoverflow.com/questions/2176861/javascript-get-clipboard-data-on-paste-event-cross-browser
@@ -328,7 +337,7 @@ const editorRoute = {
 				console.log("Editor paste: " + t.mdPasteMode);
 				//console.log(o);
 				
-				if(t.mdPasteMode == "html") {
+				if(t.mdPasteMode === "html") {
 					var e = o.event;
 
 					// Get pasted data via clipboard API
@@ -339,7 +348,7 @@ const editorRoute = {
 					// Do whatever with pasteddata
 					console.log(pastedData);
 					
-					if (pastedData == null || pastedData == "") {
+					if (pastedData === null || pastedData === "") {
 						pastedData = clipboardData.getData('text/plain');
 						console.log("getting plain text from clipboard")
 						console.log(pastedData);
@@ -372,6 +381,8 @@ const editorRoute = {
 					t.project = this.info.project;
 					t.projectInfo = null;
 					t.issueNumber = this.info.issueNumber;
+					t.attachmentId = this.info.attachmentId;
+					t.commentId = this.info.commentId;
 					t.issueInfo = null;
 					
 					if (t.project) {

@@ -28,5 +28,4 @@ public class AttachmentMeta extends BaseMeta {
 	public String toString() {
 		return "AttachmentMeta [fileName=" + fileName + ", upload=" + upload + "]";
 	}
-
 }

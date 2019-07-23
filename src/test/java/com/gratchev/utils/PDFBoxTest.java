@@ -1,11 +1,12 @@
 package com.gratchev.utils;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 
+import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 import org.apache.pdfbox.rendering.ImageType;
@@ -14,7 +15,7 @@ import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.pdfbox.tools.PDFText2HTML;
 import org.apache.pdfbox.tools.imageio.ImageIOUtil;
 import org.jsoup.Jsoup;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,7 +50,7 @@ public class PDFBoxTest {
 	public void testRenderPdfToImage() throws InvalidPasswordException, IOException {
 		// https://stackoverflow.com/questions/23326562/apache-pdfbox-convert-pdf-to-images
 
-		try (final PDDocument document = PDDocument.load(PDFBoxTest.class.getResourceAsStream(INVOICE_PDF))) {
+		try (final PDDocument document = Loader.loadPDF(PDFBoxTest.class.getResourceAsStream(INVOICE_PDF))) {
 			
 			assertEquals(1, document.getNumberOfPages());
 			
@@ -70,7 +71,7 @@ public class PDFBoxTest {
 	@Test
 	public void testParsePdfText() throws InvalidPasswordException, IOException {
 		
-		try (final PDDocument document = PDDocument.load(PDFBoxTest.class.getResourceAsStream(INVOICE_PDF))) {
+		try (final PDDocument document = Loader.loadPDF(PDFBoxTest.class.getResourceAsStream(INVOICE_PDF))) {
 			
 			assertEquals(1, document.getNumberOfPages());
 			
@@ -81,7 +82,7 @@ public class PDFBoxTest {
 	@Test
 	public void testParseGermanPdfText() throws InvalidPasswordException, IOException {
 		
-		try (final PDDocument document = PDDocument.load(PDFBoxTest.class.getResourceAsStream(PRINTED_WEB_PAGE_PDF))) {
+		try (final PDDocument document = Loader.loadPDF(PDFBoxTest.class.getResourceAsStream(PRINTED_WEB_PAGE_PDF))) {
 			
 			assertEquals(1, document.getNumberOfPages());
 			
@@ -92,7 +93,7 @@ public class PDFBoxTest {
 	@Test
 	public void testParsePdfDatasheet() throws InvalidPasswordException, IOException {
 		
-		try (final PDDocument document = PDDocument.load(PDFBoxTest.class.getResourceAsStream(DATASHEET_PDF))) {
+		try (final PDDocument document = Loader.loadPDF(PDFBoxTest.class.getResourceAsStream(DATASHEET_PDF))) {
 			
 			assertEquals(2, document.getNumberOfPages());
 			
@@ -103,7 +104,7 @@ public class PDFBoxTest {
 	@Test
 	public void testParsePdfDatasheetOverHTML() throws InvalidPasswordException, IOException {
 		
-		try (final PDDocument document = PDDocument.load(PDFBoxTest.class.getResourceAsStream(DATASHEET_PDF))) {
+		try (final PDDocument document = Loader.loadPDF(PDFBoxTest.class.getResourceAsStream(DATASHEET_PDF))) {
 			
 			assertEquals(2, document.getNumberOfPages());
 			
@@ -114,7 +115,7 @@ public class PDFBoxTest {
 	@Test
 	public void testParseLongPdfText() throws InvalidPasswordException, IOException {
 		
-		try (final PDDocument document = PDDocument.load(
+		try (final PDDocument document = Loader.loadPDF(
 				PDFBoxTest.class.getResourceAsStream(APPLE_PDF))) {
 			
 			assertEquals(6, document.getNumberOfPages());

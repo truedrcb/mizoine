@@ -34,7 +34,9 @@ import com.gratchev.mizoine.repository.Repository;
 import com.gratchev.mizoine.repository.Repository.AttachmentProxy;
 import com.gratchev.mizoine.repository.Repository.IssueProxy;
 import com.gratchev.mizoine.repository.Repository.Visitor;
-import com.gratchev.mizoine.repository.RepositoryIndexer;;
+import com.gratchev.mizoine.repository.RepositoryCache;
+import com.gratchev.mizoine.repository.RepositoryIndexer;
+import com.gratchev.mizoine.repository.meta.RepositoryMeta;;
 
 @Controller
 @EnableAutoConfiguration
@@ -58,6 +60,7 @@ public class SearchApiController extends BaseController {
 	@JsonInclude(Include.NON_NULL)
 	public static class SearchResult {
 		public final List<SearchEntry> hits = new ArrayList<>();
+		public RepositoryMeta repository;
 		public String query;
 		public String tag;
 	}
@@ -72,7 +75,10 @@ public class SearchApiController extends BaseController {
 			LOGGER.debug("Query: '"  + query + "'");
 			LOGGER.debug("Tag: '"  + tag + "'");
 		}
-		try (final Directory directory = FSDirectory.open(getRepo().getLuceneDir().toPath())) {
+		final Repository repo = getRepo();
+		final RepositoryCache repoCache = new RepositoryCache(repo);
+
+		try (final Directory directory = FSDirectory.open(repo.getLuceneDir().toPath())) {
 			try (final DirectoryReader ireader = DirectoryReader.open(directory)) {
 				IndexSearcher isearcher = new IndexSearcher(ireader);
 
@@ -87,6 +93,7 @@ public class SearchApiController extends BaseController {
 				if (tag != null && tag.length() > 0) {
 					RepositoryIndexer.createTagsQuery(Sets.newHashSet(tag), Sets.newHashSet("tags", "status"), builder);
 					result.tag = tag;
+					LOGGER.info("Search tag: " + result.tag);
 				}
 				
 				final Query luceneQuery = builder.build();
@@ -103,10 +110,23 @@ public class SearchApiController extends BaseController {
 					hit.issueNumber = hitDoc.get("issueNumber");
 					hit.attachmentId = hitDoc.get("attachmentId");
 					hit.commentId = hitDoc.get("commentId");
+					if (hit.project != null) {
+						repoCache.getProject(hit.project);
+						if (hit.issueNumber != null) {
+							repoCache.getIssue(hit.project, hit.issueNumber);
+							if (hit.attachmentId != null) {
+								repoCache.getAttachment(hit.project, hit.issueNumber, hit.attachmentId);
+							}
+							if (hit.commentId != null) {
+								repoCache.getComment(hit.project, hit.issueNumber, hit.commentId);
+							}
+						}
+					}
 					if (LOGGER.isDebugEnabled()) {
 						LOGGER.debug("Found: " + hit + " type " + hitDoc.get("type"));
 					}
 				}
+				result.repository = repoCache.getRepositoryMeta();
 				return result;
 			}
 		}
@@ -124,7 +144,7 @@ public class SearchApiController extends BaseController {
 				repo.fullScan(new Visitor() {
 
 					@Override
-					public void user(final String user) throws IOException {
+					public void user(final String user) {
 					}
 
 					@Override

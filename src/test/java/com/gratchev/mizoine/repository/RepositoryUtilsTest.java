@@ -1,17 +1,22 @@
 package com.gratchev.mizoine.repository;
 
-import static com.gratchev.mizoine.repository.RepositoryUtils.*;
-import static com.gratchev.mizoine.repository.TempRepositoryUtils.*;
-import static org.junit.Assert.*;
+import static com.gratchev.mizoine.repository.RepositoryUtils.checkOrCreateDirectory;
+import static com.gratchev.mizoine.repository.RepositoryUtils.checkOrCreateHiddenDirectory;
+import static com.gratchev.mizoine.repository.TempRepositoryUtils.assertDirExists;
+import static com.gratchev.mizoine.repository.TempRepositoryUtils.assertDirNotExists;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.gratchev.mizoine.repository.TempRepositoryUtils.TempRepository;
 
 public class RepositoryUtilsTest {
 	@SuppressWarnings("unused")
@@ -20,13 +25,13 @@ public class RepositoryUtilsTest {
 	TempRepository repo;
 	
 
-	@Before
+	@BeforeEach
 	public void setUp() throws Exception {
 		repo = TempRepository.create();
 		
 	}
 	
-	@After
+	@AfterEach
 	public void tearDown() throws IOException {
 		repo.dispose();
 	}

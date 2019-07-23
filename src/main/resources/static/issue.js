@@ -132,7 +132,7 @@ const unreadMailList = {
 <div>
 	<div v-if="mails == null">Loading...</div>
 	<div class="list-group">
-		<router-link :to="'preview-mail/' + mail.uri" 
+		<router-link :to="'preview-mail-' + mail.uri" 
 			class="list-group-item" 
 			v-for="mail in mails"
 			:key="mail.uri">
@@ -317,17 +317,17 @@ const previewMail = {
 const issueMents = {
 	template: `
 <div v-if="info">
-	<div class="no-print p-2" :key="info.timestamp">
+	<div class="no-print p-2">
 		<div v-for="(ment, mentindex) in info.ments" class="media mb-5" :key="ment.descriptionPath">
 			<a :id="'ment-' + ment.descriptionPath"></a>
 			<h6>
-				<router-link v-if="ment.attachment" :to="$route.path + '/attachment/' + ment.attachment.id">
+				<router-link v-if="ment.attachment" :to="'attachment-' + ment.attachment.id">
 					<div class="comment-badge mr-2 badge badge-light text-secondary">
 						<img v-if="ment.thumbnail" class="thumbnail" :src="ment.thumbnail" />
 						<i v-if="ment.icon" :class="ment.icon"></i>
 					</div>
 				</router-link>
-				<router-link v-if="ment.comment" :to="$route.path + '/comment/' + ment.comment.id">
+				<router-link v-if="ment.comment" :to="'comment-' + ment.comment.id">
 					<div class="comment-badge mr-2 badge badge-light text-secondary">
 						<i :class="ment.icon"></i>
 					</div>
@@ -503,6 +503,7 @@ const issueComment = {
 			var t = this;
 			axios.delete(t.uri)
 			.then(response => {
+				issuesInfo.clear(t.project, t.issueNumber);
 				store.commit('updateGitStatus');
 				t.$router.push({ path: `/issue/${this.project}-${this.issueNumber}` });
 				displayMessage("Comment removed: " + t.commentId);
@@ -527,6 +528,7 @@ const issueAttachment = {
 		<router-link class="nav-item btn" :to="'/edit/' + mznURI(info.metaPath)">
 			<icon name="sliders-h"/><span-lg> Meta</span-lg>
 		</router-link>
+		<button class="nav-item btn" @click="updateThumbnail()"><icon name="images"/> Thumbnail</button>
 		<button class="nav-item btn ml-auto" @click="deleteAttachment()"><icon name="trash-alt"/> Delete</button>
 	</nav>
 	<div class="p-2">
@@ -590,11 +592,23 @@ const issueAttachment = {
 			var t = this;
 			axios.delete(t.uri)
 			.then(response => {
+				issuesInfo.clear(t.project, t.issueNumber);
 				store.commit('updateGitStatus');
 				t.$router.push({ path: `/issue/${this.project}-${this.issueNumber}` });
 				displayMessage("Attachment removed: " + t.commentId);
 			})
 			.catch(displayError);
+		},
+		updateThumbnail() {
+			var t = this;
+			axios.post("/api/attachment/" + t.project + "-" + t.issueNumber + "/" + t.id + "/update-thumbnails")
+			.then(response => {
+				issuesInfo.clear(t.project, t.issueNumber);
+				t.update();
+			})
+			.catch(error => {
+				displayError(error);
+			});
 		}
 	},
 	created () {
@@ -618,7 +632,7 @@ const issueRoute = {
 		</h1>
 	</div>
 	<div class="secondary" v-if="description == null"><i class="fas fa-circle-notch fa-spin"></i> Loading...</div>
-	<div class="mb-3 no-print" v-if="info">
+	<div class="mb-3 no-print" v-if="info" :key="'tags-' + info.timestamp">
 		<template v-if="info.issue">
 			<i-tag v-for="tag in info.issue.status" :key="tag" :appInfo="appInfo" :tag="tag" @remove="removeTag(tag)"/>
 			<i-tag v-for="tag in info.issue.tags" :key="tag" :appInfo="appInfo" :tag="tag" @remove="removeTag(tag)"/>
@@ -664,10 +678,10 @@ const issueRoute = {
 	</nav>
 	<div :class="(showUploadArea && uri) ? 'my-4' : 'collapse'">
 		<form :action="uri + '/upload'">
-			<upload-files :uploadUrl="uri + '/upload'" @filebatchuploadcomplete="update()"/>
+			<upload-files :uploadUrl="uri + '/upload'" @filebatchuploadcomplete="resetAndUpdate()"/>
 		</form>
 	</div>
-	<div v-if="description" :key="info.timestamp">
+	<div v-if="description" :key="'descr' + info.timestamp">
 		<md-html :html="description.html" :imgInfos="imgInfos"/>
 	</div>
 	
@@ -702,7 +716,7 @@ const issueRoute = {
 			</form>
 		</div>
 	</nav>
-	<router-view :info="info"></router-view>
+	<router-view :info="info" :key="'router-view-' + info.timestamp"></router-view>
 </div>
 `, 
 		data () {
@@ -753,6 +767,11 @@ const issueRoute = {
 				});
 				store.commit('updateGitStatus');
 				//store.commit('message', 'issue: ' + t.project + '-' + t.issueNumber);
+			},
+			resetAndUpdate() {
+				var t = this;
+				issuesInfo.clear(t.project, t.issueNumber);
+				t.update();
 			},
 			reloadInfo: function(data) {
 				var t = this;
@@ -805,8 +824,9 @@ const issueRoute = {
 
 				axios.post(t.uri + "/comment", formData)
 				.then(response => {
+					issuesInfo.clear(t.project, t.issueNumber);
 					store.commit('updateGitStatus');
-					t.$router.push({ path: `/issue/${this.project}-${this.issueNumber}/comment/` + response.data });
+					t.$router.push({ path: `/issue/${this.project}-${this.issueNumber}/comment-` + response.data });
 					displayMessage("Comment created: " + response.data);
 				})
 				.catch(displayError);
@@ -830,8 +850,7 @@ const issueRoute = {
 				function stopUpdate() {
 					t.thumbnailsToUpdate.attachments = null;
 					t.thumbnailsToUpdate.updating = false;
-					issuesInfo.clear(t.project, t.issueNumber);
-					t.update();
+					t.resetAndUpdate();
 				};
 				if (!t.thumbnailsToUpdate.attachments || t.thumbnailsToUpdate.attachments.lenght <= 0) {
 					stopUpdate();
@@ -872,8 +891,9 @@ const issueRoute = {
 		}
 	},
 	children: [
+		{path: '', redirect: 'root'},
 		{
-			path: '', 
+			path: 'root', 
 			component: issueMents,
 			meta: { id: 'ments' }
 		},
@@ -883,17 +903,17 @@ const issueRoute = {
 			meta: { id: 'unread-mail' }
 		},
 		{
-			path: 'preview-mail/:mailUri', 
+			path: 'preview-mail-:mailUri', 
 			component: previewMail,
 			meta: { id: 'preview-mail' }
 		},
 		{
-			path: 'comment/:commentId', 
+			path: 'comment-:commentId', 
 			component: issueComment,
 			meta: { id: 'comment' }
 		},
 		{
-			path: 'attachment/:id', 
+			path: 'attachment-:id', 
 			component: issueAttachment,
 			meta: { id: 'attachment' }
 		}

@@ -1,34 +1,30 @@
 package com.gratchev.mizoine.api;
 
-import javax.servlet.http.HttpServletRequest;
-
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.beans.factory.annotation.Value;
 
 import com.gratchev.mizoine.FlexmarkComponent;
 import com.gratchev.mizoine.SignedInUser;
-import com.gratchev.mizoine.repository.Repositories;
 import com.gratchev.mizoine.repository.Repository;
 import com.vladsch.flexmark.util.ast.Node;
 
 public abstract class BaseController {
-	@Autowired
-	private Repositories repos;
+	private static final String DEFAULT_REPO_KEY = "";
+
+	@Value("${repository.home:sample/test_repo1}")
+	protected String defaultRootPath;
 	@Autowired
 	protected FlexmarkComponent flexmark;
 	@Autowired
 	protected SignedInUser currentUser;
 
+	private Repository defaultRepo;
+
 	public Repository getRepo() {
-		// https://stackoverflow.com/questions/3320674/spring-how-do-i-inject-an-httpservletrequest-into-a-request-scoped-bean
-		final HttpServletRequest currentRequest = 
-				((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes())
-				.getRequest();
-		if (currentRequest == null) {
-			throw new RuntimeException("Repository must be accessed within a request context");
-		} 
-		return repos.getRepository(currentRequest);
+		if (defaultRepo == null) {
+			defaultRepo = new Repository(defaultRootPath, DEFAULT_REPO_KEY);
+		}
+		return defaultRepo;
 	}
 	
 	protected Node parse(final String markdownText) {
