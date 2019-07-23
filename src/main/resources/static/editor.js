@@ -86,6 +86,7 @@ const editorRoute = {
 				<tool-button @click='putAroundSelection("~~","~~")' title="~~Strikethrough~~" icon='strikethrough' />
 				<tool-button @click='indentSelectionWith("- ")' title="- List" icon='list-ul' />
 				<tool-button @click='indentSelectionWith("1. ")' title="1. Numbered List" icon='list-ol' />
+				<tool-button @click='indentSelectionWith("> ")' title="> Blockquote" icon='quote-right' />
 				<tool-button @click='insertLink()' title="[Link sample](url/sample)" icon='link' />
 				<tool-button @click='insertImage()' title="![Image sample](url/image)" icon='image' />
 				<div class="dropdown">
@@ -320,7 +321,7 @@ const editorRoute = {
 			}
 			this.editor.session.setUseWrapMode(true);
 			this.editor.resize();
-			
+			this.editor.focus();
 			var t = this;
 
 			// https://stackoverflow.com/questions/2176861/javascript-get-clipboard-data-on-paste-event-cross-browser
