@@ -27,24 +27,29 @@ public class RepositoryCache {
 		this.repo = repo;
 	}
 	
-	public Project getProject(final String project) {
-		Project meta = projects.get(project);
-		if (meta == null) {
-			meta = repo.readProjectInfo(project);
-			if (meta == null) {
-				meta = new Project();
+	public Project getProject(final String projectId) {
+		Project project = projects.get(projectId);
+		if (project == null) {
+			getRepositoryMeta();
+			project = repo.readProjectInfo(projectId);
+			if (project == null) {
+				project = new Project();
 			}
-			projects.put(project, meta);
+			projects.put(projectId, project);
+			repositoryMeta.putProject(projectId, project.meta);
 		}
-		return meta;
+		return project;
 	}
 
-	public Issue getIssue(final String project, final String issueNumber) {
-		final String issueKey = project + "-" + issueNumber;
+	public Issue getIssue(final String projectId, final String issueNumber) {
+		final String issueKey = projectId + "-" + issueNumber;
 		Issue issue = issues.get(issueKey);
 		if (issue == null) {
-			issue = repo.issue(project, issueNumber).readInfo();
+			issue = repo.issue(projectId, issueNumber).readInfo();
 			issues.put(issueKey, issue);
+
+			final Project project = getProject(projectId);
+			project.meta.putIssue(issueNumber, issue.meta);
 		}
 		
 		return issue;

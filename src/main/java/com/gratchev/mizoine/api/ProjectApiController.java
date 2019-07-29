@@ -1,7 +1,5 @@
 package com.gratchev.mizoine.api;
 
-import static com.gratchev.utils.StringUtils.isUnsignedInteger;
-
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -21,6 +19,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import com.gratchev.mizoine.repository.Issue;
 import com.gratchev.mizoine.repository.Project;
 import com.gratchev.mizoine.repository.Repository;
+import com.gratchev.mizoine.repository.meta.IssueMeta;
 import com.gratchev.utils.FileUtils;
 import com.vladsch.flexmark.html.HtmlRenderer;
 import com.vladsch.flexmark.parser.Parser;
@@ -32,25 +31,7 @@ import com.vladsch.flexmark.util.ast.Node;
 public class ProjectApiController extends BaseDescriptionController {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ProjectApiController.class);
 	public static final Comparator<Issue> BY_ISSUE_NUMBER_DESCENDING = (o1, o2) -> {
-			final String s1 = o1.issueNumber;
-			final String s2 = o2.issueNumber;
-			
-			if(isUnsignedInteger(s1)) {
-				if(isUnsignedInteger(s2)) {
-					int i1 = Integer.parseInt(s1);
-					int i2 = Integer.parseInt(s2);
-					if (i1 != i2) {
-						return i2 - i1; 
-					}
-				} else {
-					return 1;
-				}
-			} else {
-				if(isUnsignedInteger(s2)) {
-					return -1; 
-				}
-			}
-			return -s1.compareTo(s2);
+			return IssueMeta.BY_ISSUE_NUMBER_DESCENDING.compare(o1.issueNumber, o2.issueNumber);
 		};
 
 	@GetMapping("issues")
