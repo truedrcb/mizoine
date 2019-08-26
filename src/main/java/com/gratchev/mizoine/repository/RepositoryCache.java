@@ -9,6 +9,7 @@ import java.util.Set;
 
 import com.gratchev.mizoine.repository.Repository.Proxy;
 import com.gratchev.mizoine.repository.meta.BaseMeta;
+import com.gratchev.mizoine.repository.meta.ProjectMeta;
 import com.gratchev.mizoine.repository.meta.RepositoryMeta;
 import com.gratchev.mizoine.repository.meta.RepositoryMeta.TagMeta;;
 
@@ -34,6 +35,9 @@ public class RepositoryCache {
 			project = repo.readProjectInfo(projectId);
 			if (project == null) {
 				project = new Project();
+			}
+			if (project.meta == null) {
+				project.meta = new ProjectMeta();
 			}
 			projects.put(projectId, project);
 			repositoryMeta.putProject(projectId, project.meta);

@@ -187,7 +187,7 @@ Vue.component('i-tag', {
 	},
 	template: ` 
 <div v-if="tag" class="btn-group mr-1">
-	<router-link :to="'/search?tag=' + tag" :class="'btn btn-' + badgeStyle" :title="'Search by tag: ' + tag">
+	<router-link :to="'/search/tag/' + tag" :class="'btn btn-' + badgeStyle" :title="'Search by tag: ' + tag">
 			<i :class="icon"></i> <span>{{tag}}</span>
 	</router-link>
 	<button v-on:click='clickRemove' :class="'btn btn-' + badgeStyle" :title="'Remove tag: ' + tag">
@@ -277,11 +277,15 @@ gitRoute,
 viewerRoute,
 editorRoute,
 {
-	path: '/search/:query', 
+	path: '/search/q/:query', 
 	component: searchComponent 
 },
 {
-	path: '/search/:query/tag/:tag', 
+	path: '/search/q/:query/tag/:tag', 
+	component: searchComponent 
+},
+{
+	path: '/search/tag/:tag', 
 	component: searchComponent 
 }
 ]

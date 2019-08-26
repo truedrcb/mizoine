@@ -2,7 +2,7 @@ const searchComponent = {
 	template: 
 `
 <div v-if="found">
-	<h1>{{found.query}}</h1>
+	<h1>q: {{found.query}}, tag: {{found.tag}}</h1>
 	<div class="list-group" v-if="found.hits">
 		<template v-for="hit in found.hits">
 			<router-link 
@@ -20,6 +20,7 @@ const searchComponent = {
 		return {
 			found: null,
 			query: this.$route.params.query,
+			tag: this.$route.params.tag,
 			appInfo: null
 		}
 	},
@@ -28,7 +29,7 @@ const searchComponent = {
 			var t = this;
 			console.log(t.query);
 			axios
-				.get("/api/search/find", { params: { q: t.query } })
+				.get("/api/search/find", { params: { q: t.query, tag: t.tag } })
 				.then(response => (this.found = response.data))
 				.catch(displayError);
 		}

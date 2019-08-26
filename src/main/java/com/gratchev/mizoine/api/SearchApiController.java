@@ -93,6 +93,7 @@ public class SearchApiController extends BaseController {
 				if (tag != null && tag.length() > 0) {
 					RepositoryIndexer.createTagsQuery(Sets.newHashSet(tag), Sets.newHashSet("tags", "status"), builder);
 					result.tag = tag;
+					LOGGER.info("Search tag: " + result.tag);
 				}
 				
 				final Query luceneQuery = builder.build();
