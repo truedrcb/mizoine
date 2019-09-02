@@ -5,7 +5,7 @@
 
 * Spring boot (2.1.7.RELEASE) https://spring.io/projects/spring-boot | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.springframework.boot%22%20AND%20a%3A%22spring-boot%22)
 * Flexmark (0.50.28) https://github.com/vsch/flexmark-java/wiki | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.vladsch.flexmark%22%20AND%20a%3A%22flexmark-all%22)
-* JGit (5.4.2.201908231537-r) https://www.eclipse.org/jgit/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.eclipse.jgit%22%20AND%20a%3A%22org.eclipse.jgit%22)
+* JGit (5.4.0.201906121030-r :!: reverted because or performance problem)  https://www.eclipse.org/jgit/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.eclipse.jgit%22%20AND%20a%3A%22org.eclipse.jgit%22)
 * PDFBox (2.0.16) https://pdfbox.apache.org/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.apache.pdfbox%22%20AND%20a%3A%22pdfbox-tools%22)
 * Lucene (8.2.0) https://wiki.apache.org/lucene-java/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.apache.lucene%22%20AND%20a%3A%22lucene-codecs%22)
 * Guava (28.0-jre) https://github.com/google/guava | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.google.guava%22%20AND%20a%3A%22guava%22)
