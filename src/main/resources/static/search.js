@@ -3,6 +3,22 @@ const searchComponent = {
 `
 <div v-if="found">
 	<h1>q: {{found.query}}, tag: {{found.tag}}</h1>
+	<div class="list-group" v-if="found.repository">
+		<template v-for="(projectMeta, project) in found.repository.projects">
+			<router-link 
+				class="list-group-item list-group-item-action" 
+				:to="'/issues/' + project">
+				<project-badge :meta="projectMeta" :text="project"/> {{projectMeta.title}}
+			</router-link>
+			<template v-for="(issueMeta, issueNumber) in projectMeta.issues">
+				<router-link 
+					class="list-group-item list-group-item-action" 
+					:to="'/issue/' + project + '-' + issueNumber">
+					<i-badge :meta="projectMeta" :text="project + '-' + issueNumber"/> {{issueMeta.title}}
+				</router-link>
+			</template>
+		</template>
+	</div>
 	<div class="list-group" v-if="found.hits">
 		<template v-for="hit in found.hits">
 			<router-link 

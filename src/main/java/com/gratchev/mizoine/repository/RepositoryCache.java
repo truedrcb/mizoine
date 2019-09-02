@@ -59,6 +59,16 @@ public class RepositoryCache {
 		return issue;
 	}
 	
+	public Attachment getAttachment(final String projectId, final String issueNumber, final String attachmentId) {
+		final Issue issue = getIssue(projectId, issueNumber);
+		return issue.meta.putAttachment(attachmentId, repo.attachment(projectId, issueNumber, attachmentId).readMeta());
+	}
+
+	public Comment getComment(final String projectId, final String issueNumber, final String commentId) {
+		final Issue issue = getIssue(projectId, issueNumber);
+		return issue.meta.putComment(commentId, repo.comment(projectId, issueNumber, commentId).readMeta());
+	}
+
 	private void addAllTagMetas(final Map<String, TagMeta> newTags) {
 		for (final Entry<String, TagMeta> e : newTags.entrySet()) {
 			final TagMeta tag = e.getValue();

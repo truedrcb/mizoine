@@ -1,6 +1,5 @@
 package com.gratchev.mizoine;
 
-import static com.gratchev.mizoine.api.IssueApiController.MENTS_COMPARATOR;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertTrue;
 
@@ -15,6 +14,7 @@ import org.junit.Test;
 import com.gratchev.mizoine.api.IssueApiController.WithDescription;
 import com.gratchev.mizoine.repository.Comment;
 import com.gratchev.mizoine.repository.meta.CommentMeta;
+import com.gratchev.mizoine.repository.meta.IssueMeta;
 
 public class IssueControlerMENTS_COMPARATORTest {
 	final WithDescription empty = new WithDescription();
@@ -62,76 +62,76 @@ public class IssueControlerMENTS_COMPARATORTest {
 	@Test
 	public void sort1() {
 		final List<WithDescription> list = Arrays.asList(new WithDescription());
-		list.sort(MENTS_COMPARATOR);
+		list.sort(IssueMeta.MENTS_COMPARATOR);
 		assertThat(list).hasSize(1);
 	}
 
 	@Test
 	public void compareEmpties() {
-		assertThat(MENTS_COMPARATOR.compare(empty, empty)).isEqualTo(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(empty, empty)).isEqualTo(0);
 
-		assertThat(MENTS_COMPARATOR.compare(empty, emptyMent)).isEqualTo(0);
-		assertThat(MENTS_COMPARATOR.compare(emptyMent, empty)).isEqualTo(0);
-		assertThat(MENTS_COMPARATOR.compare(empty, emptyMeta)).isEqualTo(0);
-		assertThat(MENTS_COMPARATOR.compare(emptyMeta, empty)).isEqualTo(0);
-		assertThat(MENTS_COMPARATOR.compare(emptyMent, emptyMeta)).isEqualTo(0);
-		assertThat(MENTS_COMPARATOR.compare(emptyMeta, emptyMent)).isEqualTo(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(empty, emptyMent)).isEqualTo(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(emptyMent, empty)).isEqualTo(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(empty, emptyMeta)).isEqualTo(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(emptyMeta, empty)).isEqualTo(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(emptyMent, emptyMeta)).isEqualTo(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(emptyMeta, emptyMent)).isEqualTo(0);
 	}
 	
 	@Test
 	public void compareDateWithEmpty() {
-		assertThat(MENTS_COMPARATOR.compare(d1, emptyMeta)).isLessThan(0);
-		assertThat(MENTS_COMPARATOR.compare(emptyMeta, d1)).isGreaterThan(0);
-		assertThat(MENTS_COMPARATOR.compare(d0, emptyMeta)).isLessThan(0);
-		assertThat(MENTS_COMPARATOR.compare(emptyMeta, d0)).isGreaterThan(0);
-		assertThat(MENTS_COMPARATOR.compare(d2, emptyMeta)).isLessThan(0);
-		assertThat(MENTS_COMPARATOR.compare(emptyMeta, d2)).isGreaterThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(d1, emptyMeta)).isLessThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(emptyMeta, d1)).isGreaterThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(d0, emptyMeta)).isLessThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(emptyMeta, d0)).isGreaterThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(d2, emptyMeta)).isLessThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(emptyMeta, d2)).isGreaterThan(0);
 	}
 
 	@Test
 	public void compareIdWithEmpty() {
-		assertThat(MENTS_COMPARATOR.compare(id1, emptyMeta)).isLessThan(0);
-		assertThat(MENTS_COMPARATOR.compare(emptyMeta, id1)).isGreaterThan(0);
-		assertThat(MENTS_COMPARATOR.compare(id0, emptyMeta)).isLessThan(0);
-		assertThat(MENTS_COMPARATOR.compare(emptyMeta, id0)).isGreaterThan(0);
-		assertThat(MENTS_COMPARATOR.compare(id2, emptyMeta)).isLessThan(0);
-		assertThat(MENTS_COMPARATOR.compare(emptyMeta, id2)).isGreaterThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(id1, emptyMeta)).isLessThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(emptyMeta, id1)).isGreaterThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(id0, emptyMeta)).isLessThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(emptyMeta, id0)).isGreaterThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(id2, emptyMeta)).isLessThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(emptyMeta, id2)).isGreaterThan(0);
 	}
 
 	@Test
 	public void compareDateWithEmptyDates() {
-		assertThat(MENTS_COMPARATOR.compare(d1, id1)).isLessThan(0);
-		assertThat(MENTS_COMPARATOR.compare(id1, d1)).isGreaterThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(d1, id1)).isLessThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(id1, d1)).isGreaterThan(0);
 
-		assertThat(MENTS_COMPARATOR.compare(d2, id1)).isLessThan(0);
-		assertThat(MENTS_COMPARATOR.compare(id1, d2)).isGreaterThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(d2, id1)).isLessThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(id1, d2)).isGreaterThan(0);
 	}
 
 	@Test
 	public void compareDates() {
-		assertThat(MENTS_COMPARATOR.compare(d1, d2)).isLessThan(0);
-		assertThat(MENTS_COMPARATOR.compare(d2, d1)).isGreaterThan(0);
-		assertThat(MENTS_COMPARATOR.compare(d0, d2)).isLessThan(0);
-		assertThat(MENTS_COMPARATOR.compare(d2, d0)).isGreaterThan(0);
-		assertThat(MENTS_COMPARATOR.compare(d0, d1)).isLessThan(0);
-		assertThat(MENTS_COMPARATOR.compare(d1, d0)).isGreaterThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(d1, d2)).isLessThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(d2, d1)).isGreaterThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(d0, d2)).isLessThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(d2, d0)).isGreaterThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(d0, d1)).isLessThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(d1, d0)).isGreaterThan(0);
 	}
 
 	@Test
 	public void compareIds() {
-		assertThat(MENTS_COMPARATOR.compare(id1, id2)).isLessThan(0);
-		assertThat(MENTS_COMPARATOR.compare(id2, id1)).isGreaterThan(0);
-		assertThat(MENTS_COMPARATOR.compare(id0, id2)).isLessThan(0);
-		assertThat(MENTS_COMPARATOR.compare(id2, id0)).isGreaterThan(0);
-		assertThat(MENTS_COMPARATOR.compare(id0, id1)).isLessThan(0);
-		assertThat(MENTS_COMPARATOR.compare(id1, id0)).isGreaterThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(id1, id2)).isLessThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(id2, id1)).isGreaterThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(id0, id2)).isLessThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(id2, id0)).isGreaterThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(id0, id1)).isLessThan(0);
+		assertThat(IssueMeta.MENTS_COMPARATOR.compare(id1, id0)).isGreaterThan(0);
 	}
 	
 	
 	private void permutation(final List<WithDescription> prefix, final List<WithDescription> suffix) {
 		if (suffix.isEmpty()) {
 			final ArrayList<WithDescription> sorted = new ArrayList<>(prefix);
-			sorted.sort(MENTS_COMPARATOR);
+			sorted.sort(IssueMeta.MENTS_COMPARATOR);
 			assertThat(sorted).containsExactlyElementsOf(sortedAll);
 			permutationCounter ++;
 			return;

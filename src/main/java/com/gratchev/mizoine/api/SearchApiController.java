@@ -114,6 +114,12 @@ public class SearchApiController extends BaseController {
 						repoCache.getProject(hit.project);
 						if (hit.issueNumber != null) {
 							repoCache.getIssue(hit.project, hit.issueNumber);
+							if (hit.attachmentId != null) {
+								repoCache.getAttachment(hit.project, hit.issueNumber, hit.attachmentId);
+							}
+							if (hit.commentId != null) {
+								repoCache.getComment(hit.project, hit.issueNumber, hit.commentId);
+							}
 						}
 					}
 					if (LOGGER.isDebugEnabled()) {
