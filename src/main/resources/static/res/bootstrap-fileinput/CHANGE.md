@@ -1,11 +1,20 @@
 Change Log: `bootstrap-fileinput`
 =================================
 
-## version 5.0.4
+## version 5.0.5
 
 **Date:** _under development_
 
+- (enh #1429): Enhance thumbnail preview identifiers.
+
+## version 5.0.4
+
+**Date:** 30-Jun-2019
+
+- (enh #1422): Correct drag indicator SCSS.
+- (enh #1420): Correct `preferIconicPreview` parsing.
 - (bug #1413): Correct `getFileStack` and `getFileList` methods.
+- Implement sponsorship.
 - Implement sentiment bot.
 
 ## version 5.0.3

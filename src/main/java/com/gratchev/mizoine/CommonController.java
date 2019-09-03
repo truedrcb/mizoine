@@ -35,6 +35,12 @@ public class CommonController extends BaseController {
 		return "redirect:/issues/{project}";
 	}
 	
+	@GetMapping("/attachment/{project}-{issueNumber}/{attachmentId}")
+	public String attachmentRedirect(@PathVariable final String project, 
+			@PathVariable final String issueNumber, @PathVariable final String attachmentId) {
+		return "redirect:/issue/{project}-{issueNumber}/attachment/{attachmentId}";
+	}
+	
 	@GetMapping("/issue/**")
 	public String issueRoot() {
 		return "forward:/index.html";

@@ -100,7 +100,7 @@ methods: {
 	},
 	search() {
 		var t = this;
-		t.$router.push({ path: `/search/${this.searchQuery}` });
+		t.$router.push({ path: `/search/q/${this.searchQuery}` });
 	}
 }
 
