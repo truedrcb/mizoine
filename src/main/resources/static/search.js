@@ -16,18 +16,22 @@ const searchComponent = {
 					:to="'/issue/' + project + '-' + issueNumber">
 					<i-badge :meta="projectMeta" :text="project + '-' + issueNumber"/> {{issueMeta.title}}
 				</router-link>
+				<template v-for="ment in issueMeta.ments">
+					<router-link 
+						class="list-group-item list-group-item-action small"
+						v-if="ment.attachment" 
+						:to="'/issue/' + project + '-' + issueNumber + '/attachment/' + ment.attachment.id">
+						<icon name="file-image" /> {{ment.attachment.title}}<template v-if="ment.attachment.meta"> ({{ment.attachment.meta.fileName}})</template>
+					</router-link>
+					<router-link 
+						class="list-group-item list-group-item-action small"
+						v-if="ment.comment" 
+						:to="'/issue/' + project + '-' + issueNumber + '/comment/' + ment.comment.id">
+						<icon name="comment-alt" /> <template v-if="ment.comment.meta">{{ment.comment.meta.creator}}: {{ment.comment.meta.title}}</template>
+						<template v-if="!ment.comment.meta">{{ment.comment.id}}</template>
+					</router-link>
+				</template>
 			</template>
-		</template>
-	</div>
-	<div class="list-group" v-if="found.hits">
-		<template v-for="hit in found.hits">
-			<router-link 
-				class="list-group-item list-group-item-action" 
-				v-if="hit.issueNumber"
-				:to="'/issue/' + hit.project + '-' + hit.issueNumber">
-				{{hit.project}}-{{hit.issueNumber}}
-				<small>{{hit}}</small>
-			</router-link>
 		</template>
 	</div>
 </div>

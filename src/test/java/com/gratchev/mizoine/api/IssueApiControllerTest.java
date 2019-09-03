@@ -111,7 +111,7 @@ public class IssueApiControllerTest {
 				updateDescription("[File][" + attachment.id + ".file]").html);
 
 		assertEquals(
-				"<p><a href=\"/attachment/TEST-0/" 
+				"<p><a href=\"/issue/TEST-0/attachment/" 
 				+ attachment.id 
 				+ "\" title=\"original-test.png\">Page</a></p>\n", 
 				updateDescription("[Page][" + attachment.id + ".page]").html);
