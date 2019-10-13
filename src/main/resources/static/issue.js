@@ -664,7 +664,7 @@ const issueRoute = {
 	</nav>
 	<div :class="(showUploadArea && uri) ? 'my-4' : 'collapse'">
 		<form :action="uri + '/upload'">
-			<upload-files :uploadUrl="uri + '/upload'" @filebatchuploadcomplete="update()"/>
+			<upload-files :uploadUrl="uri + '/upload'" @filebatchuploadcomplete="resetAndUpdate()"/>
 		</form>
 	</div>
 	<div v-if="description" :key="'descr' + info.timestamp">
@@ -754,6 +754,11 @@ const issueRoute = {
 				store.commit('updateGitStatus');
 				//store.commit('message', 'issue: ' + t.project + '-' + t.issueNumber);
 			},
+			resetAndUpdate() {
+				var t = this;
+				issuesInfo.clear(t.project, t.issueNumber);
+				t.update();
+			},
 			reloadInfo: function(data) {
 				var t = this;
 				t.info = data;
@@ -830,8 +835,7 @@ const issueRoute = {
 				function stopUpdate() {
 					t.thumbnailsToUpdate.attachments = null;
 					t.thumbnailsToUpdate.updating = false;
-					issuesInfo.clear(t.project, t.issueNumber);
-					t.update();
+					t.resetAndUpdate();
 				};
 				if (!t.thumbnailsToUpdate.attachments || t.thumbnailsToUpdate.attachments.lenght <= 0) {
 					stopUpdate();
