@@ -618,7 +618,7 @@ const issueRoute = {
 		</h1>
 	</div>
 	<div class="secondary" v-if="description == null"><i class="fas fa-circle-notch fa-spin"></i> Loading...</div>
-	<div class="mb-3 no-print" v-if="info">
+	<div class="mb-3 no-print" v-if="info" :key="'tags-' + info.timestamp">
 		<template v-if="info.issue">
 			<i-tag v-for="tag in info.issue.status" :key="tag" :appInfo="appInfo" :tag="tag" @remove="removeTag(tag)"/>
 			<i-tag v-for="tag in info.issue.tags" :key="tag" :appInfo="appInfo" :tag="tag" @remove="removeTag(tag)"/>
