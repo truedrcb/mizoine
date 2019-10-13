@@ -317,7 +317,7 @@ const previewMail = {
 const issueMents = {
 	template: `
 <div v-if="info">
-	<div class="no-print p-2" :key="info.timestamp">
+	<div class="no-print p-2">
 		<div v-for="(ment, mentindex) in info.ments" class="media mb-5" :key="ment.descriptionPath">
 			<a :id="'ment-' + ment.descriptionPath"></a>
 			<h6>
@@ -667,7 +667,7 @@ const issueRoute = {
 			<upload-files :uploadUrl="uri + '/upload'" @filebatchuploadcomplete="update()"/>
 		</form>
 	</div>
-	<div v-if="description" :key="info.timestamp">
+	<div v-if="description" :key="'descr' + info.timestamp">
 		<md-html :html="description.html" :imgInfos="imgInfos"/>
 	</div>
 	
@@ -702,7 +702,7 @@ const issueRoute = {
 			</form>
 		</div>
 	</nav>
-	<router-view :info="info"></router-view>
+	<router-view :info="info" :key="'router-view-' + info.timestamp"></router-view>
 </div>
 `, 
 		data () {

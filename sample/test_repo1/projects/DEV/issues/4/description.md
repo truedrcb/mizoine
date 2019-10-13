@@ -19,7 +19,7 @@
 * Date/time [moment](http://momentjs.com/docs/#/use-it/browser/)  (2.24.0) [jsDelivr](https://www.jsdelivr.com/package/npm/moment), [cndjs](https://cdnjs.com/libraries/moment.js)
 * Bootstrap (4.3.1) https://getbootstrap.com/docs/4.3/getting-started/download/
     * jQuery (3.4.1) http://jquery.com/download/
-    * Bootstrap file input (5.0.5) http://plugins.krajee.com/file-input#installation
+    * Bootstrap file input (5.0.7) http://plugins.krajee.com/file-input#installation
     * [Bootstrap Lightbox](https://github.com/ashleydw/lightbox) (5.3.0) | [cdnjs](https://cdnjs.com/libraries/ekko-lightbox)
 * Ace (1.4.6) https://ace.c9.io/#nav=embedding | [cdnjs](https://cdnjs.com/libraries/ace), [jsDelivr](https://www.jsdelivr.com/package/npm/ace)
 * highlight.js (9.15.8) https://highlightjs.org/download/
