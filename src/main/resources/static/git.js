@@ -80,12 +80,13 @@ const gitRoute =
 			<h5><small class="git-commit-name" :title="item.name">{{item.name}}</small>
 			<span v-for="tag in item.tags" :key="tag" class="badge badge-warning mr-1">{{tag}}</span>
 			{{item.shortMessage}}</h5>
-			<div>
+			<div v-if="!item.repository">
 				<project-link-badge v-for="project in item.projects" :info="projectsMap[project]" />
 				<span v-for="issue in item.issues">
 					<router-link :to="'/issue/' + issue">{{issue}}</router-link>, 
 				</span>
 			</div>
+			<repository-tree :repository="item.repository" />
 		</li>
 	</ul>
 </div>

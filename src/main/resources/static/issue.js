@@ -317,7 +317,7 @@ const previewMail = {
 const issueMents = {
 	template: `
 <div v-if="info">
-	<div class="no-print p-2" :key="info.timestamp">
+	<div class="no-print p-2">
 		<div v-for="(ment, mentindex) in info.ments" class="media mb-5" :key="ment.descriptionPath">
 			<a :id="'ment-' + ment.descriptionPath"></a>
 			<h6>
@@ -503,6 +503,7 @@ const issueComment = {
 			var t = this;
 			axios.delete(t.uri)
 			.then(response => {
+				issuesInfo.clear(t.project, t.issueNumber);
 				store.commit('updateGitStatus');
 				t.$router.push({ path: `/issue/${this.project}-${this.issueNumber}` });
 				displayMessage("Comment removed: " + t.commentId);
@@ -590,6 +591,7 @@ const issueAttachment = {
 			var t = this;
 			axios.delete(t.uri)
 			.then(response => {
+				issuesInfo.clear(t.project, t.issueNumber);
 				store.commit('updateGitStatus');
 				t.$router.push({ path: `/issue/${this.project}-${this.issueNumber}` });
 				displayMessage("Attachment removed: " + t.commentId);
@@ -618,7 +620,7 @@ const issueRoute = {
 		</h1>
 	</div>
 	<div class="secondary" v-if="description == null"><i class="fas fa-circle-notch fa-spin"></i> Loading...</div>
-	<div class="mb-3 no-print" v-if="info">
+	<div class="mb-3 no-print" v-if="info" :key="'tags-' + info.timestamp">
 		<template v-if="info.issue">
 			<i-tag v-for="tag in info.issue.status" :key="tag" :appInfo="appInfo" :tag="tag" @remove="removeTag(tag)"/>
 			<i-tag v-for="tag in info.issue.tags" :key="tag" :appInfo="appInfo" :tag="tag" @remove="removeTag(tag)"/>
@@ -664,10 +666,10 @@ const issueRoute = {
 	</nav>
 	<div :class="(showUploadArea && uri) ? 'my-4' : 'collapse'">
 		<form :action="uri + '/upload'">
-			<upload-files :uploadUrl="uri + '/upload'" @filebatchuploadcomplete="update()"/>
+			<upload-files :uploadUrl="uri + '/upload'" @filebatchuploadcomplete="resetAndUpdate()"/>
 		</form>
 	</div>
-	<div v-if="description" :key="info.timestamp">
+	<div v-if="description" :key="'descr' + info.timestamp">
 		<md-html :html="description.html" :imgInfos="imgInfos"/>
 	</div>
 	
@@ -702,7 +704,7 @@ const issueRoute = {
 			</form>
 		</div>
 	</nav>
-	<router-view :info="info"></router-view>
+	<router-view :info="info" :key="'router-view-' + info.timestamp"></router-view>
 </div>
 `, 
 		data () {
@@ -753,6 +755,11 @@ const issueRoute = {
 				});
 				store.commit('updateGitStatus');
 				//store.commit('message', 'issue: ' + t.project + '-' + t.issueNumber);
+			},
+			resetAndUpdate() {
+				var t = this;
+				issuesInfo.clear(t.project, t.issueNumber);
+				t.update();
 			},
 			reloadInfo: function(data) {
 				var t = this;
@@ -805,6 +812,7 @@ const issueRoute = {
 
 				axios.post(t.uri + "/comment", formData)
 				.then(response => {
+					issuesInfo.clear(t.project, t.issueNumber);
 					store.commit('updateGitStatus');
 					t.$router.push({ path: `/issue/${this.project}-${this.issueNumber}/comment/` + response.data });
 					displayMessage("Comment created: " + response.data);
@@ -830,8 +838,7 @@ const issueRoute = {
 				function stopUpdate() {
 					t.thumbnailsToUpdate.attachments = null;
 					t.thumbnailsToUpdate.updating = false;
-					issuesInfo.clear(t.project, t.issueNumber);
-					t.update();
+					t.resetAndUpdate();
 				};
 				if (!t.thumbnailsToUpdate.attachments || t.thumbnailsToUpdate.attachments.lenght <= 0) {
 					stopUpdate();
