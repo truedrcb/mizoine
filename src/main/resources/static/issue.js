@@ -503,6 +503,7 @@ const issueComment = {
 			var t = this;
 			axios.delete(t.uri)
 			.then(response => {
+				issuesInfo.clear(t.project, t.issueNumber);
 				store.commit('updateGitStatus');
 				t.$router.push({ path: `/issue/${this.project}-${this.issueNumber}` });
 				displayMessage("Comment removed: " + t.commentId);
@@ -590,6 +591,7 @@ const issueAttachment = {
 			var t = this;
 			axios.delete(t.uri)
 			.then(response => {
+				issuesInfo.clear(t.project, t.issueNumber);
 				store.commit('updateGitStatus');
 				t.$router.push({ path: `/issue/${this.project}-${this.issueNumber}` });
 				displayMessage("Attachment removed: " + t.commentId);
@@ -810,6 +812,7 @@ const issueRoute = {
 
 				axios.post(t.uri + "/comment", formData)
 				.then(response => {
+					issuesInfo.clear(t.project, t.issueNumber);
 					store.commit('updateGitStatus');
 					t.$router.push({ path: `/issue/${this.project}-${this.issueNumber}/comment/` + response.data });
 					displayMessage("Comment created: " + response.data);

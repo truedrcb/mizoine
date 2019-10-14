@@ -95,7 +95,6 @@ class IssuesInfo {
 		
 		this.get = function (project, issueNumber, callback) {
 			var projectIssue = project + "-" + issueNumber;
-			console.log("Issue info: " + projectIssue);
 			if (!issuesData[projectIssue]) {
 				issuesData[projectIssue] = new InfoCache("/api/issue/" + projectIssue + "/info");
 			}
@@ -104,6 +103,7 @@ class IssuesInfo {
 
 		this.clear = function (project, issueNumber) {
 			var projectIssue = project + "-" + issueNumber;
+			console.log("Reset issue: " + projectIssue);
 			issuesData[projectIssue] = null;
 		}
 		

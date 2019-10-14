@@ -132,7 +132,7 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
 		http
 		.authorizeRequests()
 		// https://stackoverflow.com/questions/20673230/spring-boot-overriding-favicon
-		.antMatchers("/public/**", "/res/**").permitAll()
+		.antMatchers("/public/**", "/res/**", "/lib/**").permitAll()
 		.anyRequest().authenticated()
 		.and()
 		.formLogin()
