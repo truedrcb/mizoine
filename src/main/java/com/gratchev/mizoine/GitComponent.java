@@ -42,7 +42,9 @@ import com.google.common.base.Splitter;
 import com.gratchev.mizoine.WebSecurityConfig.UserCredentials;
 import com.gratchev.mizoine.api.SearchApiController;
 import com.gratchev.mizoine.repository.Repository;
+import com.gratchev.mizoine.repository.RepositoryCache;
 import com.gratchev.mizoine.repository.Repository.FilePathInfo;
+import com.gratchev.mizoine.repository.meta.RepositoryMeta;
 
 public class GitComponent {
 	private static final Logger LOGGER = LoggerFactory.getLogger(GitComponent.class);
@@ -331,9 +333,10 @@ public class GitComponent {
 		public final Set<String> projects = new TreeSet<>();
 		public final Set<String> issues = new TreeSet<>();
 		public final Set<String> tags = new TreeSet<>();
+		public RepositoryMeta repository;
 	}
 	
-	private void addLogFile(final GitLogEntry logEntry, final String path) {
+	private void addLogFile(final RepositoryCache repoCache, final GitLogEntry logEntry, final String path) {
 		final GitFileInfo info = identifyFile(path, new GitFileInfo());
 		if (LOGGER.isTraceEnabled()) {
 			LOGGER.trace("Path: " + path + " info: " + info);
@@ -342,8 +345,14 @@ public class GitComponent {
 		if (info.project != null) {
 			if (info.issueNumber != null) {
 				logEntry.issues.add(info.project + "-" + info.issueNumber);
+				if (repoCache != null) {
+					repoCache.getIssue(info.project, info.issueNumber);
+				}
 			} else {
 				logEntry.projects.add(info.project);
+				if (repoCache != null) {
+					repoCache.getProject(info.project);
+				}
 			}
 		}
 	}
@@ -366,12 +375,14 @@ public class GitComponent {
 					final List<GitLogEntry> changes = new LinkedList<>();
 					final Map<String, GitLogEntry> changesMap = new HashMap<>();
 					final Iterable<RevCommit> log = git.log().setMaxCount(50).call();
+					int commitCount = 0;
 					// https://stackoverflow.com/questions/13537734/how-to-use-jgit-to-get-list-of-changed-files
 					// https://github.com/gitblit/gitblit/blob/3e0c6ca8a65bd4b076cac1451c9cdfde4be1d4b8/src/main/java/com/gitblit/utils/JGitUtils.java#L917
 					for (final RevCommit commit : log) {
 						LOGGER.debug("* " + commit.name() + commit.getShortMessage() + " # " + commit.getCommitTime());
 						
 						final GitLogEntry entry = new GitLogEntry();
+						final RepositoryCache repoCache = (commitCount++ < 5) ? new RepositoryCache(repo) : null;
 						entry.name = commit.name();
 						entry.commitTime = commit.getCommitTime();
 						entry.shortMessage = commit.getShortMessage();
@@ -386,7 +397,7 @@ public class GitComponent {
 								tw.addTree(commit.getTree());
 								while (tw.next()) {
 									LOGGER.debug(tw.getPathString());
-									addLogFile(entry, tw.getPathString());
+									addLogFile(repoCache, entry, tw.getPathString());
 								}
 							}
 						} else {
@@ -405,13 +416,17 @@ public class GitComponent {
 												diff.getOldPath(), diff.getNewPath()));
 										}
 										if (ChangeType.DELETE.equals(diff.getChangeType())) {
-											addLogFile(entry, diff.getOldPath());
+											addLogFile(repoCache, entry, diff.getOldPath());
 										} else {
-											addLogFile(entry, diff.getNewPath());
+											addLogFile(repoCache, entry, diff.getNewPath());
 										}
 									}
 								}
 							}
+						}
+						
+						if (repoCache != null) {
+							entry.repository = repoCache.getRepositoryMeta();
 						}
 					}
 					

@@ -3,37 +3,7 @@ const searchComponent = {
 `
 <div v-if="found">
 	<h1>q: {{found.query}}, tag: {{found.tag}}</h1>
-	<div class="list-group" v-if="found.repository">
-		<template v-for="(projectMeta, project) in found.repository.projects">
-			<router-link 
-				class="list-group-item list-group-item-action" 
-				:to="'/issues/' + project">
-				<project-badge :meta="projectMeta" :text="project"/> {{projectMeta.title}}
-			</router-link>
-			<template v-for="(issueMeta, issueNumber) in projectMeta.issues">
-				<router-link 
-					class="list-group-item list-group-item-action" 
-					:to="'/issue/' + project + '-' + issueNumber">
-					<i-badge :meta="projectMeta" :text="project + '-' + issueNumber"/> {{issueMeta.title}}
-				</router-link>
-				<template v-for="ment in issueMeta.ments">
-					<router-link 
-						class="list-group-item list-group-item-action small"
-						v-if="ment.attachment" 
-						:to="'/issue/' + project + '-' + issueNumber + '/attachment/' + ment.attachment.id">
-						<icon name="file-image" /> {{ment.attachment.title}}<template v-if="ment.attachment.meta"> ({{ment.attachment.meta.fileName}})</template>
-					</router-link>
-					<router-link 
-						class="list-group-item list-group-item-action small"
-						v-if="ment.comment" 
-						:to="'/issue/' + project + '-' + issueNumber + '/comment/' + ment.comment.id">
-						<icon name="comment-alt" /> <template v-if="ment.comment.meta">{{ment.comment.meta.creator}}: {{ment.comment.meta.title}}</template>
-						<template v-if="!ment.comment.meta">{{ment.comment.id}}</template>
-					</router-link>
-				</template>
-			</template>
-		</template>
-	</div>
+	<repository-tree :repository="found.repository" />
 </div>
 `, 
 	data () {
