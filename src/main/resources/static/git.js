@@ -54,7 +54,7 @@ const gitRoute =
 	</nav>
 	<div class="row">
 	<div class="col" v-if="stage" v-for="aged in ['unstaged', 'staged']">
-		<h4>{{aged}}</h4>
+		<h4 v-if="Object.entries(stage[aged]).length > 0">{{aged}}</h4>
 		<ul class="list-group" v-if="stage[aged]">
 			<li class="list-group-item" v-for="(info, path) in stage[aged]">
 				<div v-if="info.project">
