@@ -42,21 +42,34 @@ constructor() {
 
 load(data) {
 	var tags = {};
-	for (var t in data.repositoryMeta.tags ) {
-		var tag = data.repositoryMeta.tags[t]
-		tags[t] = tag;
+	for (var tname in data.repositoryMeta.tags ) {
+		var tag = data.repositoryMeta.tags[tname]
+		tags[tname] = tag;
 		if (tag.synonyms) {
 			for (var i = 0; i < tag.synonyms.length; i++) {
 				tags[tag.synonyms[i]] = tag;
 			}
 		}
 	}
-	for (var t in data.repositoryMeta.statuses ) {
-		var tag = data.repositoryMeta.statuses[t]
-		tags[t] = tag;
+	const finishedName = "finished";
+	data.finishedStatuses = {};
+	data.finishedStatuses[finishedName] = true;
+	for (var tname in data.repositoryMeta.statuses ) {
+		var tag = data.repositoryMeta.statuses[tname]
+		tags[tname] = tag;
 		if (tag.synonyms) {
+			var isFinishedSynonym = tname === finishedName;
 			for (var i = 0; i < tag.synonyms.length; i++) {
-				tags[tag.synonyms[i]] = tag;
+				var sname = tag.synonyms[i];
+				if (sname === finishedName) {
+					isFinishedSynonym = true;
+				}
+				tags[sname] = tag;
+			}
+			if (isFinishedSynonym) {
+				for (var i = 0; i < tag.synonyms.length; i++) {
+					data.finishedStatuses[tag.synonyms[i]] = true;
+				}
 			}
 		}
 	}
