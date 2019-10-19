@@ -161,6 +161,8 @@ const editorRoute = {
 						t.project = this.info.project;
 						t.projectInfo = null;
 						t.issueNumber = this.info.issueNumber;
+						t.attachmentId = this.info.attachmentId;
+						t.commentId = this.info.commentId;
 						t.issueInfo = null;
 						if (t.project && t.issueNumber) {
 							issuesInfo.clear(t.project, t.issueNumber);
@@ -177,7 +179,13 @@ const editorRoute = {
 			quit: function () {
 				if (this.project) {
 					if (this.issueNumber) {
-						this.$router.push({ path: `/issue/${this.project}-${this.issueNumber}` });
+						if(this.attachmentId) {
+							this.$router.push({ path: `/issue/${this.project}-${this.issueNumber}/attachment/${this.attachmentId}` });
+						} else if(this.commentId) {
+							this.$router.push({ path: `/issue/${this.project}-${this.issueNumber}/comment/${this.commentId}` });
+						} else {
+							this.$router.push({ path: `/issue/${this.project}-${this.issueNumber}` });
+						}
 					} else {
 						this.$router.push({ path: `/issues/${this.project}` });
 					}
@@ -373,6 +381,8 @@ const editorRoute = {
 					t.project = this.info.project;
 					t.projectInfo = null;
 					t.issueNumber = this.info.issueNumber;
+					t.attachmentId = this.info.attachmentId;
+					t.commentId = this.info.commentId;
 					t.issueInfo = null;
 					
 					if (t.project) {
