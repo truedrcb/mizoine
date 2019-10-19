@@ -295,6 +295,19 @@ public class HTMLtoMarkdownTest {
 	}
 
 	@Test
+	public void convertTable2x1ignoringBrAndHrInCell() {
+		whenHtml("<table><tr><td>a header</td></tr><tr><td>"
+					+ "<table><tr><td><b>Table test</b></td></tr><tr><td>"
+						+ "<table><tr><td><br/>first<hr/>cell<br/></td><td>second<br/>\n"
+						+ "cell</td></tr></table>"
+					+ "</td></tr></table>"
+				+ "</td></tr></table>");
+		thenMd("a header\n\n**Table test**\n\n"
+				+ "| ---- | ---- |\n"
+				+ "| first cell | second cell |");
+	}
+
+	@Test
 	public void convertSimpleMultilinePre() {
 		// JSoup trims text?
 		whenHtml("<pre>\n\n this is *code*\nwith line breaks</pre>");
@@ -328,14 +341,23 @@ public class HTMLtoMarkdownTest {
 
 	@Test
 	public void convertMultilineStrong() {
-		whenHtml("<strong>Hello <i>indent</i><br>All strong skipped</strong>");
-		thenMd("Hello *indent*\nAll strong skipped");
+		whenHtml("<strong>Hello <i>italic</i><blockquote>Block quote</blockquote>All strong skipped</strong>");
+		thenMd("Hello *italic*\n"
+				+ "> Block quote\n"
+				+ "\n"
+				+ "All strong skipped");
 	}
 
 	@Test
-	public void convertMultilineStrongCollapse() {
-		whenHtml("Hello<strong><br>All strong skipped</strong>");
-		thenMd("Hello\nAll strong skipped");
+	public void convertMultilineStrongIgnoreBr() {
+		whenHtml("<strong>Hello <i>italic</i><br>BR skipped</strong>");
+		thenMd("**Hello *italic* BR skipped**");
+	}
+
+	@Test
+	public void convertMultilineItalicIgnoreHr() {
+		whenHtml("<i>Hello italic<hr>HR skipped</i>");
+		thenMd("*Hello italic HR skipped*");
 	}
 
 	@Test 
@@ -378,18 +400,11 @@ public class HTMLtoMarkdownTest {
 	@Test 
 	public void convertSimpleTableRes() throws IOException {
 		whenHtmlRes("paste-simple-table.html");
-		thenMd("**Muster Firma**\n" + 
-				"\n" + 
-				"Musterweg 123\n" + 
-				"68794 Oberhausen-Rheinhausen\n" + 
-				"\n" + 
-				"Deutschland\n" + 
-				"\n" + 
-				"Telefon 02345 - 24446667\n" + 
-				"\n" + 
-				"Telefax 012345 - 22 44 6666\n" + 
-				"\n" + 
-				"[info@muster-seite.de](mailto:info@muster-seite.de)");
+		thenMd("| ---- | ---- |\n" + 
+				"| **Muster Firma** Musterweg 123 68794 Oberhausen-Rheinhausen Deutschland |\n" + 
+				"| Telefon | 02345 - 24446667 |\n" + 
+				"| Telefax | 012345 - 22 44 6666 |\n" + 
+				"| [info@muster-seite.de](mailto:info@muster-seite.de) |");
 	}
 
 	@Test

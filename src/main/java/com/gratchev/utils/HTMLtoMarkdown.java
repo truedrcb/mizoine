@@ -31,7 +31,7 @@ public class HTMLtoMarkdown {
 			"h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8", "h9");
 	private static final Set<String> NON_LINE_TAGS = ImmutableSet.of(
 			"table", "h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8", "h9", 
-			"ul", "ol", "dl", "pre", "code", "br", "blockquote", "tbody");
+			"ul", "ol", "dl", "pre", "code", "blockquote", "tbody");
 	private static final String SEPARATORS = " .\n\r\t;<>/\\&";
 	
 	/**
@@ -251,6 +251,17 @@ public class HTMLtoMarkdown {
 		}
 	};
 	
+	static final MDNode SPACE = new MDNode() {
+		@Override
+		public void build(FlatMDBuilder builder) {
+			builder.space();
+		}
+		
+		@Override
+		public boolean isEmpty() {
+			return false;
+		}
+	};
 	
 	static final MDNode HR = new MDNode() {
 		@Override
@@ -808,11 +819,11 @@ public class HTMLtoMarkdown {
 		
 
 		if ("hr".equals(name)) {
-			return inLine ? null : HR;
+			return inLine ? SPACE : HR;
 		}
 
 		if ("br".equals(name)) {
-			return  inLine ? null : BR;
+			return  inLine ? SPACE : BR;
 		}
 		
 		if ("b".equals(name) || "strong".equals(name)) {
