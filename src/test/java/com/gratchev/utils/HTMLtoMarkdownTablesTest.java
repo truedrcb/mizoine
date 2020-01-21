@@ -154,15 +154,15 @@ public class HTMLtoMarkdownTablesTest extends HtmlToMarkdownTestBase {
 		showMd();
 	}
 	
-//	@Test
-//	public void removeEmptyCell() {
-//		whenHtml("<table><tr><td>one cell</td><td> </td></tr></table>Hello");
-//		thenMd("| one cell |\n| ---- |\n\nHello");
-//	}
-//
-//	@Test
-//	public void removeEmptyCellInRow() {
-//		whenHtml("<table><tr><td>one cell</td></tr><tr><td> </td></tr></table>Hello");
-//		thenMd("| one cell |\n| ---- |\n\nHello");
-//	}
+	@Test
+	public void removeEmptyCell() {
+		whenHtml("<table><tr><td>one cell</td><td> </td></tr></table>Hello");
+		thenMd("| one cell |\n| ---- |\n\nHello");
+	}
+
+	@Test
+	public void removeEmptyCellInRow() {
+		whenHtml("<table><tr><td>one cell</td></tr><tr><td> </td></tr></table>Hello");
+		thenMd("| one cell |\n| ---- |\n\nHello");
+	}
 }
