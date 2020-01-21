@@ -1,16 +1,9 @@
 package com.gratchev.utils;
 
-import static org.junit.Assert.*;
-
 import java.io.IOException;
 
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
 import org.junit.Before;
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.slf4j.impl.StaticLoggerBinder;
 
 public class HTMLtoMarkdownTablesTest extends HtmlToMarkdownTestBase {
 	@Before
@@ -21,25 +14,31 @@ public class HTMLtoMarkdownTablesTest extends HtmlToMarkdownTestBase {
 	@Test
 	public void convertSimpleTable() {
 		whenHtml("<table><tr><td>one cell</td></tr></table>Hello");
-		thenMd("| ---- |\n| one cell |\n\nHello");
+		thenMd("| one cell |\n| ---- |\n\nHello");
 	}
 
 	@Test
 	public void skipHrWithinSimpleTable() {
 		whenHtml("start<table><tr><td><hr/>one cell</td></tr></table>Hello");
-		thenMd("start\n\n| ---- |\n| one cell |\n\nHello");
+		thenMd("start\n\n"
+				+ "| one cell |\n"
+				+ "| ---- |\n"
+				+ "\nHello");
 	}
 
 	@Test
 	public void keepHrOutsideSimpleTable() {
 		whenHtml("start<hr/><table><tr><td>one cell</td></tr></table>Hello");
-		thenMd("start\n\n---\n\n| ---- |\n| one cell |\n\nHello");
+		thenMd("start\n\n---\n\n"
+				+ "| one cell |\n"
+				+ "| ---- |\n"
+				+ "\nHello");
 	}
 	
 	@Test
 	public void convertTable2x1() {
 		whenHtml("<table><tr><td>first cell</td><td>second cell</td></tr></table>");
-		thenMd("| ---- | ---- |\n| first cell | second cell |");
+		thenMd("| first cell | second cell |\n| ---- | ---- |");
 	}
 	
 	@Test
@@ -48,8 +47,9 @@ public class HTMLtoMarkdownTablesTest extends HtmlToMarkdownTestBase {
 				+ "<tr><td>first cell</td><td>second cell</td></tr>"
 				+ "<tr><td>third cell</td><td>fourth cell</td></tr>"
 				+ "</table>");
-		thenMd("# Table sample\n\n| ---- | ---- |\n"
+		thenMd("# Table sample\n\n"
 				+ "| first cell | second cell |\n"
+				+ "| ---- | ---- |\n"
 				+ "| third cell | fourth cell |"
 				);
 	}
@@ -62,8 +62,8 @@ public class HTMLtoMarkdownTablesTest extends HtmlToMarkdownTestBase {
 				+ "</table>");
 		thenMd("# Table sample\n\n"
 				+ "Here comes a table\n\n"
-				+ "| ---- | ---- | ---- |\n"
 				+ "| first cell | second | cell |\n"
+				+ "| ---- | ---- | ---- |\n"
 				+ "| third cell | fourth | cell |"
 				);
 	}
@@ -76,8 +76,8 @@ public class HTMLtoMarkdownTablesTest extends HtmlToMarkdownTestBase {
 				+ "</table>");
 		thenMd("# Table sample\n\n"
 				+ "Here comes a table\n\n"
-				+ "| ---- | ---- | ---- |\n"
 				+ "| first cell | second | cell |\n"
+				+ "| ---- | ---- | ---- |\n"
 				+ "| third cell | fourth | cell |"
 				);
 	}
@@ -86,16 +86,18 @@ public class HTMLtoMarkdownTablesTest extends HtmlToMarkdownTestBase {
 	public void convertTable2x1withDivs() {
 		whenHtml("<b>Table test</b><table><tr><td><div>first cell</div></td><td><div>second</div><p>cell</p></td></tr></table>");
 		thenMd("**Table test**\n\n"
-				+ "| ---- | ---- |\n"
-				+ "| first cell | second cell |");
+				+ "| first cell | second cell |\n"
+				+ "| ---- | ---- |"
+				);
 	}
 
 	@Test
 	public void convertTable2x1withDivsInTable() {
 		whenHtml("<table><tr><td><b>Table test</b><table><tr><td><div>first cell</div></td><td><div>second</div><p>cell</p></td></tr></table></td></tr></table>");
 		thenMd("**Table test**\n\n"
-				+ "| ---- | ---- |\n"
-				+ "| first cell | second cell |");
+				+ "| first cell | second cell |\n"
+				+ "| ---- | ---- |"
+				);
 	}
 
 	@Test
@@ -106,8 +108,8 @@ public class HTMLtoMarkdownTablesTest extends HtmlToMarkdownTestBase {
 					+ "</td></tr></table>"
 				+ "</td></tr></table>");
 		thenMd("a header\n\n**Table test**\n\n"
-				+ "| ---- | ---- |\n"
-				+ "| first cell | second cell |");
+				+ "| first cell | second cell |\n"
+				+ "| ---- | ---- |");
 	}
 
 	@Test
@@ -119,8 +121,8 @@ public class HTMLtoMarkdownTablesTest extends HtmlToMarkdownTestBase {
 					+ "</td></tr></table>"
 				+ "</td></tr></table>");
 		thenMd("a header\n\n**Table test**\n\n"
-				+ "| ---- | ---- |\n"
-				+ "| first cell | second cell |");
+				+ "| first cell | second cell |\n"
+				+ "| ---- | ---- |");
 	}
 
 	@Test 
@@ -138,8 +140,9 @@ public class HTMLtoMarkdownTablesTest extends HtmlToMarkdownTestBase {
 	@Test 
 	public void convertSimpleTableRes() throws IOException {
 		whenHtmlRes("paste-simple-table.html");
-		thenMd("| ---- | ---- |\n" + 
-				"| **Muster Firma** Musterweg 123 68794 Oberhausen-Rheinhausen Deutschland |\n" + 
+		thenMd(
+				"| **Muster Firma** Musterweg 123 68794 Oberhausen-Rheinhausen Deutschland |\n" +
+				"| ---- | ---- |\n" +
 				"| Telefon | 02345 - 24446667 |\n" + 
 				"| Telefax | 012345 - 22 44 6666 |\n" + 
 				"| [info@muster-seite.de](mailto:info@muster-seite.de) |");
@@ -150,4 +153,16 @@ public class HTMLtoMarkdownTablesTest extends HtmlToMarkdownTestBase {
 		whenHtmlRes("paste-table6x2.html");
 		showMd();
 	}
+	
+//	@Test
+//	public void removeEmptyCell() {
+//		whenHtml("<table><tr><td>one cell</td><td> </td></tr></table>Hello");
+//		thenMd("| one cell |\n| ---- |\n\nHello");
+//	}
+//
+//	@Test
+//	public void removeEmptyCellInRow() {
+//		whenHtml("<table><tr><td>one cell</td></tr><tr><td> </td></tr></table>Hello");
+//		thenMd("| one cell |\n| ---- |\n\nHello");
+//	}
 }

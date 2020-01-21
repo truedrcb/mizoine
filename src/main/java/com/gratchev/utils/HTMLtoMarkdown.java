@@ -593,10 +593,8 @@ public class HTMLtoMarkdown {
 				
 				@Override
 				public void build(FlatMDBuilder builder) {
-					builder.lflf().mark("|");
-					for (int i = 0; i < colCount; i++) {
-						builder.space().mark("----").space().mark("|");
-					}
+					int row = 0;
+					builder.lf();
 					for (final ArrayList<MDNode> tableRow : table) {
 						builder.lf();
 						for(final MDNode tableCell : tableRow) {
@@ -605,6 +603,12 @@ public class HTMLtoMarkdown {
 							builder.space();
 						}
 						builder.mark("|");
+						if (row++ == 0) {
+							builder.lf().mark("|");
+							for (int i = 0; i < colCount; i++) {
+								builder.space().mark("----").space().mark("|");
+							}
+						}
 					}
 					builder.lflf();
 				}
