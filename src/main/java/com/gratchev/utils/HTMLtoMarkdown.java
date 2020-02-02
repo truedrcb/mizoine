@@ -536,6 +536,35 @@ public class HTMLtoMarkdown {
 			}
 		}
 	}
+
+	public static int removeEmptyColumns(final ArrayList<ArrayList<MDNode>> table) {
+		long nonEmptyCols = 0;
+		// Check all cells. Set bit at column position if any cell is not empty.
+		for (final ArrayList<MDNode> row : table) {
+			long colBit = 1;
+			for (final MDNode cell : row) {
+				if (!cell.isEmpty()) nonEmptyCols |= colBit;
+				colBit <<= 1;
+			}
+		}
+
+		int colMax = 0;
+		for (final ArrayList<MDNode> row : table) {
+			long colBit = 1;
+			for (final Iterator<MDNode> iterator = row.iterator(); iterator.hasNext();) {
+				iterator.next();
+				if ((colBit & nonEmptyCols) == 0) {
+					iterator.remove();
+				}
+				colBit <<= 1;
+			}
+			if (colMax < row.size()) {
+				colMax = row.size();
+			}
+		}
+		
+		return colMax;
+	}
 	
 	private MDNode convertTable(final Node n, final boolean inLine) {
 		if (n instanceof Element) {
@@ -556,7 +585,6 @@ public class HTMLtoMarkdown {
 				}
 			}
 			
-			int colMax = 0;
 			
 			final ArrayList<ArrayList<MDNode>> table = new ArrayList<>();
 			for (final Element row : rows) {
@@ -575,14 +603,16 @@ public class HTMLtoMarkdown {
 						LOGGER.debug("Ignored non-td element: " + cell);
 					}
 				}
-				if (colMax < tableRow.size()) {
-					colMax = tableRow.size();
-				}
 			}
 			
 			removeEmptyRows(table);
 			
-			final int colCount = colMax;
+			final int colCount = removeEmptyColumns(table);
+
+			if (colCount == 1 && table.size() == 1) {
+				LOGGER.debug("Ignoring one cell table: " + n);
+				return convertChilds(n, inLine);
+			}
 			
 			if (colCount < 1) {
 				LOGGER.debug("Ignorig strange table with no columns: " + n);

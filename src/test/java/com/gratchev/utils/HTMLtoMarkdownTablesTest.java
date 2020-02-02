@@ -19,25 +19,25 @@ public class HTMLtoMarkdownTablesTest extends HtmlToMarkdownTestBase {
 
 	@Test
 	public void convertSimpleTable() {
-		whenHtml("<table><tr><td>one cell</td></tr></table>Hello");
-		thenMd("| one cell |\n| ---- |\n\nHello");
+		whenHtml("<table><tr><td>cell 1</td></tr><tr><td>cell 2</td></tr></table>Hello");
+		thenMd("| cell 1 |\n| ---- |\n| cell 2 |\n\nHello");
 	}
 
 	@Test
 	public void skipHrWithinSimpleTable() {
-		whenHtml("start<table><tr><td><hr/>one cell</td></tr></table>Hello");
+		whenHtml("start<table><tr><td><hr/>cell with hr</td><td>cell 2</td></tr></table>Hello");
 		thenMd("start\n\n"
-				+ "| one cell |\n"
-				+ "| ---- |\n"
+				+ "| cell with hr | cell 2 |\n"
+				+ "| ---- | ---- |\n"
 				+ "\nHello");
 	}
 
 	@Test
 	public void keepHrOutsideSimpleTable() {
-		whenHtml("start<hr/><table><tr><td>one cell</td></tr></table>Hello");
+		whenHtml("start<hr/><table><tr><td>cell 1</td><td>cell 2</td></tr></table>Hello");
 		thenMd("start\n\n---\n\n"
-				+ "| one cell |\n"
-				+ "| ---- |\n"
+				+ "| cell 1 | cell 2 |\n"
+				+ "| ---- | ---- |\n"
 				+ "\nHello");
 	}
 	
@@ -162,62 +162,127 @@ public class HTMLtoMarkdownTablesTest extends HtmlToMarkdownTestBase {
 	
 	@Test
 	public void removeEmptyCell() {
-		whenHtml("<table><tr><td>one cell</td><td> </td></tr></table>Hello");
-		thenMd("| one cell |\n| ---- |\n\nHello");
+		whenHtml("<table><tr><td>cell 1</td><td> </td><td>cell 2</td></tr></table>Hello");
+		thenMd("| cell 1 | cell 2 |\n| ---- | ---- |\n\nHello");
 	}
 
 	@Test
 	public void removeEmptyCellInRow() {
-		whenHtml("<table><tr><td>one cell</td></tr><tr><td> </td></tr></table>Hello");
-		thenMd("| one cell |\n| ---- |\n\nHello");
+		whenHtml("<table><tr><td>cell 1</td><td>cell 2</td></tr><tr><td> </td></tr></table>Hello");
+		thenMd("| cell 1 | cell 2 |\n| ---- | ---- |\n\nHello");
+	}
+
+	final MDNode emptyNode = new MDNode() {
+		
+		@Override
+		public boolean isEmpty() {
+			return true;
+		}
+		
+		@Override
+		public void build(FlatMDBuilder builder) {
+			builder.text(" ");
+		}
+	};
+	final MDNode notEmptyNode = new MDNode() {
+		
+		@Override
+		public boolean isEmpty() {
+			return false;
+		}
+		
+		@Override
+		public void build(FlatMDBuilder builder) {
+			builder.text("X");
+		}
+	};
+	
+	private ArrayList<ArrayList<MDNode>> genNodeTable(final String... rows) {
+		final ArrayList<ArrayList<MDNode>> table = new ArrayList<>();
+		for(final String row : rows) {
+			final ArrayList<MDNode> tableRow = new ArrayList<>();
+			table.add(tableRow);
+			for(int i = 0; i < row.length(); i++) {
+				tableRow.add(row.charAt(i) == ' ' ? emptyNode : notEmptyNode);
+			}
+		}
+		return table;
 	}
 	
 	@Test
 	public void removeEmptyRowsUtilEmptyTable() {
-		ArrayList<ArrayList<MDNode>> table = new ArrayList<>();
-		table.add(new ArrayList<>());
-		table.add(new ArrayList<>());
+		final ArrayList<ArrayList<MDNode>> table = genNodeTable(
+				"", 
+				"");
 		HTMLtoMarkdown.removeEmptyRows(table);
 		
 		assertThat(table).hasSize(0);
 	}
 
 	@Test
-	public void removeEmptyRowsUtil1() {
-		ArrayList<ArrayList<MDNode>> table = new ArrayList<>();
-		final ArrayList<MDNode> row0 = new ArrayList<>();
-		final ArrayList<MDNode> row1 = new ArrayList<>();
+	public void removeEmptyColsUtilEmptyTable() {
+		final ArrayList<ArrayList<MDNode>> table = genNodeTable(
+				"", 
+				"");
+		HTMLtoMarkdown.removeEmptyColumns(table);
 		
-		final MDNode emptyNode = new MDNode() {
-			
-			@Override
-			public boolean isEmpty() {
-				return true;
-			}
-			
-			@Override
-			public void build(FlatMDBuilder builder) {
-			}
-		};
-		final MDNode notEmptyNode = new MDNode() {
-			
-			@Override
-			public boolean isEmpty() {
-				return false;
-			}
-			
-			@Override
-			public void build(FlatMDBuilder builder) {
-			}
-		};
-		row1.add(emptyNode);
-		row1.add(notEmptyNode);
-		row1.add(emptyNode);
-		table.add(row0);
-		table.add(row1);
+		assertThat(table).isEqualTo(genNodeTable(
+				"",
+				""));
+	}
+
+	@Test
+	public void removeEmptyRowsUtil1() {
+		final ArrayList<ArrayList<MDNode>> table = genNodeTable(
+				"", 
+				" X ",
+				"  ");
 		HTMLtoMarkdown.removeEmptyRows(table);
 		
 		assertThat(table).hasSize(1);
-		assertThat(table.get(0)).isEqualTo(row1);
+		assertThat(table.get(0)).containsExactly(emptyNode, notEmptyNode, emptyNode);
+		assertThat(table).isEqualTo(genNodeTable(" X "));
+	}
+
+	@Test
+	public void removeEmptyRowsUtil2() {
+		final ArrayList<ArrayList<MDNode>> table = genNodeTable(
+				"  X  ",
+				"     ",
+				"X    ");
+		HTMLtoMarkdown.removeEmptyRows(table);
+		
+		assertThat(table).isEqualTo(genNodeTable(
+				"  X  ",
+				"X    "));
+	}
+
+	@Test
+	public void removeEmptyColsUtil1() {
+		final ArrayList<ArrayList<MDNode>> table = genNodeTable(
+				" X", 
+				" X");
+		HTMLtoMarkdown.removeEmptyColumns(table);
+		
+		assertThat(table).isEqualTo(genNodeTable(
+				"X",
+				"X"));
+	}
+
+	@Test
+
+	public void removeEmptyColsUtil2() {
+		final ArrayList<ArrayList<MDNode>> table = genNodeTable(
+				"X   X", 
+				"  X", 
+				"      X", 
+				"  X       X");
+		HTMLtoMarkdown.removeEmptyColumns(table);
+		
+		assertThat(table).isEqualTo(genNodeTable(
+				"X X",
+				" X",
+				"   X",
+				" X  X"));
 	}
 }
