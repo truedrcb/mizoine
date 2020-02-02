@@ -31,6 +31,16 @@ public class ImagePreviewGenerator implements AttachmentPreviewGenerator {
 
 	public static void convertToPng(final InputStream sourceImageStream, final int maxWidth, final int maxHeight, final File outputFile) 
 			throws IOException {
+		convertTo(sourceImageStream, maxWidth, maxHeight, outputFile, "png", BufferedImage.TYPE_4BYTE_ABGR);
+	}
+
+	public static void convertToJpg(final InputStream sourceImageStream, final int maxWidth, final int maxHeight, final File outputFile) 
+			throws IOException {
+		convertTo(sourceImageStream, maxWidth, maxHeight, outputFile, "jpg", BufferedImage.TYPE_3BYTE_BGR);
+	}
+
+	private static void convertTo(final InputStream sourceImageStream, final int maxWidth, final int maxHeight,
+			final File outputFile, final String formatName, int imageType) throws IOException {
 		// https://docs.oracle.com/javase/tutorial/2d/images/loadimage.html
 		final BufferedImage bi = ImageIO.read(sourceImageStream);
 		
@@ -57,7 +67,7 @@ public class ImagePreviewGenerator implements AttachmentPreviewGenerator {
 
 		LOGGER.debug("Converting image: " + width + "x" + height + " to " + targetWidth + "x" + targetHeight);
 
-		final BufferedImage biCopy = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_4BYTE_ABGR);
+		final BufferedImage biCopy = new BufferedImage(targetWidth, targetHeight, imageType);
 
 		final Graphics2D g = biCopy.createGraphics();
 		// https://stackoverflow.com/questions/29105154/smooth-bufferimage-edges
@@ -69,7 +79,7 @@ public class ImagePreviewGenerator implements AttachmentPreviewGenerator {
 		}
 
 		// https://docs.oracle.com/javase/tutorial/2d/images/saveimage.html
-		ImageIO.write(biCopy, "png", outputFile);
+		ImageIO.write(biCopy, formatName, outputFile);
 		LOGGER.debug("Saved to: " + outputFile.getAbsolutePath());
 	}
 	

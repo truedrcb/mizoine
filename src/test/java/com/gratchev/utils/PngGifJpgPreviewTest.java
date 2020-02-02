@@ -47,6 +47,12 @@ public class PngGifJpgPreviewTest {
 	}
 
 	@Test
+	public void testBigJpgToJpg() throws IOException {
+		assertImageConversionToJpg(JPG_GUITAR, 403, 226);
+		assertImageConversionToJpg(JPG_GUITAR, 804, 452);
+	}
+
+	@Test
 	@Ignore("https://stackoverflow.com/questions/7177655/java-imageio-iioexception-unsupported-image-type")
 	public void testCmykJpgToPng() throws IOException {
 		assertExactImageConversionToPng(JPG_CMYK_LOGO, 4032, 2268);
@@ -60,6 +66,10 @@ public class PngGifJpgPreviewTest {
 		assertImageConversionToPng(GIF_DEVCALC, 384, 100);
 	}
 
+	public void testGifToJpg() throws IOException {
+		assertImageConversionToJpg(GIF_DEVCALC, 384, 100);
+	}
+
 	@Test
 	public void testPngToPng() throws IOException {
 		assertExactImageConversionToPng(PNG_FLYER, 452, 640);
@@ -68,6 +78,13 @@ public class PngGifJpgPreviewTest {
 		assertImageConversionToPng(PNG_SCREENSHOT, 854/2, 751/2);
 		assertExactImageConversionToPng(PNG_TRANSPARENT, 210, 210);
 		assertImageConversionToPng(PNG_TRANSPARENT, 133, 133);
+	}
+	
+	@Test
+	public void testPngToJpg() throws IOException {
+		assertImageConversionToJpg(PNG_FLYER, 452/3, 212);
+		assertImageConversionToJpg(PNG_SCREENSHOT, 854/2, 751/2);
+		assertImageConversionToJpg(PNG_TRANSPARENT, 133, 133);
 	}
 	
 	private void assertExactImageConversionToPng(final String resourceFileName, 
@@ -113,6 +130,20 @@ public class PngGifJpgPreviewTest {
 		// Read image back
 		final BufferedImage bi2 = ImageIO.read(outputFile);
 		LOGGER.info("Image.png: " + bi2.getWidth() + "x" + bi2.getHeight());
+
+		assertThat(bi2.getWidth()).isEqualTo(targetWidth);
+		assertThat(bi2.getHeight()).isEqualTo(targetHeight);
+	}
+
+	private void assertImageConversionToJpg(final String resourceFileName, final int targetWidth,
+			final int targetHeight) throws IOException {
+		
+		final File outputFile = new File(tempDir, resourceFileName + "_" + targetWidth + "x" + targetHeight + ".jpg");
+		ImagePreviewGenerator.convertToJpg(PngGifJpgPreviewTest.class.getResourceAsStream(resourceFileName), targetWidth, targetHeight, outputFile);
+
+		// Read image back
+		final BufferedImage bi2 = ImageIO.read(outputFile);
+		LOGGER.info("Image.jpg: " + bi2.getWidth() + "x" + bi2.getHeight());
 
 		assertThat(bi2.getWidth()).isEqualTo(targetWidth);
 		assertThat(bi2.getHeight()).isEqualTo(targetHeight);
