@@ -1,9 +1,15 @@
 package com.gratchev.utils;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.io.IOException;
+import java.util.ArrayList;
 
 import org.junit.Before;
 import org.junit.Test;
+
+import com.gratchev.utils.HTMLtoMarkdown.FlatMDBuilder;
+import com.gratchev.utils.HTMLtoMarkdown.MDNode;
 
 public class HTMLtoMarkdownTablesTest extends HtmlToMarkdownTestBase {
 	@Before
@@ -164,5 +170,54 @@ public class HTMLtoMarkdownTablesTest extends HtmlToMarkdownTestBase {
 	public void removeEmptyCellInRow() {
 		whenHtml("<table><tr><td>one cell</td></tr><tr><td> </td></tr></table>Hello");
 		thenMd("| one cell |\n| ---- |\n\nHello");
+	}
+	
+	@Test
+	public void removeEmptyRowsUtilEmptyTable() {
+		ArrayList<ArrayList<MDNode>> table = new ArrayList<>();
+		table.add(new ArrayList<>());
+		table.add(new ArrayList<>());
+		HTMLtoMarkdown.removeEmptyRows(table);
+		
+		assertThat(table).hasSize(0);
+	}
+
+	@Test
+	public void removeEmptyRowsUtil1() {
+		ArrayList<ArrayList<MDNode>> table = new ArrayList<>();
+		final ArrayList<MDNode> row0 = new ArrayList<>();
+		final ArrayList<MDNode> row1 = new ArrayList<>();
+		
+		final MDNode emptyNode = new MDNode() {
+			
+			@Override
+			public boolean isEmpty() {
+				return true;
+			}
+			
+			@Override
+			public void build(FlatMDBuilder builder) {
+			}
+		};
+		final MDNode notEmptyNode = new MDNode() {
+			
+			@Override
+			public boolean isEmpty() {
+				return false;
+			}
+			
+			@Override
+			public void build(FlatMDBuilder builder) {
+			}
+		};
+		row1.add(emptyNode);
+		row1.add(notEmptyNode);
+		row1.add(emptyNode);
+		table.add(row0);
+		table.add(row1);
+		HTMLtoMarkdown.removeEmptyRows(table);
+		
+		assertThat(table).hasSize(1);
+		assertThat(table.get(0)).isEqualTo(row1);
 	}
 }

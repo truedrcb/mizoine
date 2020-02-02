@@ -528,6 +528,15 @@ public class HTMLtoMarkdown {
 		};
 	}
 	
+	public static void removeEmptyRows(final ArrayList<ArrayList<MDNode>> table) {
+		for (final Iterator<ArrayList<MDNode>> iterator = table.iterator(); iterator.hasNext();) {
+			final ArrayList<MDNode> row = iterator.next();
+			if(row.stream().allMatch(MDNode::isEmpty)) {
+				iterator.remove();
+			}
+		}
+	}
+	
 	private MDNode convertTable(final Node n, final boolean inLine) {
 		if (n instanceof Element) {
 			final Element e = (Element) n;
@@ -570,6 +579,9 @@ public class HTMLtoMarkdown {
 					colMax = tableRow.size();
 				}
 			}
+			
+			removeEmptyRows(table);
+			
 			final int colCount = colMax;
 			
 			if (colCount < 1) {
