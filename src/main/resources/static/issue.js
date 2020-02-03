@@ -528,6 +528,7 @@ const issueAttachment = {
 		<router-link class="nav-item btn" :to="'/edit/' + mznURI(info.metaPath)">
 			<icon name="sliders-h"/><span-lg> Meta</span-lg>
 		</router-link>
+		<button class="nav-item btn" @click="updateThumbnail()"><icon name="images"/> Thumbnail</button>
 		<button class="nav-item btn ml-auto" @click="deleteAttachment()"><icon name="trash-alt"/> Delete</button>
 	</nav>
 	<div class="p-2">
@@ -597,6 +598,17 @@ const issueAttachment = {
 				displayMessage("Attachment removed: " + t.commentId);
 			})
 			.catch(displayError);
+		},
+		updateThumbnail() {
+			var t = this;
+			axios.post("/api/attachment/" + t.project + "-" + t.issueNumber + "/" + t.id + "/update-thumbnails")
+			.then(response => {
+				issuesInfo.clear(t.project, t.issueNumber);
+				t.update();
+			})
+			.catch(error => {
+				displayError(error);
+			});
 		}
 	},
 	created () {
