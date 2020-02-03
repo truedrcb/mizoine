@@ -7,12 +7,14 @@ import java.util.List;
 public interface AttachmentPreviewGenerator {
 
 	static final String PREVIEW_PNG = "preview.png";
+	static final String PREVIEW_JPG = "preview.jpg";
 	static final String PREVIEW_PAGE_PREFIX = "preview-";
-	static final String PREVIEW_PAGE_SUFFIX = ".png";
+	static final String PREVIEW_PAGE_SUFFIX = ".jpg";
 
 	static final String THUMBNAIL_PNG = "thumbnail.png";
+	static final String THUMBNAIL_JPG = "thumbnail.jpg";
 	static final String THUMBNAIL_PAGE_PREFIX = "thumbnail-";
-	static final String THUMBNAIL_PAGE_SUFFIX = ".png";
+	static final String THUMBNAIL_PAGE_SUFFIX = ".jpg";
 
 	
 	boolean isCompatibleWith(File file);

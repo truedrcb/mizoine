@@ -8,7 +8,11 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
+import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,16 +35,47 @@ public class ImagePreviewGenerator implements AttachmentPreviewGenerator {
 
 	public static void convertToPng(final InputStream sourceImageStream, final int maxWidth, final int maxHeight, final File outputFile) 
 			throws IOException {
-		convertTo(sourceImageStream, maxWidth, maxHeight, outputFile, "png", BufferedImage.TYPE_4BYTE_ABGR);
+		final BufferedImage image = convertTo(sourceImageStream, maxWidth, maxHeight, BufferedImage.TYPE_4BYTE_ABGR);
+
+		// https://docs.oracle.com/javase/tutorial/2d/images/saveimage.html
+		ImageIO.write(image, "png", outputFile);
+		LOGGER.debug("Saved to: " + outputFile.getAbsolutePath());
 	}
 
 	public static void convertToJpg(final InputStream sourceImageStream, final int maxWidth, final int maxHeight, final File outputFile) 
 			throws IOException {
-		convertTo(sourceImageStream, maxWidth, maxHeight, outputFile, "jpg", BufferedImage.TYPE_3BYTE_BGR);
+		final BufferedImage image = convertTo(sourceImageStream, maxWidth, maxHeight, BufferedImage.TYPE_3BYTE_BGR);
+
+		//saveJpgWithQuality(outputFile, image, 1f);
+		ImageIO.write(image, "jpg", outputFile);
+		LOGGER.debug("Saved to: " + outputFile.getAbsolutePath());
 	}
 
-	private static void convertTo(final InputStream sourceImageStream, final int maxWidth, final int maxHeight,
-			final File outputFile, final String formatName, int imageType) throws IOException {
+	/**
+	 * Use in case if compression quality is to be set explicitly.
+	 * See https://stackoverflow.com/questions/17108234/setting-jpg-compression-level-with-imageio-in-java
+	 * 
+	 * @param outputFile
+	 * @param image
+	 * @param compressionQuality
+	 * @throws IOException
+	 */
+	@SuppressWarnings("unused")
+	private static void saveJpgWithQuality(final File outputFile, final BufferedImage image, float compressionQuality) throws IOException {
+		final ImageWriter jpgWriter = ImageIO.getImageWritersByFormatName("jpg").next();
+		final ImageWriteParam jpgWriteParam = jpgWriter.getDefaultWriteParam();
+		jpgWriteParam.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+		jpgWriteParam.setCompressionQuality(compressionQuality);
+		
+		try(final ImageOutputStream createImageOutputStream = ImageIO.createImageOutputStream(outputFile)) {
+			jpgWriter.setOutput(createImageOutputStream);
+			jpgWriter.write(null, new IIOImage(image, null, null), jpgWriteParam);
+		} finally {
+			jpgWriter.dispose();
+		}
+	}
+
+	private static BufferedImage convertTo(final InputStream sourceImageStream, final int maxWidth, final int maxHeight, int imageType) throws IOException {
 		// https://docs.oracle.com/javase/tutorial/2d/images/loadimage.html
 		final BufferedImage bi = ImageIO.read(sourceImageStream);
 		
@@ -77,10 +112,7 @@ public class ImagePreviewGenerator implements AttachmentPreviewGenerator {
 		} finally {
 			g.dispose();
 		}
-
-		// https://docs.oracle.com/javase/tutorial/2d/images/saveimage.html
-		ImageIO.write(biCopy, formatName, outputFile);
-		LOGGER.debug("Saved to: " + outputFile.getAbsolutePath());
+		return biCopy;
 	}
 	
 	
@@ -88,16 +120,16 @@ public class ImagePreviewGenerator implements AttachmentPreviewGenerator {
 	public AttachmentPreview generatePreviews(final File file, final File targetDir) throws IOException {
 		LOGGER.debug("Generating image previews");
 		final AttachmentPreview ap = new AttachmentPreview();
-		ap.preview = new File(targetDir, PREVIEW_PNG);
+		ap.preview = new File(targetDir, PREVIEW_JPG);
 		try (final FileInputStream sourceImageStream = new FileInputStream(file)) {
-			convertToPng(sourceImageStream, 1920, 2160, ap.preview);
+			convertToJpg(sourceImageStream, 1920, 2160, ap.preview);
 		} catch (final Exception e) {
 			ap.preview = null;
 			LOGGER.error("Error converting image: " + file.getAbsolutePath(), e);
 		}
-		ap.thumbnail = new File(targetDir, THUMBNAIL_PNG);
+		ap.thumbnail = new File(targetDir, THUMBNAIL_JPG);
 		try (final FileInputStream sourceImageStream = new FileInputStream(file)) {
-			convertToPng(sourceImageStream, 320, 400, ap.thumbnail);
+			convertToJpg(sourceImageStream, 320, 400, ap.thumbnail);
 		} catch (final Exception e) {
 			ap.thumbnail = null;
 			LOGGER.error("Error converting image: " + file.getAbsolutePath(), e);

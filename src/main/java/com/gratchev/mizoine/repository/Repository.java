@@ -1,9 +1,6 @@
 package com.gratchev.mizoine.repository;
 
-import static com.gratchev.mizoine.preview.AttachmentPreviewGenerator.PREVIEW_PAGE_PREFIX;
-import static com.gratchev.mizoine.preview.AttachmentPreviewGenerator.PREVIEW_PNG;
-import static com.gratchev.mizoine.preview.AttachmentPreviewGenerator.THUMBNAIL_PAGE_PREFIX;
-import static com.gratchev.mizoine.preview.AttachmentPreviewGenerator.THUMBNAIL_PNG;
+import static com.gratchev.mizoine.preview.AttachmentPreviewGenerator.*;
 import static com.gratchev.mizoine.repository.RepositoryUtils.checkOrCreateDirectory;
 import static com.gratchev.mizoine.repository.RepositoryUtils.checkOrCreateHiddenDirectory;
 import static com.gratchev.mizoine.repository.RepositoryUtils.createNewDirectory;
@@ -1297,9 +1294,9 @@ public class Repository {
 
 			final File mizoineDir = new File(rootDir, MIZOINE_DIR);
 			attachment.thumbnails = getPreviewFileInfos(fullDirUri, mizoineDir, THUMBNAIL_PAGE_PREFIX);
-			attachment.thumbnail = getInfoIfExists(fullDirUri, mizoineDir, THUMBNAIL_PNG);
+			attachment.thumbnail = getInfoIfExists(fullDirUri, mizoineDir, THUMBNAIL_JPG);
 			attachment.previews =  getPreviewFileInfos(fullDirUri, mizoineDir, PREVIEW_PAGE_PREFIX);
-			attachment.preview = getInfoIfExists(fullDirUri, mizoineDir, PREVIEW_PNG);
+			attachment.preview = getInfoIfExists(fullDirUri, mizoineDir, PREVIEW_JPG);
 			return attachment;
 		}
 		
