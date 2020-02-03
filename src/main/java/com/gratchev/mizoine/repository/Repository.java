@@ -1348,12 +1348,10 @@ public class Repository {
 				if (
 						AttachmentPreviewGenerator.PREVIEW_PNG.equals(name)
 						|| AttachmentPreviewGenerator.THUMBNAIL_PNG.equals(name)
-						|| 
-							(name.startsWith(AttachmentPreviewGenerator.PREVIEW_PAGE_PREFIX) 
-									&& name.endsWith(AttachmentPreviewGenerator.PREVIEW_PAGE_SUFFIX))
-						|| 
-							(name.startsWith(AttachmentPreviewGenerator.THUMBNAIL_PAGE_PREFIX) 
-									&& name.endsWith(AttachmentPreviewGenerator.THUMBNAIL_PAGE_SUFFIX))
+						|| AttachmentPreviewGenerator.PREVIEW_JPG.equals(name)
+						|| AttachmentPreviewGenerator.THUMBNAIL_JPG.equals(name)
+						|| name.startsWith(AttachmentPreviewGenerator.PREVIEW_PAGE_PREFIX)
+						|| name.startsWith(AttachmentPreviewGenerator.THUMBNAIL_PAGE_PREFIX)
 						) {
 					LOGGER.info("Removing previously created preview: " + file.getAbsolutePath());
 					file.delete();
