@@ -13,16 +13,16 @@
 
 # Web/Javascript
 
-* [Vue.js](https://vuejs.org/) (v2.6.10) https://github.com/vuejs/vue/tree/dev/dist
-    * [Vue router](https://router.vuejs.org/guide/) (v3.1.2) https://router.vuejs.org/installation.html
-    * Vuex (v3.1.1) https://vuex.vuejs.org/installation.html
-    * [axios](https://vuejs.org/v2/cookbook/using-axios-to-consume-apis.html) (v0.19.0) https://github.com/axios/axios/tree/master/dist
+* [Vue.js](https://vuejs.org/) (v2.6.11) https://github.com/vuejs/vue/tree/dev/dist
+    * [Vue router](https://router.vuejs.org/guide/) (v3.1.5) https://router.vuejs.org/installation.html
+    * Vuex (v3.1.2) https://vuex.vuejs.org/installation.html
+    * [axios](https://vuejs.org/v2/cookbook/using-axios-to-consume-apis.html) (v0.19.2) https://github.com/axios/axios/tree/master/dist
 * Date/time [moment](http://momentjs.com/docs/#/use-it/browser/)  (2.24.0) [jsDelivr](https://www.jsdelivr.com/package/npm/moment), [cndjs](https://cdnjs.com/libraries/moment.js)
-* Bootstrap (4.3.1) https://getbootstrap.com/docs/4.3/getting-started/download/
+* Bootstrap (4.4.1) https://getbootstrap.com/docs/4.4/getting-started/download/
     * jQuery (3.4.1) http://jquery.com/download/
-    * Bootstrap file input (5.0.7) http://plugins.krajee.com/file-input#installation
+    * Bootstrap file input (5.0.8) http://plugins.krajee.com/file-input#installation
     * [Bootstrap Lightbox](https://github.com/ashleydw/lightbox) (5.3.0) | [cdnjs](https://cdnjs.com/libraries/ekko-lightbox)
-* Ace (1.4.6) https://ace.c9.io/#nav=embedding | [cdnjs](https://cdnjs.com/libraries/ace), [jsDelivr](https://www.jsdelivr.com/package/npm/ace)
+* Ace (1.4.7) https://ace.c9.io/#nav=embedding | [cdnjs](https://cdnjs.com/libraries/ace), [jsDelivr](https://www.jsdelivr.com/package/npm/ace)
 * highlight.js (9.15.8) https://highlightjs.org/download/
-* Font awesome (5.11.2) https://fontawesome.com/
+* Font awesome (5.12.1) https://fontawesome.com/
 * Popper.js (1.15.0) https://github.com/FezVrasta/popper.js | [unpkg](https://unpkg.com/popper.js/dist/umd/popper.min.js)
