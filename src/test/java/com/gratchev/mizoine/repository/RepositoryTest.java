@@ -1,13 +1,14 @@
 package com.gratchev.mizoine.repository;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,11 +26,11 @@ public class RepositoryTest {
 	
 	Repository repo;
 
-	@Before
+	@BeforeEach
 	public void setUp() throws Exception {
 		repo = new Repository("sample/test_repo1", "");
 		
-		assertTrue("Directory must exist to continue: " + repo.getRoot().getAbsolutePath(), repo.getRoot().exists());
+		assertThat(repo.getRoot().exists()).describedAs("Directory must exist to continue: " + repo.getRoot().getAbsolutePath()).isTrue();
 	}
 
 	@Test

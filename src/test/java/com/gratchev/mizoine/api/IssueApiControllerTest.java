@@ -1,14 +1,14 @@
 package com.gratchev.mizoine.api;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.io.IOException;
 import java.util.Date;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.mock.web.MockMultipartFile;
@@ -32,7 +32,7 @@ public class IssueApiControllerTest {
 	Issue issue;
 	Attachment attachment;
 
-	@Before
+	@BeforeEach
 	public void setUp() throws Exception {
 		repo = TempRepository.create();
 		
@@ -62,7 +62,7 @@ public class IssueApiControllerTest {
 		LOGGER.info("Attachment uploaded: " + attachment);
 	}
 	
-	@After
+	@AfterEach
 	public void tearDown() throws IOException {
 		if (repo != null) {
 			repo.dispose();

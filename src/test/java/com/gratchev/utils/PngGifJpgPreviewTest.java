@@ -10,9 +10,9 @@ import java.nio.file.Files;
 
 import javax.imageio.ImageIO;
 
-import org.junit.BeforeClass;
-import org.junit.Ignore;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,7 +32,7 @@ public class PngGifJpgPreviewTest {
 	public static final String WMF_LOGO = "V.wmf";
 	private static File tempDir;
 	
-	@BeforeClass
+	@BeforeAll
 	public static void setupClass() throws IOException {
 		tempDir = Files.createTempDirectory(new File("target").toPath(), "PngGifJpgPreviewTest-").toFile();
 
@@ -53,7 +53,7 @@ public class PngGifJpgPreviewTest {
 	}
 
 	@Test
-	@Ignore("https://stackoverflow.com/questions/7177655/java-imageio-iioexception-unsupported-image-type")
+	@Disabled("https://stackoverflow.com/questions/7177655/java-imageio-iioexception-unsupported-image-type")
 	public void testCmykJpgToPng() throws IOException {
 		assertExactImageConversionToPng(JPG_CMYK_LOGO, 4032, 2268);
 		assertImageConversionToPng(JPG_CMYK_LOGO, 403, 226);

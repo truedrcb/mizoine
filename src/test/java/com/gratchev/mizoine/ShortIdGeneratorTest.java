@@ -1,13 +1,12 @@
 package com.gratchev.mizoine;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import java.util.Set;
 import java.util.TreeSet;
 
-import org.junit.Test;
-
-import com.gratchev.mizoine.ShortIdGenerator;
+import org.junit.jupiter.api.Test;
 
 public class ShortIdGeneratorTest {
 

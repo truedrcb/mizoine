@@ -1,6 +1,7 @@
 package com.gratchev.mizoine.repository;
 
-import static org.junit.Assert.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
@@ -19,12 +20,12 @@ public class TempRepositoryUtils {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TempRepositoryUtils.class);
 
 	public static void assertDirExists(final File dir) {
-		assertTrue("Directory must exist to continue: " + dir.getAbsolutePath(), dir.exists());
+		assertThat(dir.exists()).describedAs("Directory must exist to continue: " + dir.getAbsolutePath()).isTrue();
 		assertTrue(dir.isDirectory());
 	}
 
 	public static void assertDirNotExists(final File dir) {
-		assertFalse("Unexpected existing directory: " + dir.getAbsolutePath(), dir.exists());
+		assertThat(dir.exists()).describedAs("Unexpected existing directory: " + dir.getAbsolutePath()).isFalse();
 	}
 	
 	public static void printDirectory(final File dir, final int level) {

@@ -1,6 +1,9 @@
 package com.gratchev.mizoine;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
@@ -11,9 +14,9 @@ import java.util.Set;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.api.errors.GitAPIException;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
@@ -100,12 +103,12 @@ public class GitComponentTest {
 		this.initializer = initializer;
 	}
 
-	@Before
+	@BeforeEach
 	public void setUp() throws Exception {
 		initializer.setup(this);
 	}
 
-	@After
+	@AfterEach
 	public void tearDown() throws IOException {
 		repo.dispose();
 	}

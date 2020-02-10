@@ -1,15 +1,16 @@
 package com.gratchev.mizoine.repository;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.io.File;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.gratchev.mizoine.repository.Repositories.RepositoriesConfiguration;
 import com.gratchev.mizoine.repository.Repositories.Config;
+import com.gratchev.mizoine.repository.Repositories.RepositoriesConfiguration;
 
 public class RepositoriesTestConfig {
 	@SuppressWarnings("unused")

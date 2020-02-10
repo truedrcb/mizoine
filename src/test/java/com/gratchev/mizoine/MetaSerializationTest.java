@@ -1,14 +1,15 @@
 package com.gratchev.mizoine;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.TreeMap;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,7 +29,7 @@ public class MetaSerializationTest {
 
 	final ObjectMapper mapper = new ObjectMapper();
 	
-	@Before
+	@BeforeEach
 	public void setup() {
 		mapper.enable(SerializationFeature.INDENT_OUTPUT);
 	}
@@ -122,10 +123,13 @@ public class MetaSerializationTest {
 		LOGGER.info(i1.toString());
 	}
 
-	@Test(expected = JsonProcessingException.class)
-	public void readIssueEmptyMeta() throws IOException {
-		final IssueMeta i1 = mapper.readValue(MetaSerializationTest.class.getResourceAsStream("issue-meta-empty.json"), IssueMeta.class);
-		LOGGER.info(i1.toString());
+	@Test
+	public void readIssueEmptyMeta() {
+		assertThrows(JsonProcessingException.class, 
+				() -> {
+				mapper.readValue(MetaSerializationTest.class.getResourceAsStream("issue-meta-empty.json"), IssueMeta.class);
+			}
+		);
 	}
 
 	@Test

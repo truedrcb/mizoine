@@ -5,14 +5,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.IOException;
 import java.util.ArrayList;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import com.gratchev.utils.HTMLtoMarkdown.FlatMDBuilder;
 import com.gratchev.utils.HTMLtoMarkdown.MDNode;
 
 public class HTMLtoMarkdownTablesTest extends HtmlToMarkdownTestBase {
-	@Before
+	@BeforeEach
 	public void setup() {
 		htmLtoMarkdown.skipImg = true;
 	}

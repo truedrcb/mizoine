@@ -1,6 +1,6 @@
 package com.gratchev.mizoine.repository;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -17,9 +17,9 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,7 +35,7 @@ public class RepositoryIndexerTest {
 	Path indexPath;
 
 
-	@Before
+	@BeforeEach
 	public void setUp() throws Exception {
 		repo = TempRepository.create();
 		LOGGER.debug("||| All set up ||||||||||||||| " + this.toString());
@@ -43,7 +43,7 @@ public class RepositoryIndexerTest {
 		indexPath = repo.getLuceneDir().toPath();
 	}
 
-	@After
+	@AfterEach
 	public void tearDown() throws IOException {
 		LOGGER.debug("||| Tearing down ||||||||||||||| " + this.toString());
 		repo.dispose();

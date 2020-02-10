@@ -17,7 +17,7 @@ import javax.mail.Store;
 import javax.mail.internet.MimeMultipart;
 import javax.mail.search.FlagTerm;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

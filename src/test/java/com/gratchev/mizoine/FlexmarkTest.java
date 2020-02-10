@@ -5,14 +5,14 @@ import java.io.InputStreamReader;
 import java.io.StringReader;
 import java.util.Iterator;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import com.gratchev.utils.ConcatReader;
 import com.gratchev.utils.Streams;
-import com.vladsch.flexmark.util.ast.Node;
 import com.vladsch.flexmark.ast.Reference;
 import com.vladsch.flexmark.html.HtmlRenderer;
 import com.vladsch.flexmark.parser.Parser;
+import com.vladsch.flexmark.util.ast.Node;
 import com.vladsch.flexmark.util.sequence.SubSequence;
 
 public class FlexmarkTest {

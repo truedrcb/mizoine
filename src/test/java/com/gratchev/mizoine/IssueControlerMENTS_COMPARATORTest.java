@@ -1,15 +1,15 @@
 package com.gratchev.mizoine;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import com.gratchev.mizoine.api.IssueApiController.WithDescription;
 import com.gratchev.mizoine.repository.Comment;
@@ -29,7 +29,7 @@ public class IssueControlerMENTS_COMPARATORTest {
 	final List<WithDescription> sortedAll = Arrays.asList(d0, d1, d2, id0, id1, id2, emptyMeta);
 	int permutationCounter;
 
-	@Before
+	@BeforeEach
 	public void setup() {
 		emptyMent.comment = new Comment();
 
