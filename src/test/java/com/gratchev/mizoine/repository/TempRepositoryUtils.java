@@ -61,7 +61,7 @@ public class TempRepositoryUtils {
 
 			@Override
 			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-				assertTrue(file.toFile().getAbsolutePath(), file.toFile().delete());
+				assertThat(file.toFile().delete()).as(file.toFile().getAbsolutePath()).isTrue();
 				return FileVisitResult.CONTINUE;
 			}
 
@@ -72,7 +72,7 @@ public class TempRepositoryUtils {
 
 			@Override
 			public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-				assertTrue(dir.toFile().getAbsolutePath(), dir.toFile().delete());
+				assertThat(dir.toFile().delete()).as(dir.toFile().getAbsolutePath()).isTrue();
 				return FileVisitResult.CONTINUE;
 			}
 		});
@@ -97,7 +97,7 @@ public class TempRepositoryUtils {
 			
 			for(final String subfolder : subfolders) {
 				tempRepoRoot = new File(tempRepoRoot, subfolder);
-				assertTrue(subfolder, tempRepoRoot.mkdir());
+				assertThat(tempRepoRoot.mkdir()).as(subfolder).isTrue();
 			}
 		
 			final TempRepository repo = new TempRepository(tempRepoRoot);

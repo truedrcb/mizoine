@@ -17,11 +17,11 @@ import org.eclipse.jgit.api.errors.GitAPIException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.runners.Parameterized.Parameters;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import com.google.common.base.Function;
 import com.google.common.collect.FluentIterable;
@@ -34,7 +34,7 @@ import com.gratchev.mizoine.repository.TempRepositoryUtils.TempRepository;
 import com.gratchev.utils.FileUtils;
 
 
-@RunWith(Parameterized.class)
+@ExtendWith(SpringExtension.class)
 public class GitComponentTest {
 	private static final Logger LOGGER = LoggerFactory.getLogger(GitComponentTest.class);
 	final String project = "TEST";

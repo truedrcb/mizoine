@@ -1,7 +1,7 @@
 package com.gratchev.utils;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.io.IOException;
 
@@ -25,7 +25,7 @@ public abstract class HtmlToMarkdownTestBase {
 	protected void whenHtml(final String htmlToConvert) {
 		this.html = htmlToConvert;
 		d = Jsoup.parse(this.html);
-		assertNotNull(htmlToConvert, d);
+		assertThat(d).as(htmlToConvert).isNotNull();
 		if (LOGGER.isTraceEnabled()) {
 			LOGGER.trace(d.toString());
 		}
@@ -44,7 +44,7 @@ public abstract class HtmlToMarkdownTestBase {
 	}
 
 	protected void thenMd(final String expectedMd) {
-		assertNotNull("Call 'whenHtml' before calling 'thenMd'", d);
+		assertThat(d).as("Call 'whenHtml' before calling 'thenMd'").isNotNull();
 		md = htmLtoMarkdown.convert(d);
 		
 		assertEquals(expectedMd, md);
@@ -55,7 +55,7 @@ public abstract class HtmlToMarkdownTestBase {
 	}
 
 	protected void showMd() {
-		assertNotNull("Call 'whenHtml' before calling 'thenMd'", d);
+		assertThat(d).as("Call 'whenHtml' before calling 'thenMd'").isNotNull();
 		md = htmLtoMarkdown.convert(d);
 	}
 
