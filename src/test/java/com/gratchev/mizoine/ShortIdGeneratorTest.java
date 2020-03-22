@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 
 public class ShortIdGeneratorTest {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ShortIdGeneratorTest.class);
+	final static int MINUTES_IN_YEAR = 365 * 24 * 60;
 
 	@Test
 	void test() {
@@ -64,24 +65,34 @@ public class ShortIdGeneratorTest {
 	}
 
 	@Test
-	void minuteBasedId() {
-		final int minutesInaYear = 365 * 24 * 60;
-		LOGGER.info("Number of years, until minute-based Ids overflow: {}", Integer.MAX_VALUE / minutesInaYear);
+	void minuteBasedId32and64() {
+		LOGGER.info("Number of years, until minute-based Ids overflow: {}", Integer.MAX_VALUE / MINUTES_IN_YEAR);
 		assertThat(ShortIdGenerator.ALL_64_CHARS_SORTED.chars()).hasSize(64).isSorted();
 		for (long i = 1, max = 64; i <= 6; i++, max *= 64) {
 			LOGGER.info("Id64 positions: {}. Max combinations: {}. Years to overflow: {}", i, max,
-					max / minutesInaYear);
+					max / MINUTES_IN_YEAR);
 		}
-		assertThat(ShortIdGenerator.ALL_32_CHARS_SORTED.chars()).hasSize(32).isSorted();
 		LOGGER.info("Radix 32. Positions, needed to encode max int {}", 32 / 5 + 1);
 		for (long i = 1, max = 32; i <= 7; i++, max *= 32) {
 			LOGGER.info("Id32 positions: {}. Max combinations: {}. Years to overflow: {}", i, max,
-					max / minutesInaYear);
+					max / MINUTES_IN_YEAR);
+		}
+	}
+
+	@Test
+	void minuteBasedId36() {
+		LOGGER.info("Number of years, until minute-based Ids overflow: {}", Integer.MAX_VALUE / MINUTES_IN_YEAR);
+		assertThat(ShortIdGenerator.ALL_36_CHARS_SORTED.chars()).hasSize(36).isSorted();
+		final String maxIntRadix36 = Integer.toString(Integer.MAX_VALUE, 36);
+		LOGGER.info("Max int, radix 36 {}, size {}", maxIntRadix36, maxIntRadix36.length());
+		for (long i = 1, max = 36; i <= maxIntRadix36.length(); i++, max *= 36) {
+			LOGGER.info("Id36 positions: {}. Max combinations: {}. Years to overflow: {}", i, max,
+					max / MINUTES_IN_YEAR);
 		}
 		assertThat(List.of(0, 1, 2, 3, 10, 11, 31, 33, 60, 63, 65, 110, 111, 112, 256, 2222, 2232, 2242, 44444, 44544,
 				33554431)).isSorted().extracting(n -> intToMizCode(n)).isSorted();
 		assertThat(intToMizCode(0)).isEqualTo("00000");
-		assertThat(intToMizCode(256)).isEqualTo("00080");
-		assertThat(intToMizCode(33554431)).isEqualTo("vvvvv");
+		assertThat(intToMizCode(256)).isEqualTo("00074");
+		assertThat(intToMizCode(60466175)).isEqualTo("zzzzz");
 	}
 }
