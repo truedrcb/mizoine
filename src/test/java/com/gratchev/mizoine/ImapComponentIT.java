@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import javax.mail.Message;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.slf4j.Logger;
@@ -29,6 +30,7 @@ public class ImapComponentIT {
 	ImapComponent imap;
 
 	@Test
+	@Disabled
 	public void testSearchByWorkingMessageID() {
 		final String result = imap.readMessage(
 				testId, message -> {
@@ -41,6 +43,7 @@ public class ImapComponentIT {
 	}
 
 	@Test
+	@Disabled
 	public void testSearchByWrongMessageID() {
 		final String result = imap.readMessage(
 				suspitiousId, message -> {
