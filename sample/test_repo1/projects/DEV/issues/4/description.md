@@ -2,13 +2,13 @@
 
 :/: Upgrade to JDK 11 https://winterbe.com/posts/2018/08/29/migrate-maven-projects-to-java-11-jigsaw/
 
-* Spring boot (2.2.4.RELEASE) https://spring.io/projects/spring-boot | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.springframework.boot%22%20AND%20a%3A%22spring-boot%22)
-* Flexmark (0.50.50) https://github.com/vsch/flexmark-java/wiki | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.vladsch.flexmark%22%20AND%20a%3A%22flexmark-all%22)
-* JGit (5.6.0.201912101111-r) https://www.eclipse.org/jgit/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.eclipse.jgit%22%20AND%20a%3A%22org.eclipse.jgit%22)
-* PDFBox (2.0.18) https://pdfbox.apache.org/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.apache.pdfbox%22%20AND%20a%3A%22pdfbox-tools%22)
-* Lucene (8.4.1) https://wiki.apache.org/lucene-java/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.apache.lucene%22%20AND%20a%3A%22lucene-codecs%22)
+* Spring boot (2.2.6.RELEASE) https://spring.io/projects/spring-boot | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.springframework.boot%22%20AND%20a%3A%22spring-boot%22)
+* Flexmark (0.60.2) https://github.com/vsch/flexmark-java/wiki | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.vladsch.flexmark%22%20AND%20a%3A%22flexmark-all%22)
+* JGit (5.7.0.202003110725-r) https://www.eclipse.org/jgit/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.eclipse.jgit%22%20AND%20a%3A%22org.eclipse.jgit%22)
+* PDFBox (2.0.19) https://pdfbox.apache.org/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.apache.pdfbox%22%20AND%20a%3A%22pdfbox-tools%22)
+* Lucene (8.5.0) https://wiki.apache.org/lucene-java/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.apache.lucene%22%20AND%20a%3A%22lucene-codecs%22)
 * Guava (28.2-jre) https://github.com/google/guava | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.google.guava%22%20AND%20a%3A%22guava%22)
-* Jsoup (1.12.1) https://jsoup.org/ | [Maven Central](https://search.maven.org/search?q=a:jsoup)
+* Jsoup (1.13.1) https://jsoup.org/ | [Maven Central](https://search.maven.org/search?q=a:jsoup)
 * JavaMail API (1.6.2) https://mvnrepository.com/artifact/com.sun.mail/javax.mail | [Maven Central](https://search.maven.org/search?q=g:com.sun.mail%20AND%20a:javax.mail)
 
 # Web/Javascript
