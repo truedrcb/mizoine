@@ -5,6 +5,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalUnit;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -94,5 +100,19 @@ public class ShortIdGeneratorTest {
 		assertThat(intToMizCode(0)).isEqualTo("00000");
 		assertThat(intToMizCode(256)).isEqualTo("00074");
 		assertThat(intToMizCode(60466175)).isEqualTo("zzzzz");
+	}
+	
+	@Test
+	void mizoineEpochBasedId36() {
+		// Mizone was introduced in 2017.
+		// Assume 2017-01-01 00:00 UTC as zero Id: 00000.
+		
+		final ZonedDateTime mizEpochStart = ZonedDateTime.of(LocalDate.of(2017, 1, 1), LocalTime.of(0, 0), ZoneOffset.UTC);
+		LOGGER.info("Mizoine Epoch Start: " + mizEpochStart);
+		LOGGER.info("Now UTC: " + ZonedDateTime.now(ZoneOffset.UTC));
+		LOGGER.info("Now UTC (truncated to nearest minute): " + ZonedDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MINUTES));
+		final long codeNow = ChronoUnit.MINUTES.between(mizEpochStart, ZonedDateTime.now(ZoneOffset.UTC));
+		assertThat(codeNow).isLessThan(Integer.MAX_VALUE);
+		LOGGER.info("Now UTC (minutes from Epoch Start): " + codeNow + " Id36: " + intToMizCode((int)codeNow));
 	}
 }

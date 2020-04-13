@@ -9,7 +9,7 @@ public class ShortIdGenerator {
 	public final static String ALL_36_CHARS_SORTED = "0123456789abcdefghijklmnopqrstuvwxyz";
 
 	public static String intToCode(int n) {
-		StringBuilder sb = new StringBuilder();
+		final StringBuilder sb = new StringBuilder();
 		for (int i = 0; i < 6; i++, n = n >> 6) {
 			sb.append(ALL_64_CHARS_SORTED.charAt(n & 63));
 		}
@@ -45,12 +45,12 @@ public class ShortIdGenerator {
 		return sb.toString();
 	}
 
-	public String createId(String string) {
+	public String createId(final String string) {
 		random.setSeed(string.hashCode());
 		return intToCode(random.nextInt());
 	}
 
-	public String createId(String string, Set<String> usedIds) {
+	public String createId(final String string, final Set<String> usedIds) {
 		random.setSeed(string.hashCode());
 		for (;;) {
 			final String id = intToCode(random.nextInt());
