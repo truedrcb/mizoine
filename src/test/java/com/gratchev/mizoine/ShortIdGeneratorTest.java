@@ -1,16 +1,17 @@
 package com.gratchev.mizoine;
 
 import static com.gratchev.mizoine.ShortIdGenerator.intToMizCode;
+import static com.gratchev.mizoine.ShortIdGenerator.mizCodeFor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
-import java.time.temporal.TemporalUnit;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -110,9 +111,20 @@ public class ShortIdGeneratorTest {
 		final ZonedDateTime mizEpochStart = ZonedDateTime.of(LocalDate.of(2017, 1, 1), LocalTime.of(0, 0), ZoneOffset.UTC);
 		LOGGER.info("Mizoine Epoch Start: " + mizEpochStart);
 		LOGGER.info("Now UTC: " + ZonedDateTime.now(ZoneOffset.UTC));
+		LOGGER.info("Now local:" + ZonedDateTime.now());
 		LOGGER.info("Now UTC (truncated to nearest minute): " + ZonedDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MINUTES));
 		final long codeNow = ChronoUnit.MINUTES.between(mizEpochStart, ZonedDateTime.now(ZoneOffset.UTC));
 		assertThat(codeNow).isLessThan(Integer.MAX_VALUE);
 		LOGGER.info("Now UTC (minutes from Epoch Start): " + codeNow + " Id36: " + intToMizCode((int)codeNow));
+		
+		assertThat(mizCodeFor(mizEpochStart)).isEqualTo("00000");
+		final ZonedDateTime code5EpochEnd = mizEpochStart.plus(60466175, ChronoUnit.MINUTES);
+		LOGGER.info("Mizoine Epoch End of 5 positions code: " + code5EpochEnd);
+		assertThat(mizCodeFor(code5EpochEnd)).isEqualTo("zzzzz");
+		
+		assertThrows(RuntimeException.class, () -> mizCodeFor(mizEpochStart.minus(1, ChronoUnit.MINUTES)));
+		assertThrows(RuntimeException.class, () -> mizCodeFor(mizEpochStart.plus(60466176, ChronoUnit.MINUTES)));
+
+		assertThat(mizCodeFor(ZonedDateTime.now(ZoneOffset.UTC))).isEqualTo(mizCodeFor(ZonedDateTime.now()));
 	}
 }
