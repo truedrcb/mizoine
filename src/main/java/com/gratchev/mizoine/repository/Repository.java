@@ -144,7 +144,7 @@ public class Repository {
 
 	protected final GitComponent git;
 
-	
+	@Deprecated
 	public Repository(final String rootPath, final String id) {
 		this.rootPath = rootPath;
 		this.resourcheUriPrefix = id.length() > 0 ? (id + '/') : "";
