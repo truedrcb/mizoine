@@ -5,6 +5,7 @@
 - Extract text from attachments, allow to edit it
 - Allow editing any detail: Automatically gathered as well
 - Crop/rotate pictures
+- Rename/move files and folders
 
 ## Import email
 
@@ -53,3 +54,10 @@
 - By file name
 - By tag/status
 - Sort by date/relevance
+
+## Backup/synchronize
+
+- Basic git features directly from UI
+- Show current updates (changed files, staging)
+- Show history
+- Warn about remote updates
