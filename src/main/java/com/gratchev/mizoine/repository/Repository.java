@@ -88,7 +88,7 @@ public class Repository {
 	private final ShortIdGenerator shortIdGenerator = new ShortIdGenerator();
 	private final DateFormat timestampFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
 
-	final Comparator<? super Attachment> ATTACHMENTS_BY_DATE_NAME = (a1, a2) -> {
+	static final Comparator<? super Attachment> ATTACHMENTS_BY_DATE_NAME = (a1, a2) -> {
 		if (a1.meta != null && a2.meta != null && a1.meta.creationDate != null && a2.meta.creationDate != null) {
 			// Sort by date descending (if available)
 			return a2.meta.creationDate.compareTo(a1.meta.creationDate);
@@ -100,7 +100,7 @@ public class Repository {
 		return title1.compareTo(title2);
 	};
 
-	final Comparator<? super FileInfo> ATTACHMENT_FILES_BY_INDEX = (o1, o2) -> {
+	static final Comparator<? super FileInfo> ATTACHMENT_FILES_BY_INDEX = (o1, o2) -> {
 		if (o1.fileName == null || o2.fileName == null) {
 			return 0;
 		}
@@ -113,7 +113,8 @@ public class Repository {
 			if (lastIdenticalChar >= o2.fileName.length()) {
 				break;
 			}
-			if (o1.fileName.charAt(lastIdenticalChar) != o2.fileName.charAt(lastIdenticalChar)) {
+			final char c1 = o1.fileName.charAt(lastIdenticalChar);
+			if ((c1 >= '0' && c1 <= '9') || c1 != o2.fileName.charAt(lastIdenticalChar)) {
 				break;
 			}
 			lastIdenticalChar++;
