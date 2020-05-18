@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
@@ -34,17 +35,15 @@ public class ShortIdGeneratorTest {
 		LOGGER.info(ShortIdGenerator.intToCode(-100));
 		LOGGER.info(ShortIdGenerator.intToCode(-99999));
 
-		LOGGER.info(cut.createId("2017-11-28-133544a"));
-		LOGGER.info(cut.createId("2017-11-28-133544b"));
-		LOGGER.info(cut.createId("2017-11-29-133544a"));
-		LOGGER.info(cut.createId("2017-11-28-133544c"));
-		LOGGER.info(cut.createId("2017-11-28-133544d"));
-		LOGGER.info(cut.createId("2017-11-28-133545a"));
-		LOGGER.info(cut.createId("2015-01-01-230112z"));
+		LOGGER.info(cut.createId(ZonedDateTime.of(LocalDate.of(2017, 11, 28), LocalTime.of(13, 35), ZoneOffset.UTC)));
+		LOGGER.info(cut.createId(ZonedDateTime.of(LocalDate.of(2017, 11, 29), LocalTime.of(13, 35), ZoneOffset.UTC)));
+		LOGGER.info(cut.createId(ZonedDateTime.of(LocalDate.of(2017, 11, 28), LocalTime.of(13, 36), ZoneOffset.UTC)));
+		LOGGER.info(cut.createId(ZonedDateTime.of(LocalDate.of(2017, 11, 28), LocalTime.of(13, 37), ZoneOffset.UTC)));
+		LOGGER.info(cut.createId(ZonedDateTime.of(LocalDate.of(2015, 1, 1), LocalTime.of(23, 1), ZoneOffset.UTC)));
 
-		assertEquals(cut.createId("2017-11-28-133544a"), cut.createId("2017-11-28-133544a"));
-		assertNotEquals(cut.createId("2017-11-28-133544a"), cut.createId("2017-11-28-133544b"));
-		assertNotEquals(cut.createId("2017-11-28-133544a"), cut.createId("1017-11-28-133544a"));
+		assertEquals(cut.createId(ZonedDateTime.of(LocalDate.of(2017, 11, 28), LocalTime.of(13, 35), ZoneOffset.UTC)), cut.createId(ZonedDateTime.of(LocalDate.of(2017, 11, 28), LocalTime.of(13, 35), ZoneOffset.UTC)));
+		assertNotEquals(cut.createId(ZonedDateTime.of(LocalDate.of(2017, 11, 28), LocalTime.of(13, 35), ZoneOffset.UTC)), cut.createId(ZonedDateTime.of(LocalDate.of(2017, 11, 28), LocalTime.of(13, 36), ZoneOffset.UTC)));
+		assertNotEquals(cut.createId(ZonedDateTime.of(LocalDate.of(2017, 11, 28), LocalTime.of(13, 35), ZoneOffset.UTC)), cut.createId(ZonedDateTime.of(LocalDate.of(2015, 11, 28), LocalTime.of(13, 35), ZoneOffset.UTC)));
 	}
 
 	@Test
@@ -52,20 +51,21 @@ public class ShortIdGeneratorTest {
 		final Set<String> usedIds = new TreeSet<String>();
 		final ShortIdGenerator cut = new ShortIdGenerator();
 
-		final String id1 = cut.createId("Artem");
+		final ZonedDateTime now = ZonedDateTime.now();
+		final String id1 = cut.createId(now);
 
-		assertEquals(id1, cut.createId("Artem"));
-		assertEquals(id1, cut.createId("Artem", usedIds));
+		assertEquals(id1, cut.createId(now));
+		assertEquals(id1, cut.createId(now, usedIds));
 
 		usedIds.add(id1);
-		final String id2 = cut.createId("Artem", usedIds);
+		final String id2 = cut.createId(now, usedIds);
 
 		assertNotEquals(id1, id2);
 
-		assertEquals(id2, cut.createId("Artem", usedIds));
+		assertEquals(id2, cut.createId(now, usedIds));
 
 		usedIds.add(id2);
-		final String id3 = cut.createId("Artem", usedIds);
+		final String id3 = cut.createId(now, usedIds);
 
 		assertNotEquals(id1, id3);
 		assertNotEquals(id2, id3);
@@ -122,7 +122,10 @@ public class ShortIdGeneratorTest {
 		LOGGER.info("Mizoine Epoch End of 5 positions code: " + code5EpochEnd);
 		assertThat(mizCodeFor(code5EpochEnd)).isEqualTo("zzzzz");
 		
-		assertThrows(RuntimeException.class, () -> mizCodeFor(mizEpochStart.minus(1, ChronoUnit.MINUTES)));
+		assertThat(mizCodeFor(mizEpochStart.minus(1, ChronoUnit.MINUTES))).isEqualTo("-00001");
+		assertThat(mizCodeFor(mizEpochStart.minus(60466175, ChronoUnit.MINUTES))).isEqualTo("-zzzzz");
+		
+		assertThrows(RuntimeException.class, () -> mizCodeFor(mizEpochStart.minus(60466176, ChronoUnit.MINUTES)));
 		assertThrows(RuntimeException.class, () -> mizCodeFor(mizEpochStart.plus(60466176, ChronoUnit.MINUTES)));
 
 		assertThat(mizCodeFor(ZonedDateTime.now(ZoneOffset.UTC))).isEqualTo(mizCodeFor(ZonedDateTime.now()));

@@ -14,6 +14,7 @@ import java.io.Writer;
 import java.lang.reflect.InvocationTargetException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -84,16 +85,15 @@ public class Repository {
 	public static final String META_JSON_FILENAME = "meta.json";
 
 	private final ObjectMapper objectMapper;
-	private final ShortIdGenerator shortIdGenerator = new ShortIdGenerator(); 
+	private final ShortIdGenerator shortIdGenerator = new ShortIdGenerator();
 	private final DateFormat timestampFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
-	private final static DateFormat DATE_TO_COMMENT_ID = new SimpleDateFormat("yyyy-MM-dd-HHmmss");
 
 	final Comparator<? super Attachment> ATTACHMENTS_BY_DATE_NAME = (a1, a2) -> {
 		if (a1.meta != null && a2.meta != null && a1.meta.creationDate != null && a2.meta.creationDate != null) {
 			// Sort by date descending (if available)
 			return a2.meta.creationDate.compareTo(a1.meta.creationDate);
 		}
-		
+
 		// If dates are not available: sort by name ascending
 		final String title1 = a1.getTitle();
 		final String title2 = a2.getTitle();
@@ -104,7 +104,7 @@ public class Repository {
 		if (o1.fileName == null || o2.fileName == null) {
 			return 0;
 		}
-		
+
 		int lastIdenticalChar = 0;
 		for (;;) {
 			if (lastIdenticalChar >= o1.fileName.length()) {
@@ -116,30 +116,30 @@ public class Repository {
 			if (o1.fileName.charAt(lastIdenticalChar) != o2.fileName.charAt(lastIdenticalChar)) {
 				break;
 			}
-			lastIdenticalChar ++;
+			lastIdenticalChar++;
 		}
-		
+
 		final String s1 = o1.fileName.substring(lastIdenticalChar);
 		final String s2 = o2.fileName.substring(lastIdenticalChar);
-		
-		if(isUnsignedInteger(s1)) {
-			if(isUnsignedInteger(s2)) {
+
+		if (isUnsignedInteger(s1)) {
+			if (isUnsignedInteger(s2)) {
 				int i1 = Integer.parseInt(s1);
 				int i2 = Integer.parseInt(s2);
-				return i1 - i2; 
+				return i1 - i2;
 			} else {
 				return -1;
 			}
 		} else {
-			if(isUnsignedInteger(s2)) {
-				return 1; 
+			if (isUnsignedInteger(s2)) {
+				return 1;
 			}
 		}
 		return s1.compareTo(s2);
 	};
-	
+
 	private final String rootPath;
-	
+
 	private final String resourcheUriPrefix;
 
 	protected final GitComponent git;
@@ -149,21 +149,21 @@ public class Repository {
 		this.rootPath = rootPath;
 		this.resourcheUriPrefix = id.length() > 0 ? (id + '/') : "";
 		this.git = new GitComponent(this);
-		
+
 		// https://github.com/FasterXML/jackson-core/wiki/JsonParser-Features
 		final JsonFactory jsonFactory = new JsonFactory();
 		jsonFactory.enable(JsonParser.Feature.ALLOW_COMMENTS);
 
 		objectMapper = new ObjectMapper(jsonFactory);
-		
+
 		objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
 		final DefaultPrettyPrinter pp = new DefaultPrettyPrinter();
 		pp.indentObjectsWith(new DefaultIndenter("\t", "\n"));
 		objectMapper.setDefaultPrettyPrinter(pp);
-		
+
 		LOGGER.info("\r\nMizoine\r\nRepository initialized for path: " + getRoot().getAbsolutePath() + "\r\n");
 	}
-	
+
 	public GitComponent getGitComponent() {
 		return git;
 	}
@@ -175,25 +175,23 @@ public class Repository {
 	public File getRootMizoineDir() {
 		return new File(getRoot(), MIZOINE_DIR);
 	}
-	
+
 	public File getUsersRoot() {
 		return new File(getRoot(), USERS_DIRNAME);
 	}
-
 
 	public File getProjectsRoot() {
 		return new File(getRoot(), PROJECTS_DIRNAME);
 	}
 
-
 	public File getProjectRoot(final String project) {
 		return new File(getProjectsRoot(), project);
 	}
 
-	public File getProjectDescriptionFile(final String project)  {
+	public File getProjectDescriptionFile(final String project) {
 		return new File(getProjectRoot(project), DESCRIPTION_MD_FILENAME);
 	}
-	
+
 	public String readProjectDescription(final String project) {
 		return readDescription(getProjectRoot(project));
 	}
@@ -201,7 +199,6 @@ public class Repository {
 	public File getLuceneDir() {
 		return new File(getRootMizoineDir(), ".lucene");
 	}
-
 
 	public File getProjectIssuesRoot(final String project) {
 		final File projectIssuesRoot = new File(getProjectRoot(project), ISSUES_DIRNAME);
@@ -212,13 +209,9 @@ public class Repository {
 		return new File(getProjectIssuesRoot(project), issueNumber);
 	}
 
-
-
 	public File getIssueCommentsDir(final String project, final String issueNumber) {
 		return new File(getIssueRoot(project, issueNumber), COMMENTS_DIRNAME);
 	}
-	
-	
 
 	public File getCommentRoot(final String project, final String issueNumber, final String commentId) {
 		return new File(getIssueCommentsDir(project, issueNumber), commentId);
@@ -238,8 +231,8 @@ public class Repository {
 
 	public Set<String> readTags(final File baseDir, final String tagsDirName) {
 		final File tagsDir = new File(baseDir, tagsDirName);
-		
-		if(tagsDir.exists() && tagsDir.isDirectory()) {
+
+		if (tagsDir.exists() && tagsDir.isDirectory()) {
 			final Set<String> tags = new TreeSet<>();
 			for (final File file : tagsDir.listFiles()) {
 				if (file.isFile() && !file.isHidden()) {
@@ -248,25 +241,23 @@ public class Repository {
 			}
 			return tags;
 		}
-		
+
 		return null;
 	}
-	
-	
+
 	public Set<String> readTags(final File baseDir) {
 		return readTags(baseDir, TAGS_DIRNAME);
 	}
-	
 
 	public Set<String> readStatus(final File baseDir) {
 		return readTags(baseDir, STATUS_DIRNAME);
 	}
-	
+
 	private void addTags(final File baseDir, final String tagsDirName, final String... tags) throws IOException {
 		final File tagsDir = new File(baseDir, tagsDirName);
-		
+
 		checkOrCreateDirectory(tagsDir);
-		
+
 		for (final String tag : tags) {
 			if (tag == null || tag.length() <= 0) {
 				LOGGER.debug("Empty tag creation skipped");
@@ -282,14 +273,14 @@ public class Repository {
 
 	private void removeTags(final File baseDir, final String tagsDirName, final String... tags) {
 		final File tagsDir = new File(baseDir, tagsDirName);
-		
+
 		if (!tagsDir.exists()) {
 			if (LOGGER.isDebugEnabled()) {
 				LOGGER.debug("Skip removing tags from non-existing dir: " + tagsDir.getAbsolutePath());
 			}
 			return;
 		}
-		
+
 		for (final String tag : tags) {
 			if (tag == null || tag.length() <= 0) {
 				LOGGER.debug("Empty tag deleting skipped");
@@ -309,8 +300,6 @@ public class Repository {
 		}
 	}
 
-	
-
 	private <T> T readMeta(final File baseDir, final Class<T> valueType) {
 		// read meta
 		final File metaFile = new File(baseDir, META_JSON_FILENAME);
@@ -321,7 +310,7 @@ public class Repository {
 					LOGGER.trace("Meta file: " + metaFile + " contains " + meta);
 				}
 				return meta;
-			} catch(IOException e) {
+			} catch (IOException e) {
 				if (LOGGER.isDebugEnabled()) {
 					LOGGER.debug(e.getMessage(), e);
 				}
@@ -344,7 +333,7 @@ public class Repository {
 					LOGGER.debug("Description file: " + descriptionFile + " contains " + description);
 				}
 				return description;
-			} catch(IOException e) {
+			} catch (IOException e) {
 				if (LOGGER.isDebugEnabled()) {
 					LOGGER.debug(e.getMessage(), e);
 				}
@@ -359,14 +348,15 @@ public class Repository {
 
 	}
 
-	private <T> void writeMetaMeta(final File baseDir, final T value) throws JsonGenerationException, JsonMappingException, IOException {
+	private <T> void writeMetaMeta(final File baseDir, final T value)
+			throws JsonGenerationException, JsonMappingException, IOException {
 		final File metaDir = new File(baseDir, META_DIRNAME);
 		checkOrCreateDirectory(metaDir);
 		writeMeta(metaDir, value);
 	}
 
-
-	private <T> void writeMeta(final File baseDir, final T value) throws JsonGenerationException, JsonMappingException, IOException {
+	private <T> void writeMeta(final File baseDir, final T value)
+			throws JsonGenerationException, JsonMappingException, IOException {
 		final File metaFile = new File(baseDir, META_JSON_FILENAME);
 		if (metaFile.exists()) {
 			LOGGER.info("Metadata already exists: " + metaFile.getAbsolutePath());
@@ -376,7 +366,6 @@ public class Repository {
 			LOGGER.debug("Meta uploaded: " + value + " to file: " + metaFile.getAbsolutePath());
 		}
 	}
-
 
 	private void writeDescription(final File baseDir, final String description) throws IOException {
 		writeFile(baseDir, DESCRIPTION_MD_FILENAME, description);
@@ -389,7 +378,6 @@ public class Repository {
 		}
 		FileUtils.overwriteTextFile(content, file);
 	}
-
 
 	private ArrayList<String> readAttachmentFileNames(final File baseDir) {
 		final ArrayList<String> attachmentFileNames = new ArrayList<String>();
@@ -411,43 +399,38 @@ public class Repository {
 		return attachmentFileNames;
 	}
 
-
 	public String getResourceUriBase() {
 		return RESOURCE_URI_BASE + resourcheUriPrefix;
 	}
 
 	private String attachmentUriBase(final String project, final String issueNumber, final String shortId) {
-		return getResourceUriBase() + PROJECTS_DIRNAME + '/' + project 
-				+ '/' + ISSUES_DIRNAME + '/' + issueNumber 
-				+ '/' + ATTACHMENTS_DIRNAME + '/' + shortId + '/';
+		return getResourceUriBase() + PROJECTS_DIRNAME + '/' + project + '/' + ISSUES_DIRNAME + '/' + issueNumber + '/'
+				+ ATTACHMENTS_DIRNAME + '/' + shortId + '/';
 	}
 
-
-	synchronized private File createAttachmentFolder(final File attachmentsDir, final AttachmentMeta.UploadMeta uploadMeta)
-			throws IOException {
+	synchronized private File createAttachmentFolder(final File attachmentsDir,
+			final AttachmentMeta.UploadMeta uploadMeta) throws IOException {
 		final Set<String> existingFiles = new TreeSet<String>(Arrays.asList(attachmentsDir.list()));
 		LOGGER.debug("Already existing ids: " + existingFiles);
 
-		final String longId = timestampFormat.format(new Date()) + "|" + uploadMeta.name + "|" + uploadMeta.originalFileName;
+		final ZonedDateTime now = ZonedDateTime.now();
+		final String shortId = shortIdGenerator.createId(now, existingFiles);
 
-		final String shortId = shortIdGenerator.createId(longId, existingFiles);
-
-		LOGGER.debug("New id: " + shortId + " generated from " + longId);
+		LOGGER.debug("New id: " + shortId + " generated from " + now);
 
 		final File attachmentFolder = new File(attachmentsDir, shortId);
-		if(!attachmentFolder.mkdir()) {
+		if (!attachmentFolder.mkdir()) {
 			throw new IOException("Unable to create directory: " + attachmentFolder.getAbsolutePath());
 		}
 
 		return attachmentFolder;
 	}
 
-
 	public List<Project> getProjects() {
 		final ArrayList<Project> projects = new ArrayList<Project>();
 		final File[] listFiles = getProjectsRoot().listFiles();
 		if (listFiles != null) {
-			for(final File file : listFiles) {
+			for (final File file : listFiles) {
 				if (!file.isDirectory() || file.isHidden()) {
 					continue;
 				}
@@ -462,8 +445,7 @@ public class Repository {
 
 		return projects;
 	}
-	
-	
+
 	public RepositoryMeta readRepositoryMeta() {
 		return readMeta(getRoot(), RepositoryMeta.class);
 	}
@@ -485,7 +467,7 @@ public class Repository {
 		final ArrayList<Issue> issues = new ArrayList<Issue>();
 		final File projectIssuesRoot = getProjectIssuesRoot(project);
 		if (projectIssuesRoot.exists()) {
-			for(final File file : projectIssuesRoot.listFiles()) {
+			for (final File file : projectIssuesRoot.listFiles()) {
 				if (!file.isDirectory() || file.isHidden()) {
 					continue;
 				}
@@ -496,11 +478,9 @@ public class Repository {
 		}
 		return issues;
 	}
-	
 
-	public Issue createIssue(final File projectIssuesRoot, final String newIssueTitle, 
-			final String newIssueMarkdown, final SignedInUser currentUser) 
-			throws IOException {
+	public Issue createIssue(final File projectIssuesRoot, final String newIssueTitle, final String newIssueMarkdown,
+			final SignedInUser currentUser) throws IOException {
 		final Issue issue = new Issue();
 		issue.issueNumber = "0";
 		issue.meta = new IssueMeta();
@@ -512,7 +492,7 @@ public class Repository {
 		if (projectIssuesRoot.exists()) {
 			LOGGER.info("Searching next issue number");
 			int maxIssueNumber = 0;
-			for(final File dir : projectIssuesRoot.listFiles()) {
+			for (final File dir : projectIssuesRoot.listFiles()) {
 				try {
 					int i = Integer.parseInt(dir.getName());
 					if (i > maxIssueNumber) {
@@ -549,15 +529,18 @@ public class Repository {
 		final File logFile = new File(mizoineDir, VERIFICATION_LOG);
 		return logFile;
 	}
-	
+
 	public interface Visitor {
 		void project(String project) throws Exception;
+
 		void issue(String project, String issueNumber) throws Exception;
+
 		void attachment(String project, String issueNumber, String attachmentId) throws Exception;
+
 		void comment(String project, String issueNumber, String commentId) throws Exception;
+
 		void user(String user) throws Exception;
 	}
-	
 
 	protected void verifyRepositoryAndGenerateLog(final RepositoryVerifyer v) throws IOException {
 		if (!v.checkMeta(getRoot())) {
@@ -585,19 +568,19 @@ public class Repository {
 						if (!v.checkMeta(issueDir)) {
 							continue;
 						}
-						
+
 						v.log("<div class=\"bg-light p-4\">\n");
 						final File attachmentsDir = issue(issueDir).getAttachmentsDir();
 						if (v.dirExists("Attachments dir", attachmentsDir)) {
 							for (final File attachmentDir : attachmentsDir.listFiles()) {
 								final String attachmentId = attachmentDir.getName();
-								v.log("#### [" + attachmentId + "](/attachment/" + issueFullName 
-										+ "/" + attachmentId + ")");
+								v.log("#### [" + attachmentId + "](/attachment/" + issueFullName + "/" + attachmentId
+										+ ")");
 								if (!v.dirExists("Attachment dir", attachmentDir)) {
 									continue;
 								}
 								int count = 0;
-								for(final File attachmentFile : attachmentDir.listFiles()) {
+								for (final File attachmentFile : attachmentDir.listFiles()) {
 									if (!attachmentFile.isFile()) {
 										continue;
 									}
@@ -616,14 +599,13 @@ public class Repository {
 							}
 						}
 						v.log("</div>\n");
-					
+
 						v.log("<div class=\"bg-light mt-1 mb-5 p-4\">\n");
 						final File commentsDir = getIssueCommentsDir(project, issueNumber);
 						if (v.dirExists("Comments dir", commentsDir)) {
 							for (final File commentDir : commentsDir.listFiles()) {
 								final String commentId = commentDir.getName();
-								v.log("#### [" + commentId + "](/comment/" + issueFullName 
-										+ "/" + commentId + ")");
+								v.log("#### [" + commentId + "](/comment/" + issueFullName + "/" + commentId + ")");
 								if (!v.dirExists("Comment dir", commentDir)) {
 									continue;
 								}
@@ -634,8 +616,7 @@ public class Repository {
 							}
 						}
 						v.log("</div>\n");
-					
-					
+
 					}
 					v.log("</div>\n");
 				}
@@ -645,15 +626,14 @@ public class Repository {
 		final File usersRoot = getUsersRoot();
 		v.log("# Users");
 		if (v.dirExists("Users root", usersRoot)) {
-			if(usersRoot.listFiles().length < 1) {
+			if (usersRoot.listFiles().length < 1) {
 				v.warn("Empty");
 			}
 		}
 	}
-	
-	
+
 	protected void verifyRepositoryAndGenerateLog(final File logFile) throws IOException {
-		try(final Writer w = new FileWriter(logFile)) {
+		try (final Writer w = new FileWriter(logFile)) {
 			final RepositoryVerifyer v = new RepositoryVerifyer(w, getRoot(), objectMapper);
 			try {
 				verifyRepositoryAndGenerateLog(v);
@@ -669,7 +649,7 @@ public class Repository {
 
 		final File logFile = new File(mizoineDir, VERIFICATION_LOG);
 		LOGGER.info("Writing log to file: " + logFile.getAbsolutePath());
-		
+
 		verifyRepositoryAndGenerateLog(logFile);
 	}
 
@@ -694,12 +674,12 @@ public class Repository {
 			attachmentId = null;
 			commentId = null;
 			fullFileUri = null;
-		} 
+		}
 	}
-	
+
 	public FilePathInfo identifyFile(final Iterable<String> path, final FilePathInfo info) {
 		info.clear();
-		
+
 		final Iterator<String> iterator = path.iterator();
 		if (iterator.hasNext()) {
 			if (PROJECTS_DIRNAME.equals(iterator.next())) {
@@ -725,24 +705,24 @@ public class Repository {
 				}
 			}
 		}
-		
+
 		if (iterator.hasNext()) {
 			info.fileName = iterator.next();
 		}
-		
-		if (!iterator.hasNext() && info.attachmentId != null && info.fileName != null ) {
+
+		if (!iterator.hasNext() && info.attachmentId != null && info.fileName != null) {
 			info.fullFileUri = uriEncodePath(
-					attachmentUriBase(info.project, info.issueNumber, info.attachmentId) + info.fileName) ;
+					attachmentUriBase(info.project, info.issueNumber, info.attachmentId) + info.fileName);
 		}
-		
+
 		return info;
 	}
-	
+
 	public void fullScan(final Visitor visitor) {
 		if (LOGGER.isDebugEnabled()) {
 			LOGGER.debug("Full scan: " + visitor);
 		}
-		
+
 		final File projectsRoot = getProjectsRoot();
 		if (projectsRoot.exists()) {
 			for (final File projectDir : projectsRoot.listFiles()) {
@@ -806,14 +786,15 @@ public class Repository {
 
 		final File usersRoot = getUsersRoot();
 		if (usersRoot.exists()) {
-			
+
 		}
 	}
 
 	public abstract class Proxy<T extends BaseMeta> {
 		abstract protected File getRoot();
+
 		abstract protected Class<T> valueType();
-		
+
 		protected File getMetaRoot() {
 			return getRoot();
 		}
@@ -835,7 +816,7 @@ public class Repository {
 		public Set<String> readStatus() {
 			return Repository.this.readTags(getRoot(), STATUS_DIRNAME);
 		}
-		
+
 		public Proxy<T> addStatus(final String... tags) throws IOException {
 			Repository.this.addTags(getRoot(), STATUS_DIRNAME, tags);
 			return this;
@@ -845,18 +826,19 @@ public class Repository {
 			Repository.this.removeTags(getRoot(), STATUS_DIRNAME, tags);
 			return this;
 		}
-		
+
 		public T readMeta() {
 			return Repository.this.readMeta(getMetaRoot(), valueType());
 		}
-		
+
 		public T updateMeta(final MetaUpdater<T> updater, final SignedInUser currentUser) throws IOException {
 			final File metaRoot = getMetaRoot();
 			T meta = readMeta();
 			if (meta == null) {
 				try {
 					meta = valueType().getDeclaredConstructor().newInstance();
-				} catch (InstantiationException|IllegalAccessException|NoSuchMethodException|InvocationTargetException e) {
+				} catch (InstantiationException | IllegalAccessException | NoSuchMethodException
+						| InvocationTargetException e) {
 					LOGGER.error("Unexpected", e);
 					throw new RuntimeException(e);
 				}
@@ -874,42 +856,42 @@ public class Repository {
 			return meta;
 		}
 
-		public File getDescriptionFile()  {
+		public File getDescriptionFile() {
 			return new File(getMetaRoot(), DESCRIPTION_MD_FILENAME);
 		}
-		
+
 		public String readDescription() {
 			return Repository.this.readDescription(getMetaRoot());
 		}
-		
+
 		public void writeDescription(final String description) throws IOException {
 			Repository.this.writeDescription(getMetaRoot(), description);
 		}
-		
+
 		public void createDirs() throws IOException {
 			checkOrCreateDirectory(getMetaRoot());
 		}
-		
+
 		public void delete() throws IOException {
 			FileUtils.removeDirectory(getRoot());
 		}
 
 	}
-	
+
 	public class ProjectProxy extends Proxy<ProjectMeta> {
 		final File rootDir;
 		final String project;
-		
+
 		private ProjectProxy(final String project) {
 			this.project = project;
 			this.rootDir = getProjectRoot(project);
 		}
-		
+
 		private ProjectProxy(final File rootDir) {
 			this.rootDir = rootDir;
 			this.project = rootDir.getName();
 		}
-		
+
 		@Override
 		protected File getRoot() {
 			return rootDir;
@@ -919,30 +901,30 @@ public class Repository {
 		protected Class<ProjectMeta> valueType() {
 			return ProjectMeta.class;
 		}
-		
+
 	}
 
 	public ProjectProxy project(final String project) {
 		return new ProjectProxy(project);
 	}
-	
+
 	public class IssueProxy extends Proxy<IssueMeta> {
 		final File rootDir;
 		final String project;
 		final String issueNumber;
-		
+
 		private IssueProxy(final String project, final String issueNumber) {
 			this.project = project;
 			this.issueNumber = issueNumber;
 			this.rootDir = getIssueRoot(project, issueNumber);
 		}
-		
+
 		private IssueProxy(final File rootDir) {
 			this.rootDir = rootDir;
 			this.project = rootDir.getParentFile().getParentFile().getName();
 			this.issueNumber = rootDir.getName();
 		}
-		
+
 		@Override
 		protected File getRoot() {
 			return rootDir;
@@ -965,9 +947,9 @@ public class Repository {
 			issue.status = readStatus();
 			return issue;
 		}
-		
+
 		public ArrayList<Comment> readComments() {
-			return readComments(()->new Comment());
+			return readComments(() -> new Comment());
 		}
 
 		public <T extends Comment> ArrayList<T> readComments(final Supplier<T> commentFactory) {
@@ -995,14 +977,17 @@ public class Repository {
 			}
 			return comments;
 		}
-		
+
 		public CommentProxy issueComment(final String commentId) {
 			return comment(project, issueNumber, commentId);
 		}
-		
-		
+
 		public File getAttachmentsDir() {
 			return new File(getRoot(), ATTACHMENTS_DIRNAME);
+		}
+
+		public File getCommentsDir() {
+			return new File(getRoot(), COMMENTS_DIRNAME);
 		}
 
 		public File getAttachmentRoot(final String attachmentId) {
@@ -1012,7 +997,7 @@ public class Repository {
 		public File getAttachmentMetaRoot(final String attachmentId) {
 			return new File(getAttachmentRoot(attachmentId), META_DIRNAME);
 		}
-		
+
 		public ArrayList<Attachment> readAttachments() {
 			final File attachmentsRoot = getAttachmentsDir();
 			final ArrayList<Attachment> attachments = new ArrayList<Attachment>();
@@ -1027,19 +1012,18 @@ public class Repository {
 				}
 			}
 			attachments.sort(ATTACHMENTS_BY_DATE_NAME);
-			
+
 			return attachments;
 		}
 
 		public AttachmentProxy issueAttachment(final String id) {
 			return attachment(project, issueNumber, id);
 		}
-		
-		
+
 		public Attachment uploadAttachment(final MultipartFile uploadfile, final Date creationDate) throws IOException {
 			final File attachmentsDir = getAttachmentsDir();
 			checkOrCreateDirectory(attachmentsDir);
-			
+
 			final Attachment attachment = new Attachment();
 
 			final AttachmentMeta.UploadMeta uploadMeta = new AttachmentMeta.UploadMeta();
@@ -1055,14 +1039,14 @@ public class Repository {
 			attachmentMeta.fileName = uploadMeta.originalFileName;
 			attachmentMeta.title = attachmentMeta.fileName;
 			attachmentMeta.creationDate = creationDate;
-			
+
 			writeMetaMeta(attachmentFolder, attachmentMeta);
 			attachment.meta = attachmentMeta;
 			attachment.id = attachmentFolder.getName();
 
 			final File attachmentFile = new File(attachmentFolder.getAbsolutePath(), attachmentMeta.fileName);
 			LOGGER.debug("Dest attachment file: " + attachmentFile.getAbsolutePath());
-			if(attachmentFile.exists()) {
+			if (attachmentFile.exists()) {
 				LOGGER.warn("Attachment file already exists: " + attachmentFile.getAbsolutePath());
 			}
 			uploadfile.transferTo(attachmentFile);
@@ -1088,17 +1072,34 @@ public class Repository {
 				return;
 			}
 
-			for(final File dir : issueAttachmentsDir.listFiles()) {
+			for (final File dir : issueAttachmentsDir.listFiles()) {
 				if (dir.isHidden() || !dir.isDirectory()) {
 					continue;
 				}
-				
+
 				final AttachmentProxy attachmentProxy = new AttachmentProxy(dir);
 				attachmentProxy.updatePreview();
 			}
 		}
+
+		public String newCommentId(final ZonedDateTime creationDate) {
+			final Set<String> existingFiles = new TreeSet<String>();
+			final String[] commentsDirFiles = getCommentsDir().list();
+			if (commentsDirFiles != null) {
+				existingFiles.addAll(Arrays.asList(commentsDirFiles));
+			}
+			LOGGER.debug("Already existing comment ids: " + existingFiles);
+
+			final ZonedDateTime now = ZonedDateTime.now();
+			final String shortId = shortIdGenerator.createId(now, existingFiles);
+
+			if (LOGGER.isDebugEnabled()) {
+				LOGGER.info("Comment Id: " + shortId);
+			}
+			return shortId;
+		}
 	}
-	
+
 	public IssueProxy issue(final String project, final String issueNumber) {
 		return new IssueProxy(project, issueNumber);
 	}
@@ -1107,7 +1108,6 @@ public class Repository {
 		return new IssueProxy(rootDir);
 	}
 
-	
 	public class CommentProxy extends Proxy<CommentMeta> {
 		final File rootDir;
 		final String issueNumber;
@@ -1136,7 +1136,6 @@ public class Repository {
 		protected Class<CommentMeta> valueType() {
 			return CommentMeta.class;
 		}
-		
 
 		public Comment read() {
 			final Comment comment = new Comment();
@@ -1148,52 +1147,41 @@ public class Repository {
 		}
 
 		public String getDescriptionEditorPath() {
-			return PROJECTS_DIRNAME + '/' + project + '/' 
-					+ ISSUES_DIRNAME + '/' + issueNumber + '/' 
-					+ COMMENTS_DIRNAME + '/' 
-					+ rootDir.getName() + '/' + DESCRIPTION_MD_FILENAME;
+			return PROJECTS_DIRNAME + '/' + project + '/' + ISSUES_DIRNAME + '/' + issueNumber + '/' + COMMENTS_DIRNAME
+					+ '/' + rootDir.getName() + '/' + DESCRIPTION_MD_FILENAME;
 		}
 
 		public String getMetaEditorPath() {
-			return PROJECTS_DIRNAME + '/' + project + '/' 
-					+ ISSUES_DIRNAME + '/' + issueNumber + '/' 
-					+ COMMENTS_DIRNAME + '/' 
-					+ rootDir.getName() + '/' + META_JSON_FILENAME;
+			return PROJECTS_DIRNAME + '/' + project + '/' + ISSUES_DIRNAME + '/' + issueNumber + '/' + COMMENTS_DIRNAME
+					+ '/' + rootDir.getName() + '/' + META_JSON_FILENAME;
 		}
-		
+
 		public void writeFile(final String fileName, final String content) throws IOException {
 			Repository.this.writeFile(getRoot(), fileName, content);
 		}
-	}
-	
-	public String newCommentId(final Date creationDate, final String uniqueContent) {
-		final String id = DATE_TO_COMMENT_ID.format(creationDate) + shortIdGenerator.createId(uniqueContent);
-		if (LOGGER.isDebugEnabled()) {
-			LOGGER.info("Comment Id: " + id);
-		}
-		return id;
 	}
 
 	public CommentProxy comment(final String project, final String issueNumber, final String commentId) {
 		return new CommentProxy(project, issueNumber, commentId);
 	}
-	
+
 	public CommentProxy comment(final File commentDir) {
 		return new CommentProxy(commentDir);
 	}
-	
+
 	public class AttachmentProxy extends Proxy<AttachmentMeta> {
 		final File rootDir;
 		final File metaRoot;
 		final String issueNumber;
 		final String project;
+
 		private AttachmentProxy(final String project, final String issueNumber, final String attachmentId) {
 			rootDir = issue(project, issueNumber).getAttachmentRoot(attachmentId);
 			metaRoot = new File(getRoot(), META_DIRNAME);
 			this.project = project;
 			this.issueNumber = issueNumber;
 		}
-		
+
 		private AttachmentProxy(final File rootDir) {
 			this.rootDir = rootDir;
 			this.metaRoot = new File(getRoot(), META_DIRNAME);
@@ -1202,29 +1190,26 @@ public class Repository {
 			issueNumber = issueDir.getName();
 			project = projectDir.getName();
 		}
-		
+
 		@Override
 		protected File getRoot() {
 			return rootDir;
 		}
-		
+
 		@Override
 		public File getMetaRoot() {
 			return metaRoot;
 		}
-		
+
 		public String getDescriptionEditorPath() {
-			return PROJECTS_DIRNAME + '/' + project + '/' 
-					+ ISSUES_DIRNAME + '/' + issueNumber + '/' 
-					+ ATTACHMENTS_DIRNAME + '/' 
-					+ rootDir.getName() + '/' + META_DIRNAME + '/' + DESCRIPTION_MD_FILENAME;
+			return PROJECTS_DIRNAME + '/' + project + '/' + ISSUES_DIRNAME + '/' + issueNumber + '/'
+					+ ATTACHMENTS_DIRNAME + '/' + rootDir.getName() + '/' + META_DIRNAME + '/'
+					+ DESCRIPTION_MD_FILENAME;
 		}
 
 		public String getMetaEditorPath() {
-			return PROJECTS_DIRNAME + '/' + project + '/' 
-					+ ISSUES_DIRNAME + '/' + issueNumber + '/' 
-					+ ATTACHMENTS_DIRNAME + '/' 
-					+ rootDir.getName() + '/' + META_DIRNAME + '/' + META_JSON_FILENAME;
+			return PROJECTS_DIRNAME + '/' + project + '/' + ISSUES_DIRNAME + '/' + issueNumber + '/'
+					+ ATTACHMENTS_DIRNAME + '/' + rootDir.getName() + '/' + META_DIRNAME + '/' + META_JSON_FILENAME;
 		}
 
 		@Override
@@ -1239,7 +1224,8 @@ public class Repository {
 			return info;
 		}
 
-		private ArrayList<FileInfo> getPreviewFileInfos(final String fullDirUri, final File mizoineDir, final String previewFileNamePrefix) {
+		private ArrayList<FileInfo> getPreviewFileInfos(final String fullDirUri, final File mizoineDir,
+				final String previewFileNamePrefix) {
 			if (!mizoineDir.exists()) {
 				return null;
 			}
@@ -1257,7 +1243,7 @@ public class Repository {
 			infos.sort(ATTACHMENT_FILES_BY_INDEX);
 			return infos;
 		}
-		
+
 		private FileInfo getInfoIfExists(final String fullDirUri, final File mizoineDir, final String previewFileName) {
 			if (new File(mizoineDir, previewFileName).exists()) {
 				return createFileInfo(fullDirUri, previewFileName);
@@ -1272,7 +1258,7 @@ public class Repository {
 			attachment.tags = readTags();
 			attachment.status = readStatus();
 
-			final List<String> attachmentFileNames =  readAttachmentFileNames(rootDir);
+			final List<String> attachmentFileNames = readAttachmentFileNames(rootDir);
 			final String fullDirUri = attachmentUriBase(project, issueNumber, attachment.id);
 
 			if (LOGGER.isDebugEnabled()) {
@@ -1282,7 +1268,7 @@ public class Repository {
 			final ArrayList<FileInfo> infos = new ArrayList<FileInfo>();
 
 			if (attachmentFileNames != null) {
-				for(final String filename : attachmentFileNames) {
+				for (final String filename : attachmentFileNames) {
 					final FileInfo info = new FileInfo();
 					infos.add(info);
 					info.fileName = filename;
@@ -1295,14 +1281,14 @@ public class Repository {
 			final File mizoineDir = new File(rootDir, MIZOINE_DIR);
 			attachment.thumbnails = getPreviewFileInfos(fullDirUri, mizoineDir, THUMBNAIL_PAGE_PREFIX);
 			attachment.thumbnail = getInfoIfExists(fullDirUri, mizoineDir, THUMBNAIL_JPG);
-			attachment.previews =  getPreviewFileInfos(fullDirUri, mizoineDir, PREVIEW_PAGE_PREFIX);
+			attachment.previews = getPreviewFileInfos(fullDirUri, mizoineDir, PREVIEW_PAGE_PREFIX);
 			attachment.preview = getInfoIfExists(fullDirUri, mizoineDir, PREVIEW_JPG);
 			return attachment;
 		}
-		
+
 		private File getFirstFile() {
 			for (final File file : rootDir.listFiles()) {
-				if(file.isHidden() || file.isDirectory()) {
+				if (file.isHidden() || file.isDirectory()) {
 					continue;
 				}
 
@@ -1310,7 +1296,7 @@ public class Repository {
 			}
 			return null;
 		}
-		
+
 		private AttachmentPreviewGenerator getCompatibleGenerator(final File file) {
 			for (final AttachmentPreviewGenerator generator : previewGenerators) {
 				if (generator.isCompatibleWith(file)) {
@@ -1319,40 +1305,37 @@ public class Repository {
 			}
 			return null;
 		}
-		
- 		
+
 		public void extractDescription() throws IOException {
 			final File file = getFirstFile();
 			if (file == null) {
 				return;
 			}
-			
+
 			final AttachmentPreviewGenerator generator = getCompatibleGenerator(file);
 			if (generator == null) {
 				return;
 			}
-			
+
 			final String markdown = generator.extractMarkdown(file);
 			if (markdown != null && !markdown.isBlank()) {
 				writeDescription(markdown);
 			}
 		}
-		
+
 		public void updatePreview() throws IOException {
 			final File mizoineDir = new File(rootDir, MIZOINE_DIR);
 			LOGGER.debug("Updating preview files in: " + mizoineDir.getAbsolutePath());
 			checkOrCreateHiddenDirectory(mizoineDir);
-			
+
 			for (final File file : mizoineDir.listFiles()) {
 				final String name = file.getName();
-				if (
-						AttachmentPreviewGenerator.PREVIEW_PNG.equals(name)
+				if (AttachmentPreviewGenerator.PREVIEW_PNG.equals(name)
 						|| AttachmentPreviewGenerator.THUMBNAIL_PNG.equals(name)
 						|| AttachmentPreviewGenerator.PREVIEW_JPG.equals(name)
 						|| AttachmentPreviewGenerator.THUMBNAIL_JPG.equals(name)
 						|| name.startsWith(AttachmentPreviewGenerator.PREVIEW_PAGE_PREFIX)
-						|| name.startsWith(AttachmentPreviewGenerator.THUMBNAIL_PAGE_PREFIX)
-						) {
+						|| name.startsWith(AttachmentPreviewGenerator.THUMBNAIL_PAGE_PREFIX)) {
 					LOGGER.info("Removing previously created preview: " + file.getAbsolutePath());
 					file.delete();
 				}
@@ -1362,18 +1345,18 @@ public class Repository {
 			if (file == null) {
 				return;
 			}
-			
+
 			final AttachmentPreviewGenerator generator = getCompatibleGenerator(file);
 			if (generator == null) {
 				return;
 			}
-			
+
 			generator.generatePreviews(file, mizoineDir);
-			
+
 		}
 
 	}
-	
+
 	public AttachmentProxy attachment(final String project, final String issueNumber, final String attachmentId) {
 		return new AttachmentProxy(project, issueNumber, attachmentId);
 	}

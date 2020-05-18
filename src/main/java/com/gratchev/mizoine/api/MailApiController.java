@@ -6,6 +6,8 @@ import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -232,8 +234,8 @@ public class MailApiController extends BaseController {
 			final Repository repo = getRepo();
 			final Date messageDate = getMessageDate(message);
 			
-			final String commentId = repo.newCommentId(messageDate, messageId);
 			final IssueProxy issue = repo.issue(project, issueNumber);
+			final String commentId = issue.newCommentId(ZonedDateTime.ofInstant(messageDate.toInstant(), ZoneId.systemDefault()));
 			final CommentProxy comment = repo.comment(project, issueNumber, commentId);
 			comment.createDirs();
 			comment.updateMeta((meta) -> {

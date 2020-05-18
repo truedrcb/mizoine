@@ -5,6 +5,7 @@ import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
+import java.time.temporal.Temporal;
 import java.util.Random;
 import java.util.Set;
 
@@ -53,21 +54,28 @@ public class ShortIdGenerator {
 	 */
 	public static String intToMizCode(int n) {
 		final StringBuilder sb = new StringBuilder();
+		int insertOffset;
+		if (n < 0) {
+			sb.append('-');
+			n = -n;
+			insertOffset = 1;
+		} else {
+			insertOffset = 0;
+		}
 		for (int i = 0; i < 5; i++, n /= 36) {
-			sb.insert(0, ALL_36_CHARS_SORTED.charAt(n % 36));
+			sb.insert(insertOffset, ALL_36_CHARS_SORTED.charAt(n % 36));
 		}
 		return sb.toString();
 	}
 
-	public String createId(final String string) {
-		random.setSeed(string.hashCode());
-		return intToCode(random.nextInt());
+	@Deprecated
+	public String createId(final Temporal dateTime) {
+		return mizCodeFor(dateTime);
 	}
 
-	public String createId(final String string, final Set<String> usedIds) {
-		random.setSeed(string.hashCode());
-		for (;;) {
-			final String id = intToCode(random.nextInt());
+	public String createId(final Temporal dateTime, final Set<String> usedIds) {
+		for (long codeNow = toLongMizCode(dateTime);; codeNow++) {
+			final String id = mizCodeFor(codeNow, dateTime);
 			if (usedIds.contains(id)) {
 				continue;
 			}
@@ -82,11 +90,19 @@ public class ShortIdGenerator {
 	 *                 <code>ZonedDateTime.now()</code>
 	 * @return MizCode for given minute
 	 */
-	public static String mizCodeFor(final ZonedDateTime dateTime) {
-		final long codeNow = ChronoUnit.MINUTES.between(MIZ_EPOCH_START, dateTime);
-		if (codeNow < 0 || codeNow > MIZ_CODE_MAX) {
+	public static String mizCodeFor(final Temporal dateTime) {
+		return mizCodeFor(toLongMizCode(dateTime), dateTime);
+	}
+
+	public static String mizCodeFor(final long codeNow, final Temporal dateTime) {
+		if (codeNow < -MIZ_CODE_MAX || codeNow > MIZ_CODE_MAX) {
 			throw new RuntimeException("mizCode overflow for date/time: " + dateTime);
 		}
 		return intToMizCode((int) codeNow);
+	}
+
+	private static long toLongMizCode(final Temporal dateTime) {
+		final long codeNow = ChronoUnit.MINUTES.between(MIZ_EPOCH_START, dateTime);
+		return codeNow;
 	}
 }

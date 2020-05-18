@@ -5,6 +5,7 @@ import static com.gratchev.mizoine.api.AttachmentApiController.getPageBaseUri;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
@@ -197,14 +198,14 @@ public class IssueApiController extends BaseDescriptionController {
 	@ResponseBody
 	public String createComment(@PathVariable final String project, 
 			@PathVariable final String issueNumber, final String title) throws IOException {
-		final Date creationDate = new Date();
+		final ZonedDateTime creationDate = ZonedDateTime.now();
 		final Repository repo = getRepo();
-		final String commentId = repo.newCommentId(creationDate, title);
+		final String commentId = repo.issue(project, issueNumber).newCommentId(creationDate);
 		final CommentProxy comment = repo.comment(project, issueNumber, commentId);
 		comment.createDirs();
 		comment.updateMeta((meta) -> {
 			meta.title = title;
-			meta.creationDate = creationDate;
+			meta.creationDate = Date.from(creationDate.toInstant());
 			meta.creator = currentUser.getName();
 		}, currentUser);
 		return commentId;
