@@ -122,17 +122,20 @@ public class Repository {
 
 		final String s1 = o1.fileName.substring(lastIdenticalChar);
 		final String s2 = o2.fileName.substring(lastIdenticalChar);
+		
+		final String ns1 = s1.replaceFirst("[^0-9].*", ""); // TODO: OMG Refactor this
+		final String ns2 = s2.replaceFirst("[^0-9].*", "");
 
-		if (isUnsignedInteger(s1)) {
-			if (isUnsignedInteger(s2)) {
-				int i1 = Integer.parseInt(s1);
-				int i2 = Integer.parseInt(s2);
+		if (isUnsignedInteger(ns1)) {
+			if (isUnsignedInteger(ns2)) {
+				int i1 = Integer.parseInt(ns1);
+				int i2 = Integer.parseInt(ns2);
 				return i1 - i2;
 			} else {
 				return -1;
 			}
 		} else {
-			if (isUnsignedInteger(s2)) {
+			if (isUnsignedInteger(ns2)) {
 				return 1;
 			}
 		}
