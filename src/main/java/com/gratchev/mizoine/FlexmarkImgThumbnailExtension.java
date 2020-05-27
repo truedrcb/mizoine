@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.slf4j.Logger;
@@ -46,7 +47,7 @@ public class FlexmarkImgThumbnailExtension implements Parser.ParserExtension, Ht
 	
 	
 	public static final String LARGE_IMG_SUFFIX = ".lg"; // same suffix as in similar bootstrap text classes
-	public static final HashMap<String, String> SHORTCUT_TO_FA = new HashMap<String, String>();
+	public static final Map<String, String> SHORTCUT_TO_FA = new HashMap<>();
 
 	static {
 		SHORTCUT_TO_FA.put("!", "fas fa-exclamation-triangle text-warning");
@@ -79,7 +80,7 @@ public class FlexmarkImgThumbnailExtension implements Parser.ParserExtension, Ht
 			this.styleClass = styleClass;
 			this.newTab = newTab;
 			
-			LOGGER.info("New: " + toString());
+			LOGGER.debug("New: " + toString());
 		}
 	}
 
@@ -107,7 +108,7 @@ public class FlexmarkImgThumbnailExtension implements Parser.ParserExtension, Ht
 		private final List<LinkTemplate> linkTemplates;
 		
 		public ImgExtensionProvider(DataHolder dataHolder) {
-			linkTemplates = TEMPLATES.getFrom(dataHolder);
+			linkTemplates = TEMPLATES.get(dataHolder);
 		}
 
 		@Override

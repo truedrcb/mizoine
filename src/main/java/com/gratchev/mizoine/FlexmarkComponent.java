@@ -66,7 +66,9 @@ public class FlexmarkComponent {
 
 		if (linkTemplatesConfiguration != null) {
 			final Map<String, String> linkTemplates = linkTemplatesConfiguration.getLinkTemplates();
+			LOGGER.info("Link templates: " + linkTemplates);
 			final List<String> prefixes = new ArrayList<>(linkTemplates.keySet());
+			LOGGER.info("Link templates prefixes: " + prefixes);
 			
 			// Avoid short to long prefixes interference: For example - "note" and "note:" 
 			Collections.sort(prefixes);

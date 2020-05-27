@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.util.Arrays;
 
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.gratchev.mizoine.FlexmarkImgThumbnailExtension.LinkTemplate;
 import com.vladsch.flexmark.ext.autolink.AutolinkExtension;
@@ -16,6 +18,7 @@ import com.vladsch.flexmark.util.data.MutableDataSet;
 import com.vladsch.flexmark.util.misc.Extension;
 
 public class FlexmarkImgThumbnailExtensionTest {
+	protected static final Logger LOGGER = LoggerFactory.getLogger(FlexmarkImgThumbnailExtensionTest.class);
 	static String commonMark(String markdown) {
 		
 
@@ -41,7 +44,7 @@ public class FlexmarkImgThumbnailExtensionTest {
 		Node document = parser.parse(markdown);
 		HtmlRenderer renderer = HtmlRenderer.builder(options).build();
 		final String html = renderer.render(document);
-		System.out.println(html); 
+		LOGGER.info(html); 
 		return html;
 	}
 
