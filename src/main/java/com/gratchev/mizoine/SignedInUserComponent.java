@@ -21,17 +21,10 @@ public class SignedInUserComponent implements SignedInUser {
 	@SuppressWarnings("unused")
 	private static final Logger LOGGER = LoggerFactory.getLogger(SignedInUserComponent.class);
 
-	/* (non-Javadoc)
-	 * @see com.gratchev.mizoine.SignedInUser#getName()
-	 */
 	@Override
 	public String getName() {
 		return SecurityContextHolder.getContext().getAuthentication().getName();
 	}
-
-	/* (non-Javadoc)
-	 * @see com.gratchev.mizoine.SignedInUser#getEmail()
-	 */
 	@Override
 	public String getEmail() {
 		return getName() + "@mizoine.test";
@@ -40,9 +33,6 @@ public class SignedInUserComponent implements SignedInUser {
 	@Autowired
 	private BasicUsersConfiguration usersConfiguration;
 
-	/* (non-Javadoc)
-	 * @see com.gratchev.mizoine.SignedInUser#getCredentials()
-	 */
 	@Override
 	public UserCredentials getCredentials() {
 		return usersConfiguration.getUsers().get(getName());
