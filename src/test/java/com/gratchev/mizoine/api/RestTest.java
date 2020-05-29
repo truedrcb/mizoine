@@ -2,6 +2,9 @@ package com.gratchev.mizoine.api;
 
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestBuilders.formLogin;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.authenticated;
+import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.unauthenticated;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -22,7 +25,7 @@ public class RestTest {
 
 	@Autowired
 	private MockMvc mvc;
-	
+
 	@Test
 	public void shouldRedirectToLogin() throws Exception {
 		mvc.perform(get("/")).andDo(print()).andExpect(status().is3xxRedirection())
@@ -32,10 +35,22 @@ public class RestTest {
 	}
 
 	@Test
-	public void shouldLogin() throws Exception {
+	public void testLogin() throws Exception {
 		// https://docs.spring.io/spring-security/site/docs/4.2.x/reference/html/test-mockmvc.html
 		mvc.perform(formLogin("/login").user("amadeus").password("god")).andDo(print())
-				.andExpect(status().is3xxRedirection()).andExpect(redirectedUrl("/"));
+				.andExpect(status().is3xxRedirection()).andExpect(authenticated()).andExpect(redirectedUrl("/"));
+	}
+
+	@Test
+	public void testLoginError() throws Exception {
+		mvc.perform(formLogin("/login").user("amadeus").password("dog")).andDo(print())
+				.andExpect(status().is3xxRedirection()).andExpect(unauthenticated())
+				.andExpect(redirectedUrl("/login.html?error"));
+	}
+
+	@Test
+	public void shouldReadAppInfo() throws Exception {
+		mvc.perform(get("/api/app").with(user("hacker"))).andDo(print()).andExpect(status().isOk());
 	}
 
 	@Test
