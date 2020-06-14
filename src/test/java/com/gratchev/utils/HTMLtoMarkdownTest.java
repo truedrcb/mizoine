@@ -300,4 +300,10 @@ public class HTMLtoMarkdownTest extends HtmlToMarkdownTestBase {
 		whenHtmlRes("paste-error-nosuchelement.html");
 		showMd();
 	}
+
+	@Test
+	public void convertTeletype() {
+		whenHtml("<div>Hello <tt>code</tt></div>");
+		thenMd("Hello `code`");
+	}
 }

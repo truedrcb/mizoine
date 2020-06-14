@@ -920,7 +920,7 @@ public class HTMLtoMarkdown {
 			return convertList(n, inLine);
 		}
 		
-		if ("pre".equals(name) || "code".equals(name)) {
+		if ("pre".equals(name) || "code".equals(name) || "tt".equals(name)) {
 			final Element e = (Element) n;
 			final String innerHtml = e.html();
 			if (LOGGER.isTraceEnabled()) {
