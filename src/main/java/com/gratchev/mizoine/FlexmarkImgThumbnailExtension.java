@@ -35,7 +35,7 @@ import com.vladsch.flexmark.util.ast.Node;
 import com.vladsch.flexmark.util.data.DataHolder;
 import com.vladsch.flexmark.util.data.DataKey;
 import com.vladsch.flexmark.util.data.MutableDataHolder;
-import com.vladsch.flexmark.util.html.Attributes;
+import com.vladsch.flexmark.util.html.MutableAttributes;
 import com.vladsch.flexmark.util.sequence.BasedSequence;
 
 /**
@@ -112,7 +112,7 @@ public class FlexmarkImgThumbnailExtension implements Parser.ParserExtension, Ht
 		}
 
 		@Override
-		public void setAttributes(final Node node, final AttributablePart part, final Attributes attributes) {
+		public void setAttributes(final Node node, final AttributablePart part, final 	MutableAttributes attributes) {
 			if (node instanceof ImageRef) {
 				final ImageRef r = (ImageRef) node;
 				final BasedSequence reference = r.getReference();

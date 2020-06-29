@@ -2,11 +2,11 @@
 
 :/: Upgrade to JDK 11 https://winterbe.com/posts/2018/08/29/migrate-maven-projects-to-java-11-jigsaw/
 
-* Spring boot (2.3.0.RELEASE) https://spring.io/projects/spring-boot | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.springframework.boot%22%20AND%20a%3A%22spring-boot%22)
-* Flexmark (0.61.32) https://github.com/vsch/flexmark-java/wiki | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.vladsch.flexmark%22%20AND%20a%3A%22flexmark-all%22)
-* JGit (5.7.0.202003110725-r) https://www.eclipse.org/jgit/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.eclipse.jgit%22%20AND%20a%3A%22org.eclipse.jgit%22)
-* PDFBox (2.0.19) https://pdfbox.apache.org/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.apache.pdfbox%22%20AND%20a%3A%22pdfbox-tools%22)
-* Lucene (8.5.1) https://wiki.apache.org/lucene-java/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.apache.lucene%22%20AND%20a%3A%22lucene-codecs%22)
+* Spring boot (2.3.1.RELEASE) https://spring.io/projects/spring-boot | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.springframework.boot%22%20AND%20a%3A%22spring-boot%22)
+* Flexmark (0.62.2) https://github.com/vsch/flexmark-java/wiki | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.vladsch.flexmark%22%20AND%20a%3A%22flexmark-all%22)
+* JGit (5.8.0.202006091008-r) https://www.eclipse.org/jgit/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.eclipse.jgit%22%20AND%20a%3A%22org.eclipse.jgit%22)
+* PDFBox (2.0.20) https://pdfbox.apache.org/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.apache.pdfbox%22%20AND%20a%3A%22pdfbox-tools%22)
+* Lucene (8.5.2) https://wiki.apache.org/lucene-java/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.apache.lucene%22%20AND%20a%3A%22lucene-codecs%22)
 * Guava (29.0-jre) https://github.com/google/guava | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.google.guava%22%20AND%20a%3A%22guava%22)
 * Jsoup (1.13.1) https://jsoup.org/ | [Maven Central](https://search.maven.org/search?q=a:jsoup)
 * JavaMail API (1.6.2) https://mvnrepository.com/artifact/com.sun.mail/javax.mail | [Maven Central](https://search.maven.org/search?q=g:com.sun.mail%20AND%20a:javax.mail)
@@ -24,5 +24,5 @@
     * [Bootstrap Lightbox](https://github.com/ashleydw/lightbox) (5.3.0) | [cdnjs](https://cdnjs.com/libraries/ekko-lightbox)
 * Ace (1.4.7) https://ace.c9.io/#nav=embedding | [cdnjs](https://cdnjs.com/libraries/ace), [jsDelivr](https://www.jsdelivr.com/package/npm/ace)
 * highlight.js (9.15.8) https://highlightjs.org/download/
-* Font awesome (5.13.0) https://fontawesome.com/
+* Font awesome (5.13.1) https://fontawesome.com/
 * Popper.js (1.15.0) https://github.com/FezVrasta/popper.js | [unpkg](https://unpkg.com/popper.js/dist/umd/popper.min.js)

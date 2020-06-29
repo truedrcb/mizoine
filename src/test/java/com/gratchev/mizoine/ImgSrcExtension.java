@@ -14,7 +14,7 @@ import com.vladsch.flexmark.html.renderer.AttributablePart;
 import com.vladsch.flexmark.html.renderer.LinkResolverContext;
 import com.vladsch.flexmark.util.ast.Node;
 import com.vladsch.flexmark.util.data.MutableDataHolder;
-import com.vladsch.flexmark.util.html.Attributes;
+import com.vladsch.flexmark.util.html.MutableAttributes;
 
 /**
  * Customize attributes output https://github.com/vsch/flexmark-java/wiki/Usage#customize-html-attributes-via-attribute-provider
@@ -41,7 +41,7 @@ public class ImgSrcExtension implements HtmlRenderer.HtmlRendererExtension {
 
 	static class ImgSrcExtensionProvider implements AttributeProvider {
 		@Override
-		public void setAttributes(final Node node, final AttributablePart part, final Attributes attributes) {
+		public void setAttributes(final Node node, final AttributablePart part, final MutableAttributes attributes) {
 			if (node instanceof AutoLink && part == AttributablePart.LINK) {
 				if (LOGGER.isDebugEnabled()) {
 					LOGGER.debug("Link: " + node + " part " + part.getName());
