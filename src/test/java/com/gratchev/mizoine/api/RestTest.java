@@ -12,6 +12,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrlPattern;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.io.IOException;
+import java.nio.file.Files;
+
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,6 +22,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultHandler;
 
@@ -32,12 +37,26 @@ public class RestTest {
 	@Autowired
 	private MockMvc mvc;
 
+	@DynamicPropertySource
+	static void dynamicProperties(final DynamicPropertyRegistry registry) {
+		registry.add("config", () -> {
+			try {
+				return Files.createTempDirectory("miz-tes-repos").toAbsolutePath().toString();
+			} catch (IOException e) {
+				throw new RuntimeException(e);
+			}
+		});
+	}
+
 	@Test
 	public void shouldRedirectToLogin() throws Exception {
 		mvc.perform(get("/")).andDo(print()).andExpect(status().is3xxRedirection())
 				.andExpect(redirectedUrlPattern("**/login.html"));
 		mvc.perform(get("/login.html")).andDo(print()).andExpect(status().isOk())
 				.andExpect(content().string(containsString("Remember me")));
+
+		mvc.perform(get("/api2/app")).andDo(print()).andExpect(status().is3xxRedirection())
+				.andExpect(redirectedUrlPattern("**/login.html"));
 	}
 
 	@Test
@@ -74,4 +93,8 @@ public class RestTest {
 
 	}
 
+	@Test
+	void api2app() throws Exception {
+		mvc.perform(get("/api2/app").with(user("hacker"))).andDo(prettyPrintJson()).andExpect(status().isOk());
+	}
 }
