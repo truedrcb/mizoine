@@ -12,6 +12,9 @@ const projectRoute = {
 	</div>
 	<div class="secondary" v-if="issues == null || info == null"><i class="fas fa-circle-notch fa-spin"></i> Loading...</div>
 	<div class="danger" v-if="error">{{ error }}</div>
+	<div v-if="info &amp;&amp; info.description" :key="'descr' + info.timestamp">
+		<md-html :html="info.description.html"/>
+	</div>
 	<nav class="navbar navbar-light bg-light sticky-top">
 		<router-link class="nav-item btn btn-light" 
 			:to="'/edit/' + mznURI('projects/' + project + '/description.md')">
