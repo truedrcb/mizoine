@@ -2,12 +2,13 @@
 
 :/: Upgrade to JDK 11 https://winterbe.com/posts/2018/08/29/migrate-maven-projects-to-java-11-jigsaw/
 
-* Spring boot (2.3.4.RELEASE) https://spring.io/projects/spring-boot | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.springframework.boot%22%20AND%20a%3A%22spring-boot%22)
+* Spring boot (2.3.5.RELEASE) https://spring.io/projects/spring-boot | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.springframework.boot%22%20AND%20a%3A%22spring-boot%22)
+* Springdoc (1.4.8) https://www.baeldung.com/spring-rest-openapi-documentation | [Maven Central](https://search.maven.org/search?q=g:org.springdoc%20AND%20a:springdoc-openapi-ui)
 * Flexmark (0.62.2) https://github.com/vsch/flexmark-java/wiki | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.vladsch.flexmark%22%20AND%20a%3A%22flexmark-all%22)
 * JGit (5.9.0.202009080501-r) https://www.eclipse.org/jgit/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.eclipse.jgit%22%20AND%20a%3A%22org.eclipse.jgit%22)
 * PDFBox (2.0.21) https://pdfbox.apache.org/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.apache.pdfbox%22%20AND%20a%3A%22pdfbox-tools%22)
-* Lucene (8.6.2) https://wiki.apache.org/lucene-java/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.apache.lucene%22%20AND%20a%3A%22lucene-codecs%22)
-* Guava (29.0-jre) https://github.com/google/guava | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.google.guava%22%20AND%20a%3A%22guava%22)
+* Lucene (8.7.0) https://wiki.apache.org/lucene-java/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.apache.lucene%22%20AND%20a%3A%22lucene-codecs%22)
+* Guava (30.0-jre) https://github.com/google/guava | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.google.guava%22%20AND%20a%3A%22guava%22)
 * Jsoup (1.13.1) https://jsoup.org/ | [Maven Central](https://search.maven.org/search?q=a:jsoup)
 * JavaMail API (1.6.2) https://mvnrepository.com/artifact/com.sun.mail/javax.mail | [Maven Central](https://search.maven.org/search?q=g:com.sun.mail%20AND%20a:javax.mail)
 

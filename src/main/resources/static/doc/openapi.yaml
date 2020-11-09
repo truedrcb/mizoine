@@ -3,9 +3,78 @@ info:
     title: Mizoine
     version: 2.0.0
 paths:
-  /api2/app:
+  /api2:
     get:
-      summary: "Retrieve config"
+      summary: "Retrieve configurations"
+      parameters:
+        - in: query
+          name: app
+          description: "Retrieve general application configuration"
+          schema:
+            type: boolean
+          allowEmptyValue: true
       responses:
           '200':
               description: "Success"
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/app'
+  /api2/{rid}:
+    get:
+      summary: "Retrieve projects list"
+      parameters:
+        - in: path
+          name: rid
+          description: Repository identifier
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: meta
+          description: "Retrieve repository metadata"
+          schema:
+            type: boolean
+          allowEmptyValue: true
+      responses:
+        '200':
+            description: "Success"
+  /api2/{rid}/{pid}:
+    get:
+      summary: "Retrieve issues list"
+      parameters:
+        - in: path
+          name: rid
+          description: Repository identifier
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: pid
+          description: Project identifier
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: meta
+          description: "Retrieve project metadata"
+          schema:
+            type: boolean
+          allowEmptyValue: true
+      responses:
+        '200':
+            description: "Success"
+components:
+  schemas:
+    app:
+      type: object
+      properties:
+        repositories:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+            required:
+              - id
