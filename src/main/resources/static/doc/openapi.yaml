@@ -3,7 +3,7 @@ info:
     title: Mizoine
     version: 2.0.0
 paths:
-  /api2/Repositories:
+  /api2/repositories:
     get:
       summary: "Retrieve configurations of all repositories"
       parameters:
@@ -20,7 +20,20 @@ paths:
                 application/json:
                   schema:
                     $ref: '#/components/schemas/app'
-  /api2/Repositories({rid})/Projects:
+  /api2/repositories({rid}):
+    get:
+      summary: "Retrieve repository metadata"
+      parameters:
+        - in: path
+          name: rid
+          description: Repository identifier
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+            description: "Success"
+  /api2/repositories({rid})/projects:
     get:
       summary: "Retrieve projects list"
       parameters:
@@ -30,16 +43,29 @@ paths:
           required: true
           schema:
             type: string
-        - in: query
-          name: meta
-          description: "Retrieve repository metadata"
-          schema:
-            type: boolean
-          allowEmptyValue: true
       responses:
         '200':
             description: "Success"
-  /api2/Repositories({rid})/Projects({pid})/Issues:
+  /api2/repositories({rid})/projects({pid}):
+    get:
+      summary: "Retrieve project metadata"
+      parameters:
+        - in: path
+          name: rid
+          description: Repository identifier
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: pid
+          description: Project identifier
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+            description: "Success"
+  /api2/repositories({rid})/projects({pid})/issues:
     get:
       summary: "Retrieve issues list"
       parameters:
@@ -55,16 +81,35 @@ paths:
           required: true
           schema:
             type: string
-        - in: query
-          name: meta
-          description: "Retrieve project metadata"
-          schema:
-            type: boolean
-          allowEmptyValue: true
       responses:
         '200':
             description: "Success"
-  /api2/Repositories({rid})/Projects({pid})/Issues({iid})/Ments:
+  /api2/repositories({rid})/projects({pid})/issues({iid}):
+    get:
+      summary: "Retrieve issue metadata"
+      parameters:
+        - in: path
+          name: rid
+          description: Repository identifier
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: pid
+          description: Project identifier
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: iid
+          description: Issue identifier
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+            description: "Success"
+  /api2/repositories({rid})/projects({pid})/issues({iid})/ments:
     get:
       summary: "Retrieve issue comments/attachments list"
       parameters:
@@ -86,12 +131,6 @@ paths:
           required: true
           schema:
             type: string
-        - in: query
-          name: meta
-          description: "Retrieve project metadata"
-          schema:
-            type: boolean
-          allowEmptyValue: true
       responses:
         '200':
             description: "Success"
