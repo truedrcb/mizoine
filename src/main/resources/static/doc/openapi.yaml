@@ -3,9 +3,9 @@ info:
     title: Mizoine
     version: 2.0.0
 paths:
-  /api2:
+  /api2/Repositories:
     get:
-      summary: "Retrieve configurations"
+      summary: "Retrieve configurations of all repositories"
       parameters:
         - in: query
           name: app
@@ -20,7 +20,7 @@ paths:
                 application/json:
                   schema:
                     $ref: '#/components/schemas/app'
-  /api2/{rid}:
+  /api2/Repositories({rid})/Projects:
     get:
       summary: "Retrieve projects list"
       parameters:
@@ -39,7 +39,7 @@ paths:
       responses:
         '200':
             description: "Success"
-  /api2/{rid}/{pid}:
+  /api2/Repositories({rid})/Projects({pid})/Issues:
     get:
       summary: "Retrieve issues list"
       parameters:
@@ -52,6 +52,37 @@ paths:
         - in: path
           name: pid
           description: Project identifier
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: meta
+          description: "Retrieve project metadata"
+          schema:
+            type: boolean
+          allowEmptyValue: true
+      responses:
+        '200':
+            description: "Success"
+  /api2/Repositories({rid})/Projects({pid})/Issues({iid})/Ments:
+    get:
+      summary: "Retrieve issue comments/attachments list"
+      parameters:
+        - in: path
+          name: rid
+          description: Repository identifier
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: pid
+          description: Project identifier
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: iid
+          description: Issue identifier
           required: true
           schema:
             type: string

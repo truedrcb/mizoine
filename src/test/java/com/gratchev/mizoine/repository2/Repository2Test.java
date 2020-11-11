@@ -1,4 +1,4 @@
-package com.gratchev.mizoine.repository;
+package com.gratchev.mizoine.repository2;
 
 import java.io.IOException;
 import java.nio.file.Files;
