@@ -1,0 +1,9 @@
+.description-title {
+	font-size: 70%;
+	margin-top: 1ex;
+}
+
+.description-title .btn {
+	position: absolute;
+	right: 1ex;
+}
