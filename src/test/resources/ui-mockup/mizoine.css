@@ -4,6 +4,5 @@
 }
 
 .description-title .btn {
-	position: absolute;
-	right: 1ex;
+	float: right;
 }
