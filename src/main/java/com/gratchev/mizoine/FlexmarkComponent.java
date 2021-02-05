@@ -66,9 +66,9 @@ public class FlexmarkComponent {
 
 		if (linkTemplatesConfiguration != null) {
 			final Map<String, String> linkTemplates = linkTemplatesConfiguration.getLinkTemplates();
-			LOGGER.info("Link templates: " + linkTemplates);
+			LOGGER.info("Link templates: {}", linkTemplates);
 			final List<String> prefixes = new ArrayList<>(linkTemplates.keySet());
-			LOGGER.info("Link templates prefixes: " + prefixes);
+			LOGGER.info("Link templates prefixes: {}", prefixes);
 			
 			// Avoid short to long prefixes interference: For example - "note" and "note:" 
 			Collections.sort(prefixes);
@@ -76,11 +76,11 @@ public class FlexmarkComponent {
 			final List<LinkTemplate> templates = new ArrayList<>();
 			for (final String prefix : prefixes) {
 				final String templateConf = linkTemplates.get(prefix);
-				LOGGER.info("Configuring link template prefix: " + prefix + " = " + templateConf);
+				LOGGER.info("Configuring link template prefix: {} = {}", prefix, templateConf);
 				final String[] split = templateConf.split(";");
-				LOGGER.info("Template parameters: " + split.length);
+				LOGGER.info("Template parameters: {}", split.length);
 				if (split.length < 1) {
-					LOGGER.warn("Skipped");
+					LOGGER.info("Skipped");
 					continue;
 				}
 				final String urlTemplate = split[0];
