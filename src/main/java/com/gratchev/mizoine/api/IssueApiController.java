@@ -135,8 +135,8 @@ public class IssueApiController extends BaseDescriptionController {
 		info.issue = proxy.readInfo();
 
 		final ArrayList<Attachment> attachments = proxy.readAttachments();
-		final String markdownFooterRefs = generateMarkdownFooterRefs(getPageBaseUri(project, issueNumber), attachments);
-		
+		// PERFORMANCE KILLER!!!
+		//final String markdownFooterRefs = generateMarkdownFooterRefs(getPageBaseUri(project, issueNumber), attachments);
 		info.ments = new ArrayList<>();
 		attachments.stream().map(attachment -> {
 			final WithDescription ment = new WithDescription();
@@ -163,7 +163,7 @@ public class IssueApiController extends BaseDescriptionController {
 		
 		for(final WithDescription ment: info.ments) {
 			if (ment.descriptionMarkdown != null) {
-				final Node document = parser.parse(ment.descriptionMarkdown + markdownFooterRefs);
+				final Node document = parser.parse(ment.descriptionMarkdown/* + markdownFooterRefs*/); // PERFORMANCE KILLER!!!
 				ment.descriptionHtml = renderer.render(document);
 			} else {
 				ment.descriptionHtml = null;
