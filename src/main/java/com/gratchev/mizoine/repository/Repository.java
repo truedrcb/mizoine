@@ -1,6 +1,9 @@
 package com.gratchev.mizoine.repository;
 
-import static com.gratchev.mizoine.preview.AttachmentPreviewGenerator.*;
+import static com.gratchev.mizoine.preview.AttachmentPreviewGenerator.PREVIEW_JPG;
+import static com.gratchev.mizoine.preview.AttachmentPreviewGenerator.PREVIEW_PAGE_PREFIX;
+import static com.gratchev.mizoine.preview.AttachmentPreviewGenerator.THUMBNAIL_JPG;
+import static com.gratchev.mizoine.preview.AttachmentPreviewGenerator.THUMBNAIL_PAGE_PREFIX;
 import static com.gratchev.mizoine.repository.RepositoryUtils.checkOrCreateDirectory;
 import static com.gratchev.mizoine.repository.RepositoryUtils.checkOrCreateHiddenDirectory;
 import static com.gratchev.mizoine.repository.RepositoryUtils.createNewDirectory;
@@ -12,8 +15,6 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
 import java.lang.reflect.InvocationTargetException;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -56,13 +57,13 @@ import com.gratchev.utils.FileUtils;
 
 public class Repository {
 
+	public static final String MIZOINE_DIR = ".mizoine";
+
+	public static final String RESOURCE_URI_BASE = "/attachments/";
+
 	private static final Logger LOGGER = LoggerFactory.getLogger(Repository.class);
 
 	private static final String VERIFICATION_LOG = "repository-verification-log.md";
-
-	static final String MIZOINE_DIR = ".mizoine";
-
-	static final String RESOURCE_URI_BASE = "/attachments/";
 
 	private static final String ATTACHMENTS_DIRNAME = "attachments";
 
@@ -86,7 +87,6 @@ public class Repository {
 
 	private final ObjectMapper objectMapper;
 	private final ShortIdGenerator shortIdGenerator = new ShortIdGenerator();
-	private final DateFormat timestampFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
 
 	static final Comparator<? super Attachment> ATTACHMENTS_BY_DATE_NAME = (a1, a2) -> {
 		if (a1.meta != null && a2.meta != null && a1.meta.creationDate != null && a2.meta.creationDate != null) {
@@ -144,14 +144,14 @@ public class Repository {
 
 	private final String rootPath;
 
-	private final String resourcheUriPrefix;
+	private final String resourceUriPrefix;
 
 	protected final GitComponent git;
 
 	@Deprecated
 	public Repository(final String rootPath, final String id) {
 		this.rootPath = rootPath;
-		this.resourcheUriPrefix = id.length() > 0 ? (id + '/') : "";
+		this.resourceUriPrefix = id.length() > 0 ? (id + '/') : "";
 		this.git = new GitComponent(this);
 
 		// https://github.com/FasterXML/jackson-core/wiki/JsonParser-Features
@@ -205,8 +205,7 @@ public class Repository {
 	}
 
 	public File getProjectIssuesRoot(final String project) {
-		final File projectIssuesRoot = new File(getProjectRoot(project), ISSUES_DIRNAME);
-		return projectIssuesRoot;
+		return new File(getProjectRoot(project), ISSUES_DIRNAME);
 	}
 
 	public File getIssueRoot(final String project, final String issueNumber) {
@@ -404,7 +403,7 @@ public class Repository {
 	}
 
 	public String getResourceUriBase() {
-		return RESOURCE_URI_BASE + resourcheUriPrefix;
+		return RESOURCE_URI_BASE + resourceUriPrefix;
 	}
 
 	private String attachmentUriBase(final String project, final String issueNumber, final String shortId) {
@@ -939,10 +938,6 @@ public class Repository {
 			return IssueMeta.class;
 		}
 
-		/**
-		 * @param issueDir
-		 * @return Not null
-		 */
 		public Issue readInfo() {
 			final Issue issue = new Issue();
 			issue.issueNumber = issueNumber;

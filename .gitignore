@@ -6,3 +6,5 @@
 .project
 **/.vscode
 /.sts4-cache
+.idea
+mizoine.iml
