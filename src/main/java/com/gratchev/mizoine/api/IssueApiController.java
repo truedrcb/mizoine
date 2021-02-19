@@ -160,17 +160,17 @@ public class IssueApiController extends BaseDescriptionController {
 		
 		final Parser parser = flexmark.getParser();
 		final HtmlRenderer renderer = flexmark.getRenderer();
-		
+		info.ments.sort(IssueMeta.MENTS_COMPARATOR);
+
 		for(final WithDescription ment: info.ments) {
 			if (ment.descriptionMarkdown != null) {
-				final Node document = parser.parse(ment.descriptionMarkdown/* + markdownFooterRefs*/); // PERFORMANCE KILLER!!!
+				final Node document = parser.parse(ment.descriptionMarkdown
+					/* + markdownFooterRefs*/); // PERFORMANCE KILLER!!!
 				ment.descriptionHtml = renderer.render(document);
 			} else {
 				ment.descriptionHtml = null;
 			}
 		}
-
-		info.ments.sort(IssueMeta.MENTS_COMPARATOR);
 		return info;
 	}
 
@@ -215,9 +215,7 @@ public class IssueApiController extends BaseDescriptionController {
 	@ResponseBody
 	public String updateTitle(@PathVariable final String project, 
 			@PathVariable final String issueNumber, final String title) throws IOException {
-		getRepo().issue(project, issueNumber).updateMeta((meta) -> {
-			meta.title = title;
-		}, currentUser);
+		getRepo().issue(project, issueNumber).updateMeta(meta -> meta.title = title, currentUser);
 		return title;
 	}
 

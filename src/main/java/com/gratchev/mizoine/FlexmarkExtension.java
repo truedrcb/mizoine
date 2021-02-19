@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,7 +30,6 @@ import com.vladsch.flexmark.html.renderer.NodeRenderer;
 import com.vladsch.flexmark.html.renderer.NodeRendererContext;
 import com.vladsch.flexmark.html.renderer.NodeRendererFactory;
 import com.vladsch.flexmark.html.renderer.NodeRenderingHandler;
-import com.vladsch.flexmark.html.renderer.NodeRenderingHandler.CustomNodeRenderer;
 import com.vladsch.flexmark.parser.Parser;
 import com.vladsch.flexmark.util.ast.Node;
 import com.vladsch.flexmark.util.data.DataHolder;
@@ -42,8 +42,8 @@ import com.vladsch.flexmark.util.sequence.BasedSequence;
  * Customize attributes output
  * https://github.com/vsch/flexmark-java/wiki/Usage#customize-html-attributes-via-attribute-provider
  */
-public class FlexmarkImgThumbnailExtension implements Parser.ParserExtension, HtmlRendererExtension {
-	private static final Logger LOGGER = LoggerFactory.getLogger(FlexmarkImgThumbnailExtension.class);
+public class FlexmarkExtension implements Parser.ParserExtension, HtmlRendererExtension {
+	private static final Logger LOGGER = LoggerFactory.getLogger(FlexmarkExtension.class);
 	
 	
 	public static final String LARGE_IMG_SUFFIX = ".lg"; // same suffix as in similar bootstrap text classes
@@ -80,28 +80,28 @@ public class FlexmarkImgThumbnailExtension implements Parser.ParserExtension, Ht
 			this.styleClass = styleClass;
 			this.newTab = newTab;
 			
-			LOGGER.debug("New: " + toString());
+			LOGGER.debug("New: {}", this);
 		}
 	}
 
-	public static final DataKey<List<LinkTemplate>> TEMPLATES = new DataKey<>("TEMPLATES", 
-			new ArrayList<LinkTemplate>()); 
+	public static final DataKey<List<LinkTemplate>> TEMPLATES = new DataKey<>("TEMPLATES",
+			new ArrayList<>());
 	
 	@Override
-	public void rendererOptions(MutableDataHolder options) {
+	public void rendererOptions(final @NotNull MutableDataHolder options) {
 		// add any configuration settings to options you want to apply to everything,
 		// here
 	}
 
 	@Override
-	public void extend(Builder rendererBuilder, String rendererType) {
+	public void extend(final Builder rendererBuilder, final @NotNull String rendererType) {
 		rendererBuilder.attributeProviderFactory(ImgExtensionProvider.Factory());
 		rendererBuilder.nodeRendererFactory(new EmojiNodeRenderer.Factory());
 
 	}
 
-	static FlexmarkImgThumbnailExtension create() {
-		return new FlexmarkImgThumbnailExtension();
+	static FlexmarkExtension create() {
+		return new FlexmarkExtension();
 	}
 
 	static class ImgExtensionProvider implements AttributeProvider {
@@ -112,17 +112,20 @@ public class FlexmarkImgThumbnailExtension implements Parser.ParserExtension, Ht
 		}
 
 		@Override
-		public void setAttributes(final Node node, final AttributablePart part, final 	MutableAttributes attributes) {
+		public void setAttributes(final @NotNull Node node, final @NotNull AttributablePart part, final @NotNull MutableAttributes attributes) {
 			if (node instanceof ImageRef) {
 				final ImageRef r = (ImageRef) node;
 				final BasedSequence reference = r.getReference();
-				if (reference != null) {
-					attributes.replaceValue("class",
-							reference.endsWith(LARGE_IMG_SUFFIX) ? "miz-md-img" : "miz-md-thumbnail");
-					attributes.replaceValue("miz-ref", reference);
-				}
+				attributes.replaceValue("class",
+						reference.endsWith(LARGE_IMG_SUFFIX) ? "miz-md-img" : "miz-md-thumbnail");
+				attributes.replaceValue("miz-ref", reference);
 			} else if (node instanceof Image) {
 				attributes.replaceValue("class", "miz-md-img");
+//				final Image image = (Image) node;
+//				if (image.getUrl().equals("thumb")) {
+//					attributes.replaceValue("src", "thumb-replaced");
+//					attributes.replaceValue("miz-ref", image.getText());
+//				}
 			} else if (node instanceof AutoLink) {
 				attributes.replaceValue("target", "_blank");
 			} else if (node instanceof Link) {
@@ -159,7 +162,7 @@ public class FlexmarkImgThumbnailExtension implements Parser.ParserExtension, Ht
 		static AttributeProviderFactory Factory() {
 			return new IndependentAttributeProviderFactory() {
 				@Override
-				public AttributeProvider apply(LinkResolverContext context) {
+				public @NotNull AttributeProvider apply(final @NotNull LinkResolverContext context) {
 					return new ImgExtensionProvider(context.getOptions());
 				}
 			};
@@ -183,17 +186,12 @@ public class FlexmarkImgThumbnailExtension implements Parser.ParserExtension, Ht
 
 		@Override
 		public Set<NodeRenderingHandler<?>> getNodeRenderingHandlers() {
-			HashSet<NodeRenderingHandler<?>> set = new HashSet<NodeRenderingHandler<?>>();
-			set.add(new NodeRenderingHandler<Emoji>(Emoji.class, new CustomNodeRenderer<Emoji>() {
-				@Override
-				public void render(Emoji node, NodeRendererContext context, HtmlWriter html) {
-					EmojiNodeRenderer.this.render(node, context, html);
-				}
-			}));
+			HashSet<NodeRenderingHandler<?>> set = new HashSet<>();
+			set.add(new NodeRenderingHandler<>(Emoji.class, EmojiNodeRenderer.this::render));
 			return set;
 		}
 
-		private void render(final Emoji emoji, NodeRendererContext context, HtmlWriter html) {
+		private void render(final Emoji emoji, final NodeRendererContext context, final HtmlWriter html) {
 			final String faClass = SHORTCUT_TO_FA.get(emoji.getText().toString());
 			if (faClass == null) {
 				// output as text
@@ -211,7 +209,7 @@ public class FlexmarkImgThumbnailExtension implements Parser.ParserExtension, Ht
 
 		public static class Factory implements NodeRendererFactory {
 			@Override
-			public NodeRenderer apply(DataHolder options) {
+			public @NotNull NodeRenderer apply(final @NotNull DataHolder options) {
 				return new EmojiNodeRenderer(options);
 			}
 		}

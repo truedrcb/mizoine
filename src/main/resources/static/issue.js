@@ -321,13 +321,13 @@ const issueMents = {
 		<div v-for="(ment, mentindex) in info.ments" class="media mb-5" :key="ment.descriptionPath">
 			<a :id="'ment-' + ment.descriptionPath"></a>
 			<h6>
-				<router-link v-if="ment.attachment" :to="$route.path + '/attachment/' + ment.attachment.id">
+				<router-link v-if="ment.attachment" :to="'attachment-' + ment.attachment.id">
 					<div class="comment-badge mr-2 badge badge-light text-secondary">
 						<img v-if="ment.thumbnail" class="thumbnail" :src="ment.thumbnail" />
 						<i v-if="ment.icon" :class="ment.icon"></i>
 					</div>
 				</router-link>
-				<router-link v-if="ment.comment" :to="$route.path + '/comment/' + ment.comment.id">
+				<router-link v-if="ment.comment" :to="'comment-' + ment.comment.id">
 					<div class="comment-badge mr-2 badge badge-light text-secondary">
 						<i :class="ment.icon"></i>
 					</div>
@@ -826,7 +826,7 @@ const issueRoute = {
 				.then(response => {
 					issuesInfo.clear(t.project, t.issueNumber);
 					store.commit('updateGitStatus');
-					t.$router.push({ path: `/issue/${this.project}-${this.issueNumber}/comment/` + response.data });
+					t.$router.push({ path: `/issue/${this.project}-${this.issueNumber}/comment-` + response.data });
 					displayMessage("Comment created: " + response.data);
 				})
 				.catch(displayError);
@@ -891,8 +891,9 @@ const issueRoute = {
 		}
 	},
 	children: [
+		{path: '', redirect: 'root'},
 		{
-			path: '', 
+			path: 'root', 
 			component: issueMents,
 			meta: { id: 'ments' }
 		},
@@ -902,17 +903,17 @@ const issueRoute = {
 			meta: { id: 'unread-mail' }
 		},
 		{
-			path: 'preview-mail/:mailUri', 
+			path: 'preview-mail-:mailUri', 
 			component: previewMail,
 			meta: { id: 'preview-mail' }
 		},
 		{
-			path: 'comment/:commentId', 
+			path: 'comment-:commentId', 
 			component: issueComment,
 			meta: { id: 'comment' }
 		},
 		{
-			path: 'attachment/:id', 
+			path: 'attachment-:id', 
 			component: issueAttachment,
 			meta: { id: 'attachment' }
 		}

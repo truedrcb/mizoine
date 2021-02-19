@@ -1,12 +1,14 @@
 package com.gratchev.mizoine;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
+import com.gratchev.mizoine.FlexmarkExtension.LinkTemplate;
+import com.vladsch.flexmark.ext.autolink.AutolinkExtension;
+import com.vladsch.flexmark.ext.gfm.strikethrough.StrikethroughExtension;
+import com.vladsch.flexmark.ext.superscript.SuperscriptExtension;
+import com.vladsch.flexmark.ext.tables.TablesExtension;
+import com.vladsch.flexmark.ext.typographic.TypographicExtension;
+import com.vladsch.flexmark.html.HtmlRenderer;
+import com.vladsch.flexmark.parser.Parser;
+import com.vladsch.flexmark.util.data.MutableDataSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,21 +16,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Component;
 
-import com.gratchev.mizoine.FlexmarkImgThumbnailExtension.LinkTemplate;
-import com.vladsch.flexmark.ext.autolink.AutolinkExtension;
-import com.vladsch.flexmark.ext.gfm.strikethrough.StrikethroughExtension;
-import com.vladsch.flexmark.ext.tables.TablesExtension;
-import com.vladsch.flexmark.ext.typographic.TypographicExtension;
-import com.vladsch.flexmark.html.HtmlRenderer;
-import com.vladsch.flexmark.parser.Parser;
-import com.vladsch.flexmark.ext.superscript.SuperscriptExtension;
-import com.vladsch.flexmark.util.data.MutableDataSet;
+import java.util.*;
 
 @Component
 public class FlexmarkComponent {
 	private static final Logger LOGGER = LoggerFactory.getLogger(FlexmarkComponent.class);
-	
-	private final MutableDataSet options = new MutableDataSet();
 	
 	private Parser parser = null;
 	private HtmlRenderer renderer = null;
@@ -48,14 +40,15 @@ public class FlexmarkComponent {
 	}
 
 	public void init() {
+		final MutableDataSet options = new MutableDataSet();
 		// uncomment to set optional extensions
 		// See https://github.com/vsch/flexmark-java/wiki/Extensions
-		options.set(Parser.EXTENSIONS, Arrays.asList(
+		options.set(Parser.EXTENSIONS, List.of(
 				StrikethroughExtension.create(), 
 				SuperscriptExtension.create(), 
 				TablesExtension.create(),
 				TypographicExtension.create(),
-				FlexmarkImgThumbnailExtension.create(),
+				FlexmarkExtension.create(),
 				//WikiLinkExtension.create(),
 				AutolinkExtension.create()));
 		
@@ -85,12 +78,12 @@ public class FlexmarkComponent {
 				}
 				final String urlTemplate = split[0];
 				final String styleClass = split.length > 1 ? split[1] : null;
-				final boolean newTab = split.length > 2 ? (!split[2].equals("false")) : true;
+				final boolean newTab = split.length <= 2 || (!split[2].equals("false"));
 				
 				// Revert sorted order
 				templates.add(0, new LinkTemplate(prefix, urlTemplate, styleClass, newTab));
 			}
-			options.set(FlexmarkImgThumbnailExtension.TEMPLATES, templates);
+			options.set(FlexmarkExtension.TEMPLATES, templates);
 		}
 
 		parser = Parser.builder(options).build();
@@ -102,13 +95,13 @@ public class FlexmarkComponent {
 
 	@Bean
 	@ConfigurationProperties
-	public LinkTemplatesConfiguration linkTemplatesConfugurationBean() {
+	public LinkTemplatesConfiguration linkTemplatesConfigurationBean() {
 		return new LinkTemplatesConfiguration();
 	}
 
 	public static class LinkTemplatesConfiguration {
 
-		private Map<String, String> linkTemplates = new HashMap<String, String>();
+		private final Map<String, String> linkTemplates = new HashMap<>();
 
 		public Map<String, String> getLinkTemplates() {
 			return this.linkTemplates;
