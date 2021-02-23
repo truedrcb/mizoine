@@ -52,32 +52,32 @@ public class TempRepositoryUtils {
 	
 	public static void removeDirectory(final File root) throws IOException {
 		LOGGER.info("Removing directory: " + root.getAbsolutePath());
-		Files.walkFileTree(root.toPath(), new FileVisitor<Path>() {
+		Files.walkFileTree(root.toPath(), new FileVisitor<>() {
 
 			@Override
-			public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+			public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
 				return FileVisitResult.CONTINUE;
 			}
 
 			@Override
-			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
 				assertThat(file.toFile().delete()).as(file.toFile().getAbsolutePath()).isTrue();
 				return FileVisitResult.CONTINUE;
 			}
 
 			@Override
-			public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
+			public FileVisitResult visitFileFailed(Path file, IOException exc) {
 				return FileVisitResult.CONTINUE;
 			}
 
 			@Override
-			public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+			public FileVisitResult postVisitDirectory(Path dir, IOException exc) {
 				assertThat(dir.toFile().delete()).as(dir.toFile().getAbsolutePath()).isTrue();
 				return FileVisitResult.CONTINUE;
 			}
 		});
 		assertDirNotExists(root);
-		LOGGER.info("Directory suscessfully removed.");
+		LOGGER.info("Directory successfully removed.");
 	}
 	
 	public static class TempRepository extends Repository {

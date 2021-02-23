@@ -73,7 +73,8 @@ public class FlexmarkExtensionTest {
 	@Test
 	public void testImgRefThumbnail() {
 		final String html = commonMark("hello ![Test][ABC123] image\n\n[ABC123]: /attachments/.mizoine/image1-thumbnail.jpg");
-		assertEquals("<p>hello <img src=\"/attachments/.mizoine/image1-thumbnail.jpg\" alt=\"Test\" class=\"miz-md-thumbnail\" miz-ref=\"ABC123\" /> image</p>\n", html);
+		assertEquals("<p>hello <img src=\"/attachments/.mizoine/image1-thumbnail.jpg\" alt=\"Test\" class=\"miz-md-thumbnail\" miz-ref=\"ABC123\" /> image</p>\n",
+				html);
 	}
 
 	@Test

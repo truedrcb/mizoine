@@ -13,5 +13,4 @@ public class CommonControllerTest {
         assertThat(cut.issueAttachments("/s/", "123^DD", "c", "/../../../.xxx"))
                 .isEqualTo("forward:/attachments/.mizoine/%2Fs%2F/123%5EDD/c/%2F..%2F..%2F..%2F.xxx");
     }
-
 }

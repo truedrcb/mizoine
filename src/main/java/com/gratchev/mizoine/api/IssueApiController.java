@@ -63,12 +63,12 @@ public class IssueApiController extends BaseDescriptionController {
 
 			LOGGER.debug("File: " + fileName);
 
-			final MultipartFile uploadfile = request.getFile(fileName);
+			final MultipartFile uploadFile = request.getFile(fileName);
 
 			try {
-				getRepo().issue(project, issueNumber).uploadAttachment(uploadfile, new Date());
+				getRepo().issue(project, issueNumber).uploadAttachment(uploadFile, new Date());
 			} catch (IOException e) {
-				LOGGER.error("Upload failed for file: " + fileName + " " + uploadfile, e);
+				LOGGER.error("Upload failed for file: " + fileName + " " + uploadFile, e);
 			}
 
 		}

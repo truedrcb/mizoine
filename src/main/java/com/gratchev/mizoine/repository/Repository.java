@@ -1019,17 +1019,17 @@ public class Repository {
 			return attachment(project, issueNumber, id);
 		}
 
-		public Attachment uploadAttachment(final MultipartFile uploadfile, final Date creationDate) throws IOException {
+		public Attachment uploadAttachment(final MultipartFile uploadFile, final Date creationDate) throws IOException {
 			final File attachmentsDir = getAttachmentsDir();
 			checkOrCreateDirectory(attachmentsDir);
 
 			final Attachment attachment = new Attachment();
 
 			final AttachmentMeta.UploadMeta uploadMeta = new AttachmentMeta.UploadMeta();
-			uploadMeta.originalFileName = uploadfile.getOriginalFilename();
-			uploadMeta.name = uploadfile.getName();
-			uploadMeta.contentType = uploadfile.getContentType();
-			uploadMeta.size = uploadfile.getSize();
+			uploadMeta.originalFileName = uploadFile.getOriginalFilename();
+			uploadMeta.name = uploadFile.getName();
+			uploadMeta.contentType = uploadFile.getContentType();
+			uploadMeta.size = uploadFile.getSize();
 			LOGGER.debug("Upload: " + uploadMeta);
 
 			final File attachmentFolder = createAttachmentFolder(attachmentsDir, uploadMeta);
@@ -1048,7 +1048,7 @@ public class Repository {
 			if (attachmentFile.exists()) {
 				LOGGER.warn("Attachment file already exists: " + attachmentFile.getAbsolutePath());
 			}
-			uploadfile.transferTo(attachmentFile);
+			uploadFile.transferTo(attachmentFile);
 
 			final AttachmentProxy attachmentProxy = attachment(attachmentFolder);
 			try {
@@ -1082,7 +1082,7 @@ public class Repository {
 		}
 
 		public String newCommentId(final ZonedDateTime creationDate) {
-			final Set<String> existingFiles = new TreeSet<String>();
+			final Set<String> existingFiles = new TreeSet<>();
 			final String[] commentsDirFiles = getCommentsDir().list();
 			if (commentsDirFiles != null) {
 				existingFiles.addAll(Arrays.asList(commentsDirFiles));

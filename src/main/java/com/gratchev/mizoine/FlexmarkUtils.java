@@ -68,6 +68,7 @@ public class FlexmarkUtils {
 	}
 
 
+	@Deprecated
 	public static String generateMarkdownFooterRefs(final String project, final String issueNumber, final Collection<String> mentIds) {
 		final StringBuilder sb = new StringBuilder("\n\n");
 		for (final String id : mentIds) {
