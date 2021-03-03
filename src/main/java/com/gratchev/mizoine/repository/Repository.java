@@ -1019,6 +1019,18 @@ public class Repository {
 			return attachment(project, issueNumber, id);
 		}
 
+		/**
+		 * Creates new attachment within the current issue, copies a binary file from provided source to attachment
+		 * folder, generates an appropriate metadata.json, generates preview files (by calling
+		 * {@link AttachmentProxy#updatePreview()}).
+		 *
+		 * @param uploadFile   File to copy
+		 * @param creationDate Creation date to store in metadata.json
+		 * @return DTO with fully expanded attachment info
+		 * @throws IOException At file operations errors
+		 * @deprecated TODO: Decouple dependency to {@link AttachmentProxy}
+		 */
+		@Deprecated
 		public Attachment uploadAttachment(final MultipartFile uploadFile, final Date creationDate) throws IOException {
 			final File attachmentsDir = getAttachmentsDir();
 			checkOrCreateDirectory(attachmentsDir);
