@@ -1,17 +1,15 @@
 package com.gratchev.mizoine.api;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.gratchev.mizoine.ImapComponent;
 import com.gratchev.mizoine.repository.Attachment;
 import com.gratchev.mizoine.repository.Repository;
 import com.gratchev.mizoine.repository.Repository.CommentProxy;
 import com.gratchev.mizoine.repository.Repository.IssueProxy;
-import com.gratchev.utils.HTMLtoMarkdown;
 import com.gratchev.utils.ImapUtils;
+import com.gratchev.utils.ImapUtils.MailBlock;
+import com.gratchev.utils.ImapUtils.MailMessage;
 import org.apache.tomcat.util.codec.binary.Base64;
 import org.jetbrains.annotations.NotNull;
-import org.jsoup.Jsoup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,8 +41,6 @@ public class MailApiController extends BaseController {
 	@Autowired
 	protected ImapComponent imap;
 
-	private final HTMLtoMarkdown mailHTMLtoMarkdown = new HTMLtoMarkdown();
-
 	/**
 	 * Safely extract a date from the message
 	 *
@@ -56,35 +52,6 @@ public class MailApiController extends BaseController {
 		final Date sentDate = message.getSentDate();
 		final Date receivedDate = message.getReceivedDate();
 		return sentDate != null ? sentDate : (receivedDate != null ? receivedDate : new Date());
-	}
-
-	private MailBlock extractMailBlock(final Part part) throws MessagingException, IOException {
-		final MailBlock block = new MailBlock();
-		block.contentType = part.getContentType();
-		final int indexOfSemicolon = block.contentType.indexOf(';');
-		if (indexOfSemicolon > 0) {
-			block.contentSubType = block.contentType.substring(0, indexOfSemicolon);
-		} else {
-			block.contentSubType = block.contentType;
-		}
-
-		block.size = part.getSize();
-		block.fileName = part.getFileName();
-		final String mimeType = block.contentSubType.toLowerCase();
-		if (mimeType.startsWith("text/")) {
-			block.content = part.getContent().toString();
-			if (mimeType.contains("html")) {
-				block.markdown = mailHTMLtoMarkdown.convert(Jsoup.parse(block.content));
-			} else {
-				block.markdown = block.content
-						// Redundant line feeds (inserted by some formatting programs)
-						.replace(" \n", " ")
-						// Remove potential HTML injections
-						.replace("<", "&lt;");
-			}
-		}
-
-		return block;
 	}
 
 	@GetMapping("list/unread")
@@ -155,7 +122,7 @@ public class MailApiController extends BaseController {
 		final PartCounter counter = new PartCounter();
 
 		ImapUtils.forParts(message, (part) -> {
-			final MailBlock block = extractMailBlock(part);
+			final MailBlock block = ImapUtils.extractMailBlock(part);
 			if (block.markdown != null) {
 				block.html = render(block.markdown);
 			}
@@ -232,7 +199,7 @@ public class MailApiController extends BaseController {
 		ImapUtils.forParts(message, (part) -> {
 			final String partId = counter.nextId();
 
-			final MailBlock block = extractMailBlock(part);
+			final MailBlock block = ImapUtils.extractMailBlock(part);
 
 			if (block.content != null) {
 				contentParts.put(partId, block);
@@ -351,28 +318,6 @@ public class MailApiController extends BaseController {
 		comment.writeDescription(sb.toString());
 
 		return commentId;
-	}
-
-	@JsonInclude(Include.NON_EMPTY)
-	public static class MailBlock {
-		public String id;
-		public String contentType;
-		public String contentSubType;
-		public String content;
-		public String markdown;
-		public String html;
-		public int size;
-		public String fileName;
-	}
-
-	@JsonInclude(Include.NON_EMPTY)
-	public static class MailMessage {
-		public final List<Header> headers = new ArrayList<>();
-		public final List<MailBlock> blocks = new ArrayList<>();
-		public String id;
-		public String uri;
-		public String subject;
-		public Address[] from;
 	}
 
 	private static class PartCounter {
