@@ -411,8 +411,7 @@ public class Repository {
 				+ ATTACHMENTS_DIRNAME + '/' + shortId + '/';
 	}
 
-	synchronized private File createAttachmentFolder(final File attachmentsDir,
-			final AttachmentMeta.UploadMeta uploadMeta) throws IOException {
+	synchronized private File createAttachmentFolder(final File attachmentsDir) throws IOException {
 		final Set<String> existingFiles = new TreeSet<String>(Arrays.asList(attachmentsDir.list()));
 		LOGGER.debug("Already existing ids: " + existingFiles);
 
@@ -1044,7 +1043,7 @@ public class Repository {
 			uploadMeta.size = uploadFile.getSize();
 			LOGGER.debug("Upload: " + uploadMeta);
 
-			final File attachmentFolder = createAttachmentFolder(attachmentsDir, uploadMeta);
+			final File attachmentFolder = createAttachmentFolder(attachmentsDir);
 			final AttachmentMeta attachmentMeta = new AttachmentMeta();
 			attachmentMeta.upload = uploadMeta;
 			attachmentMeta.fileName = uploadMeta.originalFileName;

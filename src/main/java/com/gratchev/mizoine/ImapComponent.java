@@ -1,23 +1,17 @@
 package com.gratchev.mizoine;
 
-import java.io.IOException;
-import java.util.Properties;
-
-import javax.mail.Folder;
-import javax.mail.Message;
-import javax.mail.MessagingException;
-import javax.mail.Multipart;
-import javax.mail.Part;
-import javax.mail.Session;
-import javax.mail.Store;
-import javax.mail.search.MessageIDTerm;
-
+import com.gratchev.mizoine.WebSecurityConfig.ImapConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import com.gratchev.mizoine.WebSecurityConfig.ImapConnection;
+import javax.mail.Folder;
+import javax.mail.Message;
+import javax.mail.Session;
+import javax.mail.Store;
+import javax.mail.search.MessageIDTerm;
+import java.util.Properties;
 
 @Component
 public class ImapComponent {
@@ -27,23 +21,19 @@ public class ImapComponent {
 
 	@Autowired
 	protected SignedInUser currentUser;
-	
-	
-	public interface MailReader<T> {
-		T read(final Folder inbox) throws Exception;
-	}
 
 	public <T> T readFolder(final String folderName, final MailReader<T> reader) {
 		final ImapConnection connection = currentUser.getCredentials().getImap();
-		if (connection == null || connection.getHost() == null || connection.getUsername() == null 
+		if (connection == null || connection.getHost() == null || connection.getUsername() == null
 				|| connection.getPassword() == null) {
 			LOGGER.warn("E-Mail IMAP connection is undefined for the user.");
 			return null;
 		}
 
-		final Session session = Session.getDefaultInstance(new Properties( ));
+		final Session session = Session.getDefaultInstance(new Properties());
 		try (final Store store = session.getStore("imaps")) {
-			store.connect(connection.getHost(), connection.getPort(), connection.getUsername(), connection.getPassword());
+			store.connect(connection.getHost(), connection.getPort(), connection.getUsername(),
+					connection.getPassword());
 			try (final Folder folder = store.getFolder(folderName)) {
 				folder.open(Folder.READ_ONLY);
 				return reader.read(folder);
@@ -83,11 +73,10 @@ public class ImapComponent {
 		return readInbox((inbox) -> readMessageUsingFullSearch(inbox, messageId));
 	}
 
-	
 	public Message readMessage(final String messageId) {
 		return readInbox((inbox) -> {
 			final Message[] messages = inbox.search(new MessageIDTerm(messageId));
-			
+
 			if (messages.length != 1) {
 				LOGGER.error("Messages with Id '" + messageId + "' found: " + messages.length);
 				if (messages.length < 1) {
@@ -96,7 +85,11 @@ public class ImapComponent {
 			}
 			return messages[0];
 		});
-		
+
+	}
+
+	public interface MailReader<T> {
+		T read(final Folder inbox) throws Exception;
 	}
 
 }

@@ -110,6 +110,19 @@ public class ImapUtilsTest {
 		thenMailBlock("text/xml;charset=ABC123", "text/xml", "<z>666</z>", "&lt;z>666&lt;/z>");
 	}
 
+	@Test
+	void extractMailBlockNonText() throws MessagingException, IOException {
+		final Object content = new Object() {
+			@Override
+			public String toString() {
+				Assertions.fail("toString must not be called");
+				return null;
+			}
+		};
+		whenPart(MediaType.IMAGE_PNG_VALUE, content);
+		thenMailBlock(MediaType.IMAGE_PNG_VALUE, MediaType.IMAGE_PNG_VALUE, null, null);
+	}
+
 	private void thenMailBlock(final String contentType, final String contentSubType,
 							   final String content,
 							   final String markdown) throws IOException, MessagingException {
