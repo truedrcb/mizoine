@@ -1,31 +1,17 @@
 package com.gratchev.utils;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.gratchev.mizoine.mail.Part;
 import org.jsoup.Jsoup;
 
-import javax.mail.*;
-import java.io.IOException;
+import javax.mail.Address;
+import javax.mail.Header;
 import java.util.ArrayList;
 import java.util.List;
 
 public class ImapUtils {
-	public static void forParts(final Multipart multipart, final PartVisitor visitor) throws MessagingException, IOException {
-		final int count = multipart.getCount();
-		for (int i = 0; i < count; i++) {
-			forParts(multipart.getBodyPart(i), visitor);
-		}
-	}
 
-	public static void forParts(final Part part, final PartVisitor visitor) throws MessagingException, IOException {
-		final Object content = part.getContent();
-		if (content instanceof Multipart) {
-			forParts((Multipart) content, visitor);
-		} else {
-			visitor.visit(part);
-		}
-	}
-
-	public static MailBlock extractMailBlock(final Part part) throws MessagingException, IOException {
+	public static MailBlock extractMailBlock(final Part part) throws Exception {
 		final HTMLtoMarkdown mailHTMLtoMarkdown = new HTMLtoMarkdown();
 		final MailBlock block = new MailBlock();
 		block.contentType = part.getContentType();
@@ -53,10 +39,6 @@ public class ImapUtils {
 		}
 
 		return block;
-	}
-
-	public interface PartVisitor {
-		void visit(Part part) throws MessagingException, IOException;
 	}
 
 	@JsonInclude(JsonInclude.Include.NON_EMPTY)

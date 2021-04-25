@@ -3,7 +3,10 @@ package com.gratchev.mizoine.mail.impl;
 import com.gratchev.mizoine.mail.Folder;
 import com.gratchev.mizoine.mail.Message;
 
+import javax.mail.Flags;
 import javax.mail.MessagingException;
+import javax.mail.search.FlagTerm;
+import javax.mail.search.MessageIDTerm;
 import java.util.stream.Stream;
 
 /**
@@ -22,11 +25,25 @@ public class FolderImpl implements Folder {
 
 	@Override
 	public Stream<Message> getMessages() throws MessagingException {
-		return Stream.of(wrappedFolder.getMessages()).map(m -> new MessageImpl(m));
+		return toStream(wrappedFolder.getMessages());
+	}
+
+	@Override
+	public Stream<Message> searchById(final String messageId) throws Exception {
+		return toStream(wrappedFolder.search(new MessageIDTerm(messageId)));
+	}
+
+	@Override
+	public Stream<Message> getUnseenMessages() throws Exception {
+		return toStream(wrappedFolder.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false)));
 	}
 
 	@Override
 	public void close() throws Exception {
 		wrappedFolder.close();
+	}
+
+	private Stream<Message> toStream(final javax.mail.Message[] messages) {
+		return Stream.of(messages).map(m -> new MessageImpl(m));
 	}
 }

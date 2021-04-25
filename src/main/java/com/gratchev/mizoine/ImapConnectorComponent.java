@@ -34,8 +34,10 @@ public class ImapConnectorComponent implements ImapConnector {
 					connection.getPassword());
 		return new Store() {
 			@Override
-			public Folder getFolder(final String name) throws MessagingException {
-				return new FolderImpl(store.getFolder(name));
+			public Folder getReadOnlyFolder(final String name) throws MessagingException {
+				final javax.mail.Folder folder = store.getFolder(name);
+				folder.open(javax.mail.Folder.READ_ONLY);
+				return new FolderImpl(folder);
 			}
 
 			@Override

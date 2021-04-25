@@ -7,6 +7,6 @@ public class ImapComponentTest {
 	void readFolder() {
 		final ImapComponent cut = new ImapComponent();
 		final SignedInUserComponentMock user = new SignedInUserComponentMock();
-		cut.currentUser = user;
+		//cut.currentUser = user;
 	}
 }

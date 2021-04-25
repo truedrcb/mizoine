@@ -1,6 +1,7 @@
 package com.gratchev.mizoine.api;
 
 import com.gratchev.mizoine.ImapComponent;
+import com.gratchev.mizoine.mail.Message;
 import com.gratchev.mizoine.repository.Attachment;
 import com.gratchev.mizoine.repository.Repository;
 import com.gratchev.mizoine.repository.Repository.CommentProxy;
@@ -18,8 +19,8 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import javax.mail.*;
-import javax.mail.search.FlagTerm;
+import javax.mail.Address;
+import javax.mail.Header;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -29,6 +30,7 @@ import java.nio.file.Files;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Controller
 @EnableAutoConfiguration
@@ -46,9 +48,9 @@ public class MailApiController extends BaseController {
 	 *
 	 * @param message E-mail message for date extraction.
 	 * @return If available: Sent date. Otherwise, if available: Received date. Otherwise: current date.
-	 * @throws MessagingException If message throws an error
+	 * @throws Exception If message throws an error
 	 */
-	private static Date getMessageDate(final Message message) throws MessagingException {
+	private static Date getMessageDate(final Message message) throws Exception {
 		final Date sentDate = message.getSentDate();
 		final Date receivedDate = message.getReceivedDate();
 		return sentDate != null ? sentDate : (receivedDate != null ? receivedDate : new Date());
@@ -57,46 +59,40 @@ public class MailApiController extends BaseController {
 	@GetMapping("list/unread")
 	@ResponseBody
 	public List<MailMessage> getUnreadMailList() {
-		final List<MailMessage> mailMessages = new ArrayList<>();
-
-		imap.readInbox((inbox) -> {
-			// Fetch unseen messages from inbox folder
-			final Message[] messages = inbox.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false));
-
-			// Sort messages from recent to oldest
-			Arrays.sort(messages, (m1, m2) -> {
-				try {
-					return getMessageDate(m2).compareTo(getMessageDate(m1));
-				} catch (final MessagingException e) {
-					LOGGER.warn("Date reading error", e);
-					return 0;
-				}
-			});
-
-			for (final Message message : messages) {
-				final MailMessage mailMessage = new MailMessage();
-				mailMessage.subject = message.getSubject();
-				mailMessage.from = message.getFrom();
-				mailMessages.add(mailMessage);
-				if (LOGGER.isDebugEnabled()) {
-					LOGGER.debug("sendDate: " + message.getSentDate() + " subject: " + message.getSubject());
-					LOGGER.debug("contentType: " + message.getContentType());
-				}
-				final String[] idHeaders = message.getHeader("Message-ID");
-				if (idHeaders != null && idHeaders.length > 0) {
-					mailMessage.id = idHeaders[0];
-					mailMessage.uri = encodeUri(mailMessage.id);
-				}
-			}
-			return null;
-		});
-
-		return mailMessages;
+		return imap.readInbox(inbox ->
+				inbox.getUnseenMessages().sorted((m1, m2) -> {
+					// Sort messages from recent to oldest
+					try {
+						return getMessageDate(m2).compareTo(getMessageDate(m1));
+					} catch (final Exception e) {
+						LOGGER.warn("Date reading error", e);
+						return 0;
+					}
+				}).map(message -> {
+					try {
+						final MailMessage mailMessage = new MailMessage();
+						mailMessage.subject = message.getSubject();
+						mailMessage.from = message.getFrom();
+						if (LOGGER.isDebugEnabled()) {
+							LOGGER.debug("sendDate: " + message.getSentDate() + " subject: " + message.getSubject());
+							LOGGER.debug("contentType: " + message.getContentType());
+						}
+						final String[] idHeaders = message.getHeader("Message-ID");
+						if (idHeaders != null && idHeaders.length > 0) {
+							mailMessage.id = idHeaders[0];
+							mailMessage.uri = encodeUri(mailMessage.id);
+						}
+						return mailMessage;
+					} catch (final Exception e) {
+						LOGGER.warn("Skipped reading message", e);
+					}
+					return null;
+				})).filter(Objects::nonNull).collect(Collectors.toList());
 	}
 
 	@GetMapping("preview/{uri}")
 	@ResponseBody
-	public MailMessage getMailPreview(@PathVariable final String uri) throws MessagingException, IOException {
+	public MailMessage getMailPreview(@PathVariable final String uri) throws Exception {
 		final MailMessage mailMessage = new MailMessage();
 
 		final Message message = imap.readMessage(decodeUri(uri));
@@ -121,13 +117,17 @@ public class MailApiController extends BaseController {
 		}
 		final PartCounter counter = new PartCounter();
 
-		ImapUtils.forParts(message, (part) -> {
-			final MailBlock block = ImapUtils.extractMailBlock(part);
-			if (block.markdown != null) {
-				block.html = render(block.markdown);
+		message.getParts().forEach(part -> {
+			try {
+				final MailBlock block = ImapUtils.extractMailBlock(part);
+				if (block.markdown != null) {
+					block.html = render(block.markdown);
+				}
+				block.id = counter.nextId();
+				mailMessage.blocks.add(block);
+			} catch (Exception e) {
+				throw new RuntimeException(e);
 			}
-			block.id = counter.nextId();
-			mailMessage.blocks.add(block);
 		});
 
 		return mailMessage;
@@ -158,7 +158,7 @@ public class MailApiController extends BaseController {
 	@PostMapping("import-to-issue")
 	@ResponseBody
 	public String importMailToIssue(final String uri, final String blockId, final String project,
-									final String issueNumber) throws MessagingException, IOException {
+									final String issueNumber) throws Exception {
 		final String messageId = decodeUri(uri);
 
 		LOGGER.info("Importing mail with ID: " + messageId + " (" + blockId + ") to issue " + project + "-" + issueNumber);
@@ -196,27 +196,28 @@ public class MailApiController extends BaseController {
 		final PartCounter counter = new PartCounter();
 		final Map<String, MailBlock> contentParts = new TreeMap<>();
 
-		ImapUtils.forParts(message, (part) -> {
+		message.getParts().forEach(part -> {
 			final String partId = counter.nextId();
 
-			final MailBlock block = ImapUtils.extractMailBlock(part);
-
-			if (block.content != null) {
-				contentParts.put(partId, block);
-				final String fileName = partId + (block.contentSubType.toLowerCase().contains("html") ? ".html" :
-						".txt");
-				LOGGER.info("Saving mail text to: " + fileName);
-				comment.writeFile(fileName, block.content);
-				return;
-			}
-
-			if (block.fileName == null) {
-				return;
-			}
-
-			LOGGER.info("Importing attachment: " + block.fileName + " type: " + block.contentType);
-
 			try {
+				final MailBlock block = ImapUtils.extractMailBlock(part);
+
+				if (block.content != null) {
+					contentParts.put(partId, block);
+					final String fileName = partId + (block.contentSubType.toLowerCase().contains("html") ? ".html" :
+							".txt");
+					LOGGER.info("Saving mail text to: " + fileName);
+					comment.writeFile(fileName, block.content);
+					return;
+				}
+
+				if (block.fileName == null) {
+					return;
+				}
+
+				LOGGER.info("Importing attachment: " + block.fileName + " type: " + block.contentType);
+
+
 				final MultipartFile uploadFile = new MultipartFile() {
 
 					@Override
@@ -233,7 +234,7 @@ public class MailApiController extends BaseController {
 					public long getSize() {
 						try {
 							return part.getSize();
-						} catch (final MessagingException e) {
+						} catch (final Exception e) {
 							LOGGER.error("getSize", e);
 							return 0;
 						}
@@ -243,7 +244,7 @@ public class MailApiController extends BaseController {
 					public String getOriginalFilename() {
 						try {
 							return part.getFileName();
-						} catch (final MessagingException e) {
+						} catch (final Exception e) {
 							LOGGER.error("getOriginalFilename", e);
 							return null;
 						}
@@ -258,7 +259,7 @@ public class MailApiController extends BaseController {
 					public @NotNull InputStream getInputStream() throws IOException {
 						try {
 							return part.getInputStream();
-						} catch (MessagingException e) {
+						} catch (Exception e) {
 							throw new IOException(e);
 						}
 					}
@@ -275,8 +276,8 @@ public class MailApiController extends BaseController {
 				};
 
 				attachments.add(issue.uploadAttachment(uploadFile, messageDate));
-			} catch (IOException e) {
-				LOGGER.error("Upload failed for file: " + block.fileName, e);
+			} catch (Exception e) {
+				LOGGER.error("Upload failed for block #: " + counter.counter, e);
 			}
 
 		});
