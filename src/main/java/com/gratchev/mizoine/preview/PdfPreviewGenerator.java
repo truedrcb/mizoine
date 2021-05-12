@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 import org.apache.pdfbox.rendering.ImageType;
@@ -63,7 +64,7 @@ public class PdfPreviewGenerator implements AttachmentPreviewGenerator {
 			throws IOException, InvalidPasswordException {
 		final ArrayList<File> list = new ArrayList<>();
 		
-		try (final PDDocument document = PDDocument.load(file)) {
+		try (final PDDocument document = Loader.loadPDF(file)) {
 			PDFRenderer pdfRenderer = new PDFRenderer(document);
 			for (int page = 0; page < document.getNumberOfPages(); ++page)
 			{ 
@@ -84,7 +85,7 @@ public class PdfPreviewGenerator implements AttachmentPreviewGenerator {
 
 	@Override
 	public String extractMarkdown(final File file) throws IOException {
-		try (final PDDocument document = PDDocument.load(file)) {
+		try (final PDDocument document = Loader.loadPDF(file)) {
 			final PDFText2HTML pdfText2HTML = new PDFText2HTML();
 			pdfText2HTML.setPageEnd("\n<hr>\n");
 			final String html = pdfText2HTML.getText(document);
