@@ -1,35 +1,5 @@
 package com.gratchev.mizoine.repository;
 
-import static com.gratchev.mizoine.preview.AttachmentPreviewGenerator.PREVIEW_JPG;
-import static com.gratchev.mizoine.preview.AttachmentPreviewGenerator.PREVIEW_PAGE_PREFIX;
-import static com.gratchev.mizoine.preview.AttachmentPreviewGenerator.THUMBNAIL_JPG;
-import static com.gratchev.mizoine.preview.AttachmentPreviewGenerator.THUMBNAIL_PAGE_PREFIX;
-import static com.gratchev.mizoine.repository.RepositoryUtils.checkOrCreateDirectory;
-import static com.gratchev.mizoine.repository.RepositoryUtils.checkOrCreateHiddenDirectory;
-import static com.gratchev.mizoine.repository.RepositoryUtils.createNewDirectory;
-import static com.gratchev.mizoine.repository.RepositoryUtils.uriEncodePath;
-import static com.gratchev.utils.StringUtils.isUnsignedInteger;
-
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.Writer;
-import java.lang.reflect.InvocationTargetException;
-import java.time.ZonedDateTime;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.function.Supplier;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.web.multipart.MultipartFile;
-
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerationException;
@@ -47,13 +17,27 @@ import com.gratchev.mizoine.preview.ImagePreviewGenerator;
 import com.gratchev.mizoine.preview.PdfPreviewGenerator;
 import com.gratchev.mizoine.preview.SvgPreviewGenerator;
 import com.gratchev.mizoine.repository.Attachment.FileInfo;
-import com.gratchev.mizoine.repository.meta.AttachmentMeta;
-import com.gratchev.mizoine.repository.meta.BaseMeta;
-import com.gratchev.mizoine.repository.meta.CommentMeta;
-import com.gratchev.mizoine.repository.meta.IssueMeta;
-import com.gratchev.mizoine.repository.meta.ProjectMeta;
-import com.gratchev.mizoine.repository.meta.RepositoryMeta;
+import com.gratchev.mizoine.repository.meta.*;
 import com.gratchev.utils.FileUtils;
+import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.Writer;
+import java.lang.reflect.InvocationTargetException;
+import java.nio.file.Files;
+import java.time.ZonedDateTime;
+import java.util.*;
+import java.util.function.Supplier;
+
+import static com.google.common.io.Files.getFileExtension;
+import static com.gratchev.mizoine.preview.AttachmentPreviewGenerator.*;
+import static com.gratchev.mizoine.repository.RepositoryUtils.*;
+import static com.gratchev.utils.StringUtils.isUnsignedInteger;
 
 public class Repository {
 
@@ -106,7 +90,7 @@ public class Repository {
 		}
 
 		int lastIdenticalChar = 0;
-		for (;;) {
+		for (; ; ) {
 			if (lastIdenticalChar >= o1.fileName.length()) {
 				break;
 			}
@@ -122,7 +106,7 @@ public class Repository {
 
 		final String s1 = o1.fileName.substring(lastIdenticalChar);
 		final String s2 = o2.fileName.substring(lastIdenticalChar);
-		
+
 		final String ns1 = s1.replaceFirst("[^0-9].*", ""); // TODO: OMG Refactor this
 		final String ns2 = s2.replaceFirst("[^0-9].*", "");
 
@@ -482,7 +466,7 @@ public class Repository {
 	}
 
 	public Issue createIssue(final File projectIssuesRoot, final String newIssueTitle, final String newIssueMarkdown,
-			final SignedInUser currentUser) throws IOException {
+							 final SignedInUser currentUser) throws IOException {
 		final Issue issue = new Issue();
 		issue.issueNumber = "0";
 		issue.meta = new IssueMeta();
@@ -523,8 +507,8 @@ public class Repository {
 		void update(T meta) throws Exception;
 	}
 
-	private final AttachmentPreviewGenerator[] previewGenerators = { new PdfPreviewGenerator(),
-			new SvgPreviewGenerator(), new ImagePreviewGenerator() };
+	private final AttachmentPreviewGenerator[] previewGenerators = {new PdfPreviewGenerator(),
+			new SvgPreviewGenerator(), new ImagePreviewGenerator()};
 
 	public File getVerificationLogFile() {
 		final File mizoineDir = getRootMizoineDir();
@@ -1213,13 +1197,13 @@ public class Repository {
 
 		public String getDescriptionEditorPath() {
 			return PROJECTS_DIRNAME + '/' + project + '/' + ISSUES_DIRNAME + '/' + issueNumber + '/'
-					+ ATTACHMENTS_DIRNAME + '/' + rootDir.getName() + '/' + META_DIRNAME + '/'
+					+ ATTACHMENTS_DIRNAME + '/' + getAttachmentId() + '/' + META_DIRNAME + '/'
 					+ DESCRIPTION_MD_FILENAME;
 		}
 
 		public String getMetaEditorPath() {
 			return PROJECTS_DIRNAME + '/' + project + '/' + ISSUES_DIRNAME + '/' + issueNumber + '/'
-					+ ATTACHMENTS_DIRNAME + '/' + rootDir.getName() + '/' + META_DIRNAME + '/' + META_JSON_FILENAME;
+					+ ATTACHMENTS_DIRNAME + '/' + getAttachmentId() + '/' + META_DIRNAME + '/' + META_JSON_FILENAME;
 		}
 
 		@Override
@@ -1235,7 +1219,7 @@ public class Repository {
 		}
 
 		private ArrayList<FileInfo> getPreviewFileInfos(final String fullDirUri, final File mizoineDir,
-				final String previewFileNamePrefix) {
+														final String previewFileNamePrefix) {
 			if (!mizoineDir.exists()) {
 				return null;
 			}
@@ -1254,7 +1238,8 @@ public class Repository {
 			return infos;
 		}
 
-		private FileInfo getInfoIfExists(final String fullDirUri, final File mizoineDir, final String previewFileName) {
+		private FileInfo getInfoIfExists(final String fullDirUri, final File mizoineDir,
+										 final String previewFileName) {
 			if (new File(mizoineDir, previewFileName).exists()) {
 				return createFileInfo(fullDirUri, previewFileName);
 			}
@@ -1263,7 +1248,7 @@ public class Repository {
 
 		public Attachment readInfo() {
 			final Attachment attachment = new Attachment();
-			attachment.id = rootDir.getName();
+			attachment.id = getAttachmentId();
 			attachment.meta = readMeta();
 			attachment.tags = readTags();
 			attachment.status = readStatus();
@@ -1288,12 +1273,17 @@ public class Repository {
 
 			attachment.files = infos;
 
-			final File mizoineDir = new File(rootDir, MIZOINE_DIR);
+			final File mizoineDir = getMizoineDir();
 			attachment.thumbnails = getPreviewFileInfos(fullDirUri, mizoineDir, THUMBNAIL_PAGE_PREFIX);
 			attachment.thumbnail = getInfoIfExists(fullDirUri, mizoineDir, THUMBNAIL_JPG);
 			attachment.previews = getPreviewFileInfos(fullDirUri, mizoineDir, PREVIEW_PAGE_PREFIX);
 			attachment.preview = getInfoIfExists(fullDirUri, mizoineDir, PREVIEW_JPG);
 			return attachment;
+		}
+
+		@NotNull
+		public String getAttachmentId() {
+			return rootDir.getName();
 		}
 
 		private File getFirstFile() {
@@ -1334,8 +1324,41 @@ public class Repository {
 		}
 
 		public void updatePreview() throws IOException {
-			final File mizoineDir = new File(rootDir, MIZOINE_DIR);
-			LOGGER.debug("Updating preview files in: " + mizoineDir.getAbsolutePath());
+			final List<File> mizoineDirs = List.of(getMizoineDir(), getCentralMizoineDir());
+			for (final File mizoineDir : mizoineDirs) {
+				LOGGER.debug("Updating preview files in: " + mizoineDir.getAbsolutePath());
+				cleanUpPreviewDir(mizoineDir);
+			}
+
+			final File file = getFirstFile();
+			if (file == null) {
+				return;
+			}
+
+			final AttachmentPreviewGenerator generator = getCompatibleGenerator(file);
+			if (generator == null) {
+				return;
+			}
+
+
+			for (final File mizoineDir : mizoineDirs) {
+				final String fileExtension = getFileExtension(file.getName());
+				Files.copy(file.toPath(), new File(mizoineDir, "original." + fileExtension).toPath());
+				generator.generatePreviews(file, mizoineDir);
+			}
+		}
+
+		@NotNull
+		private File getMizoineDir() {
+			return new File(rootDir, MIZOINE_DIR);
+		}
+
+		@NotNull
+		private File getCentralMizoineDir() {
+			return new File(new File(new File(getRootMizoineDir(), project), issueNumber), getAttachmentId());
+		}
+
+		private void cleanUpPreviewDir(final File mizoineDir) throws IOException {
 			checkOrCreateHiddenDirectory(mizoineDir);
 
 			for (final File file : mizoineDir.listFiles()) {
@@ -1350,19 +1373,6 @@ public class Repository {
 					file.delete();
 				}
 			}
-
-			final File file = getFirstFile();
-			if (file == null) {
-				return;
-			}
-
-			final AttachmentPreviewGenerator generator = getCompatibleGenerator(file);
-			if (generator == null) {
-				return;
-			}
-
-			generator.generatePreviews(file, mizoineDir);
-
 		}
 
 	}

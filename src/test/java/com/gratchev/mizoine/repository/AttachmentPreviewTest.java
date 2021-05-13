@@ -6,16 +6,20 @@ import com.gratchev.mizoine.repository.Repository.AttachmentProxy;
 import com.gratchev.mizoine.repository.Repository.CommentProxy;
 import com.gratchev.mizoine.repository.Repository.IssueProxy;
 import com.gratchev.mizoine.repository.TempRepositoryUtils.TempRepository;
+import org.apache.catalina.connector.OutputBuffer;
+import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 
-import java.io.IOException;
+import java.io.*;
 import java.time.ZonedDateTime;
 import java.util.Date;
 
+import static com.gratchev.mizoine.repository.TempRepositoryUtils.assertDirExists;
+import static com.gratchev.mizoine.repository.TempRepositoryUtils.assertFileExists;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class AttachmentPreviewTest {
@@ -36,14 +40,29 @@ public class AttachmentPreviewTest {
 	void testUpload1() throws IOException {
 		final IssueProxy issue = repo.issue("ART", "16");
 		issue.createDirs();
-		issue.uploadAttachment(new MockMultipartFile("flyer.png", "FlyerBear3web.png", MediaType.IMAGE_PNG_VALUE,
-				AttachmentPreviewTest.class.getResourceAsStream("/com/gratchev/utils/FlyerBear3web.png")), new Date());
+		try (final InputStream pngStream = getPngStream()) {
+			issue.uploadAttachment(new MockMultipartFile("flyer.png", "FlyerBear3web.png", MediaType.IMAGE_PNG_VALUE,
+					pngStream), new Date());
+		}
+	}
+
+	@Nullable
+	private InputStream getPngStream() {
+		return AttachmentPreviewTest.class.getResourceAsStream("/com/gratchev/utils/FlyerBear3web.png");
 	}
 
 	@Test
 	void testPreview1() throws IOException {
 		final AttachmentProxy attachment = repo.attachment("PRO", "1", ShortIdGenerator.mizCodeFor(now));
 		attachment.createDirs();
+		try (final InputStream pngStream = getPngStream(); final OutputStream os = new FileOutputStream(new File(attachment.getRoot(), "test.png"))) {
+			pngStream.transferTo(os);
+		}
+		attachment.updatePreview();
+		final File mizDir = assertDirExists(repo.getRootMizoineDir(), "PRO", "1", attachment.getAttachmentId());
+		assertFileExists(mizDir, "preview.jpg");
+		assertFileExists(mizDir, "thumbnail.jpg");
+		assertFileExists(mizDir, "original.png");
 	}
 
 	@Test

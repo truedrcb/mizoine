@@ -144,7 +144,7 @@ public class SearchApiController extends BaseController {
 				repo.fullScan(new Visitor() {
 
 					@Override
-					public void user(final String user) throws IOException {
+					public void user(final String user) {
 					}
 
 					@Override

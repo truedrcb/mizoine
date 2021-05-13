@@ -19,13 +19,25 @@ import com.google.common.base.Strings;
 public class TempRepositoryUtils {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TempRepositoryUtils.class);
 
-	public static void assertDirExists(final File dir) {
-		assertThat(dir.exists()).describedAs("Directory must exist to continue: " + dir.getAbsolutePath()).isTrue();
-		assertTrue(dir.isDirectory());
+	public static File assertDirExists(final File dir, final String... children) {
+		assertThat(dir).exists().isDirectory();
+		File subdir = dir;
+		for (final String child : children) {
+			subdir = new File(subdir, child);
+			assertThat(dir).exists().isDirectory();
+		}
+		return subdir;
+	}
+
+	public static File assertFileExists(final File dir, final String fileName) {
+		assertDirExists(dir);
+		final File file = new File(dir, fileName);
+		assertThat(file).exists().isFile();
+		return file;
 	}
 
 	public static void assertDirNotExists(final File dir) {
-		assertThat(dir.exists()).describedAs("Unexpected existing directory: " + dir.getAbsolutePath()).isFalse();
+		assertThat(dir).doesNotExist();
 	}
 	
 	public static void printDirectory(final File dir, final int level) {

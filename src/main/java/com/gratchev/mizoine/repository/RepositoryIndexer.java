@@ -166,7 +166,7 @@ public class RepositoryIndexer implements AutoCloseable {
 	}
 	
 	public RepositoryIndexer(final Directory directory) throws IOException {
-		LOGGER.debug("Indexing!");
+		LOGGER.debug("Indexing directory: {}", directory);
 		writer = new IndexWriter(directory, config);
 	}
 	

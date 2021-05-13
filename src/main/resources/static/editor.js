@@ -180,9 +180,9 @@ const editorRoute = {
 				if (this.project) {
 					if (this.issueNumber) {
 						if(this.attachmentId) {
-							this.$router.push({ path: `/issue/${this.project}-${this.issueNumber}/attachment/${this.attachmentId}` });
+							this.$router.push({ path: `/issue/${this.project}-${this.issueNumber}/attachment-${this.attachmentId}` });
 						} else if(this.commentId) {
-							this.$router.push({ path: `/issue/${this.project}-${this.issueNumber}/comment/${this.commentId}` });
+							this.$router.push({ path: `/issue/${this.project}-${this.issueNumber}/comment-${this.commentId}` });
 						} else {
 							this.$router.push({ path: `/issue/${this.project}-${this.issueNumber}` });
 						}

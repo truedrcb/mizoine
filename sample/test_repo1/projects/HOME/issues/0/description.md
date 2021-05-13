@@ -23,10 +23,10 @@ Created by [DRCB](http://artem.gratchev.com)(c)
 
 # Experimenting
 
-![SVG image sample](https://spring.io/img/homepage/icon-spring-boot.svg)
+![SVG image sample](https://upload.wikimedia.org/wikipedia/commons/4/4f/SVG_Logo.svg)
 
 ![PNG image](/attachments/projects/HOME/issues/0/attachments/--_980/Screenshot-2017-12-1%20spring%20io.png)
 
-Here is the test: ![](12345/previewXX.jpg)
+Relative image linking: ![Preview](--_980/preview.jpg)
 
 [yandex]: http://ya.ru
