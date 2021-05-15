@@ -7,13 +7,14 @@ import org.jsoup.Jsoup;
 import javax.mail.Address;
 import javax.mail.Header;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 public class ImapUtils {
 
-	public static MailBlock extractMailBlock(final Part part) throws Exception {
+	public static MailPartDto extractMailBlock(final Part part) throws Exception {
 		final HTMLtoMarkdown mailHTMLtoMarkdown = new HTMLtoMarkdown();
-		final MailBlock block = new MailBlock();
+		final MailPartDto block = new MailPartDto();
 		block.contentType = part.getContentType();
 		final int indexOfSemicolon = block.contentType.indexOf(';');
 		if (indexOfSemicolon > 0) {
@@ -42,7 +43,7 @@ public class ImapUtils {
 	}
 
 	@JsonInclude(JsonInclude.Include.NON_EMPTY)
-	public static class MailBlock {
+	public static class MailPartDto {
 		public String id;
 		public String contentType;
 		public String contentSubType;
@@ -56,7 +57,7 @@ public class ImapUtils {
 	@JsonInclude(JsonInclude.Include.NON_EMPTY)
 	public static class MailMessage {
 		public final List<Header> headers = new ArrayList<>();
-		public final List<MailBlock> blocks = new ArrayList<>();
+		public final List<MailPartDto> blocks = new ArrayList<>();
 		public String id;
 		public String uri;
 		public String subject;

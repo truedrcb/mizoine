@@ -17,8 +17,6 @@ public interface Message {
 
 	Address[] getFrom() throws Exception;
 
-	String getContentType() throws Exception;
-
 	Enumeration<Header> getAllHeaders() throws Exception;
 
 	Stream<Part> getParts() throws Exception;

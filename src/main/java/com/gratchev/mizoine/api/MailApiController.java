@@ -7,8 +7,8 @@ import com.gratchev.mizoine.repository.Repository;
 import com.gratchev.mizoine.repository.Repository.CommentProxy;
 import com.gratchev.mizoine.repository.Repository.IssueProxy;
 import com.gratchev.utils.ImapUtils;
-import com.gratchev.utils.ImapUtils.MailBlock;
 import com.gratchev.utils.ImapUtils.MailMessage;
+import com.gratchev.utils.ImapUtils.MailPartDto;
 import org.apache.tomcat.util.codec.binary.Base64;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -56,26 +56,31 @@ public class MailApiController extends BaseController {
 		return sentDate != null ? sentDate : (receivedDate != null ? receivedDate : new Date());
 	}
 
+	/**
+	 * Safely extract a date from the mail message DTO
+	 *
+	 * @param message E-mail message for date extraction.
+	 * @return If available: Sent date. Otherwise, if available: Received date. Otherwise: current date.
+	 */
+	private static Date getMessageDate(final MailMessage message) {
+		final Date sentDate = message.sentDate;
+		final Date receivedDate = message.receivedDate;
+		return sentDate != null ? sentDate : (receivedDate != null ? receivedDate : new Date());
+	}
+
 	@GetMapping("list/unread")
 	@ResponseBody
 	public List<MailMessage> getUnreadMailList() {
 		return imap.readInbox(inbox ->
-				inbox.getUnseenMessages().sorted((m1, m2) -> {
-					// Sort messages from recent to oldest
-					try {
-						return getMessageDate(m2).compareTo(getMessageDate(m1));
-					} catch (final Exception e) {
-						LOGGER.warn("Date reading error", e);
-						return 0;
-					}
-				}).map(message -> {
+				inbox.getUnseenMessages().map(message -> {
 					try {
 						final MailMessage mailMessage = new MailMessage();
 						mailMessage.subject = message.getSubject();
 						mailMessage.from = message.getFrom();
+						mailMessage.sentDate = message.getSentDate();
+						mailMessage.receivedDate = message.getReceivedDate();
 						if (LOGGER.isDebugEnabled()) {
 							LOGGER.debug("sendDate: " + message.getSentDate() + " subject: " + message.getSubject());
-							LOGGER.debug("contentType: " + message.getContentType());
 						}
 						final String[] idHeaders = message.getHeader("Message-ID");
 						if (idHeaders != null && idHeaders.length > 0) {
@@ -87,7 +92,8 @@ public class MailApiController extends BaseController {
 						LOGGER.warn("Skipped reading message", e);
 					}
 					return null;
-				})).filter(Objects::nonNull).collect(Collectors.toList());
+				})).filter(Objects::nonNull).sorted((m1, m2) -> getMessageDate(m2).compareTo(getMessageDate(m1))
+		).collect(Collectors.toList());
 	}
 
 	@GetMapping("preview/{uri}")
@@ -101,7 +107,6 @@ public class MailApiController extends BaseController {
 		mailMessage.from = message.getFrom();
 		if (LOGGER.isDebugEnabled()) {
 			LOGGER.debug("sendDate: " + message.getSentDate() + " subject: " + message.getSubject());
-			LOGGER.debug("contentType: " + message.getContentType());
 		}
 		final Enumeration<Header> headers = message.getAllHeaders();
 		while (headers.hasMoreElements()) {
@@ -119,7 +124,7 @@ public class MailApiController extends BaseController {
 
 		message.getParts().forEach(part -> {
 			try {
-				final MailBlock block = ImapUtils.extractMailBlock(part);
+				final MailPartDto block = ImapUtils.extractMailBlock(part);
 				if (block.markdown != null) {
 					block.html = render(block.markdown);
 				}
@@ -146,22 +151,22 @@ public class MailApiController extends BaseController {
 	 * <ul>
 	 * <li>Attachments - each as separate attachment to issue
 	 * <li>Text parts - each as separate file (part-0.txt, part-1.html, etc.) within comment directory
-	 * <li>Specified part (by blockId) - converted to markdown and set as description of the comment
+	 * <li>Specified part (by <code>commentPartId</code>) - converted to markdown and set as description of the comment
 	 * </ul>
 	 *
-	 * @param uri         Encoded mail Id (see {@link #encodeUri(String)} and {@link #decodeUri(String)}
-	 * @param blockId     Index of mail part (block) to be imported as text of the comment
-	 * @param project     Target project of the issue
-	 * @param issueNumber Target issue number (where to create a comment)
+	 * @param uri           Encoded mail Id (see {@link #encodeUri(String)} and {@link #decodeUri(String)}
+	 * @param commentPartId Index of mail part (block) to be imported as text of the comment
+	 * @param project       Target project of the issue
+	 * @param issueNumber   Target issue number (where to create a comment)
 	 * @return Comment Id (which was created within target issue)
 	 */
 	@PostMapping("import-to-issue")
 	@ResponseBody
-	public String importMailToIssue(final String uri, final String blockId, final String project,
+	public String importMailToIssue(final String uri, final String commentPartId, final String project,
 									final String issueNumber) throws Exception {
 		final String messageId = decodeUri(uri);
 
-		LOGGER.info("Importing mail with ID: " + messageId + " (" + blockId + ") to issue " + project + "-" + issueNumber);
+		LOGGER.info("Importing mail with ID: " + messageId + " (" + commentPartId + ") to issue " + project + "-" + issueNumber);
 
 		final Message message = imap.readMessage(messageId);
 		final Repository repo = getRepo();
@@ -194,28 +199,28 @@ public class MailApiController extends BaseController {
 		final List<Attachment> attachments = new ArrayList<>();
 
 		final PartCounter counter = new PartCounter();
-		final Map<String, MailBlock> contentParts = new TreeMap<>();
+		final Map<String, MailPartDto> contentParts = new TreeMap<>();
 
 		message.getParts().forEach(part -> {
 			final String partId = counter.nextId();
 
 			try {
-				final MailBlock block = ImapUtils.extractMailBlock(part);
+				final MailPartDto partDto = ImapUtils.extractMailBlock(part);
 
-				if (block.content != null) {
-					contentParts.put(partId, block);
-					final String fileName = partId + (block.contentSubType.toLowerCase().contains("html") ? ".html" :
+				if (partDto.content != null) {
+					contentParts.put(partId, partDto);
+					final String fileName = partId + (partDto.contentSubType.toLowerCase().contains("html") ? ".html" :
 							".txt");
 					LOGGER.info("Saving mail text to: " + fileName);
-					comment.writeFile(fileName, block.content);
+					comment.writeFile(fileName, partDto.content);
 					return;
 				}
 
-				if (block.fileName == null) {
+				if (partDto.fileName == null) {
 					return;
 				}
 
-				LOGGER.info("Importing attachment: " + block.fileName + " type: " + block.contentType);
+				LOGGER.info("Importing attachment: " + partDto.fileName + " type: " + partDto.contentType);
 
 
 				final MultipartFile uploadFile = new MultipartFile() {
@@ -266,7 +271,7 @@ public class MailApiController extends BaseController {
 
 					@Override
 					public String getContentType() {
-						return block.contentType;
+						return partDto.contentType;
 					}
 
 					@Override
@@ -284,17 +289,17 @@ public class MailApiController extends BaseController {
 
 		// Write description
 		final StringBuilder sb = new StringBuilder();
-		final List<MailBlock> blocksToAdd = new ArrayList<>();
+		final List<MailPartDto> blocksToAdd = new ArrayList<>();
 
 
-		if (contentParts.containsKey(blockId)) {
-			blocksToAdd.add(contentParts.get(blockId));
+		if (contentParts.containsKey(commentPartId)) {
+			blocksToAdd.add(contentParts.get(commentPartId));
 		} else {
 			blocksToAdd.addAll(contentParts.values());
 		}
 
 		int i = 0;
-		for (final MailBlock block : blocksToAdd) {
+		for (final MailPartDto block : blocksToAdd) {
 			if (block.markdown != null && !block.markdown.isBlank()) {
 				if (i > 0) {
 					sb.append("\n\n---\n\n");
@@ -310,9 +315,9 @@ public class MailApiController extends BaseController {
 			for (Attachment a : attachments) {
 				sb.append("- [");
 				sb.append(a.meta.fileName);
-				sb.append("][");
+				sb.append("](attachment-");
 				sb.append(a.id);
-				sb.append(".page]\n");
+				sb.append(")\n");
 			}
 		}
 

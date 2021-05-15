@@ -1273,7 +1273,7 @@ public class Repository {
 
 			attachment.files = infos;
 
-			final File mizoineDir = getMizoineDir();
+			final File mizoineDir = getLocalMizoineDir();
 			attachment.thumbnails = getPreviewFileInfos(fullDirUri, mizoineDir, THUMBNAIL_PAGE_PREFIX);
 			attachment.thumbnail = getInfoIfExists(fullDirUri, mizoineDir, THUMBNAIL_JPG);
 			attachment.previews = getPreviewFileInfos(fullDirUri, mizoineDir, PREVIEW_PAGE_PREFIX);
@@ -1324,7 +1324,12 @@ public class Repository {
 		}
 
 		public void updatePreview() throws IOException {
-			final List<File> mizoineDirs = List.of(getMizoineDir(), getCentralMizoineDir());
+			checkOrCreateHiddenDirectory(getRootMizoineDir());
+			final File localMizoineDir = getLocalMizoineDir();
+			checkOrCreateHiddenDirectory(localMizoineDir);
+			final File centralMizoineDir = getCentralMizoineDir();
+			checkOrCreateDirectory(centralMizoineDir);
+			final List<File> mizoineDirs = List.of(localMizoineDir, centralMizoineDir);
 			for (final File mizoineDir : mizoineDirs) {
 				LOGGER.debug("Updating preview files in: " + mizoineDir.getAbsolutePath());
 				cleanUpPreviewDir(mizoineDir);
@@ -1340,7 +1345,6 @@ public class Repository {
 				return;
 			}
 
-
 			for (final File mizoineDir : mizoineDirs) {
 				final String fileExtension = getFileExtension(file.getName());
 				Files.copy(file.toPath(), new File(mizoineDir, "original." + fileExtension).toPath());
@@ -1349,7 +1353,7 @@ public class Repository {
 		}
 
 		@NotNull
-		private File getMizoineDir() {
+		private File getLocalMizoineDir() {
 			return new File(rootDir, MIZOINE_DIR);
 		}
 
@@ -1359,8 +1363,6 @@ public class Repository {
 		}
 
 		private void cleanUpPreviewDir(final File mizoineDir) throws IOException {
-			checkOrCreateHiddenDirectory(mizoineDir);
-
 			for (final File file : mizoineDir.listFiles()) {
 				final String name = file.getName();
 				if (AttachmentPreviewGenerator.PREVIEW_PNG.equals(name)

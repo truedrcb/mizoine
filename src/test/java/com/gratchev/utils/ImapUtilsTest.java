@@ -1,18 +1,25 @@
 package com.gratchev.utils;
 
 import com.gratchev.mizoine.mail.Part;
-import com.gratchev.utils.ImapUtils.MailBlock;
+import com.gratchev.utils.ImapUtils.MailPartDto;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class ImapUtilsTest {
 	public static final String HTML_CONTENT = "<html><body>abc</body>";
 	public static final String MD_CONTENT = "abc";
 	Part part;
+
+	@BeforeEach
+	void setup() {
+		part = mock(Part.class);
+	}
 
 	@Test
 	void extractMailBlockHtml() throws Exception {
@@ -55,7 +62,7 @@ public class ImapUtilsTest {
 	private void thenMailBlock(final String contentType, final String contentSubType,
 							   final String content,
 							   final String markdown) throws Exception {
-		final MailBlock mailBlock = ImapUtils.extractMailBlock(part);
+		final MailPartDto mailBlock = ImapUtils.extractMailBlock(part);
 		assertThat(mailBlock).isNotNull();
 		assertThat(mailBlock.size).isEqualTo(12345);
 		assertThat(mailBlock.fileName).isEqualTo("test.html");
