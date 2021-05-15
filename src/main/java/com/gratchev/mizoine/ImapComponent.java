@@ -17,7 +17,7 @@ public class ImapComponent {
 	@Autowired
 	protected ImapConnector connector;
 
-	public <T> T readFolder(final String folderName, final MailReader<T> reader) {
+	public <T> T readFolder(final String folderName, final FolderReader<T> reader) {
 		try (final Store store = connector.getStore()) {
 			try (final Folder folder = store.getReadOnlyFolder(folderName)) {
 				return reader.read(folder);
@@ -28,7 +28,7 @@ public class ImapComponent {
 		}
 	}
 
-	public <T> T readInbox(final MailReader<T> reader) {
+	public <T> T readInbox(final FolderReader<T> reader) {
 		return readFolder(FOLDER_INBOX, reader);
 	}
 
@@ -57,20 +57,23 @@ public class ImapComponent {
 	}
 
 	/**
-	 * Same as {@link #readMessage(String)}, but loading all INBOX messages first<br>
+	 * Same as {@link #readMessage(String, MessageReader)}, but loading all INBOX messages first<br>
 	 * The method is required since some message Id's are not correctly recognised by standard inbox
 	 * search, but returned correctly when reading complete list.
 	 */
-	public Message readMessageUsingFullSearch(final String messageId) {
-		return readInbox((inbox) -> readMessageUsingFullSearch(inbox, messageId));
+	public <T> T readMessageUsingFullSearch(final String messageId, final MessageReader<T> reader) throws Exception {
+		return reader.read(readInbox((inbox) -> readMessageUsingFullSearch(inbox, messageId)));
 	}
 
-	public Message readMessage(final String messageId) {
-		return readInbox(inbox -> inbox.searchById(messageId).findFirst().orElseGet(() -> readMessageUsingFullSearch(inbox, messageId)));
+	public <T> T readMessage(final String messageId, final MessageReader<T> reader) throws Exception {
+		return reader.read(readInbox(inbox -> inbox.searchById(messageId).findFirst().orElseGet(() -> readMessageUsingFullSearch(inbox, messageId))));
 	}
 
-	public interface MailReader<T> {
+	public interface FolderReader<T> {
 		T read(final Folder inbox) throws Exception;
 	}
 
+	public interface MessageReader<T> {
+		T read(final Message message) throws Exception;
+	}
 }

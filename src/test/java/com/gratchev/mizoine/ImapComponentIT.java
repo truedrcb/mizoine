@@ -30,17 +30,21 @@ public class ImapComponentIT {
 	@Test
 	@Disabled
 	public void testSearchByWorkingMessageID() throws Exception {
-		final Message message = imap.readMessage(testId);
-		LOGGER.info("Message: " + message.getMessageNumber() + " " + message.getSubject());
-		LOGGER.info("Returned: " + message);
+		imap.readMessage(testId, message -> {
+			LOGGER.info("Message: " + message.getMessageNumber() + " " + message.getSubject());
+			LOGGER.info("Returned: " + message);
+			return null;
+		});
 	}
 
 	@Test
 	@Disabled
 	public void testSearchByWrongMessageID() throws Exception {
-		final Message message = imap.readMessage(suspitiousId);
-		LOGGER.info("Message: " + message.getMessageNumber() + " " + message.getSubject());
-		LOGGER.info("Returned: " + message);
+		imap.readMessage(suspitiousId, message -> {
+			LOGGER.info("Message: " + message.getMessageNumber() + " " + message.getSubject());
+			LOGGER.info("Returned: " + message);
+			return null;
+		});
 	}
 
 	@Test

@@ -2,6 +2,7 @@ package com.gratchev.mizoine.api;
 
 import com.gratchev.mizoine.FlexmarkComponent;
 import com.gratchev.mizoine.ImapComponent;
+import com.gratchev.mizoine.ImapComponent.MessageReader;
 import com.gratchev.mizoine.SignedInUserComponentMock;
 import com.gratchev.mizoine.mail.Message;
 import com.gratchev.mizoine.mail.Part;
@@ -37,6 +38,7 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -99,9 +101,8 @@ public class MailApiControllerTest {
 		final String mailSubject = "6. Parrish NF, Tomonaga K: A Viral (Arc)hive for Metazoan Memory. Cell 2018, 172" +
 				"(1-2):8-10.";
 		final Date mailSentDate = new Date();
-
-		when(controller.imap.readMessage(eq(MESSAGE_ID))).thenReturn(new SimpleMessage(List.of(new TextPart(mailText,
-				MediaType.TEXT_PLAIN_VALUE)), mailSubject, mailSentDate));
+		whenMessage(MESSAGE_ID, new SimpleMessage(List.of(new TextPart(mailText, MediaType.TEXT_PLAIN_VALUE)),
+				mailSubject, mailSentDate));
 
 		final String commentId = controller.importMailToIssue(controller.encodeUri(MESSAGE_ID), "?", PROJECT,
 				issue.issueNumber);
@@ -121,9 +122,9 @@ public class MailApiControllerTest {
 		final String mailSubject = "Manifesto for Agile Software Development";
 		final Date mailSentDate = new Date();
 
-		when(controller.imap.readMessage(eq(MESSAGE_ID))).thenReturn(new SimpleMessage(List.of(new TextPart(mailText,
-				MediaType.TEXT_PLAIN_VALUE), new TextPart("<p>See <a href=https://agilemanifesto" +
-				".org/>Manifesto</a></p>", MediaType.TEXT_HTML_VALUE)), mailSubject, mailSentDate));
+		whenMessage(MESSAGE_ID, new SimpleMessage(List.of(new TextPart(mailText, MediaType.TEXT_PLAIN_VALUE),
+				new TextPart("<p>See <a href=https://agilemanifesto" + ".org/>Manifesto</a></p>",
+						MediaType.TEXT_HTML_VALUE)), mailSubject, mailSentDate));
 
 		final String commentId = controller.importMailToIssue(controller.encodeUri(MESSAGE_ID), "part-1", PROJECT,
 				issue.issueNumber);
@@ -147,10 +148,10 @@ public class MailApiControllerTest {
 		final Date mailSentDate = new Date();
 
 		final String fileName = "invoice.pdf";
-		when(controller.imap.readMessage(eq(MESSAGE_ID))).thenReturn(new SimpleMessage(List.of(new TextPart(mailText,
-				MediaType.TEXT_PLAIN_VALUE), new TextPart(mailText2, MediaType.TEXT_PLAIN_VALUE), new BinaryPart(
-				"/com/gratchev/utils/Invoice251217.pdf", MediaType.APPLICATION_PDF_VALUE, fileName)), mailSubject,
-				mailSentDate));
+		whenMessage(MESSAGE_ID, new SimpleMessage(List.of(new TextPart(mailText, MediaType.TEXT_PLAIN_VALUE),
+				new TextPart(mailText2, MediaType.TEXT_PLAIN_VALUE), new BinaryPart("/com/gratchev/utils" +
+						"/Invoice251217" +
+						".pdf", MediaType.APPLICATION_PDF_VALUE, fileName)), mailSubject, mailSentDate));
 
 		final String commentId = controller.importMailToIssue(controller.encodeUri(MESSAGE_ID), "?", PROJECT,
 				issue.issueNumber);
@@ -158,7 +159,8 @@ public class MailApiControllerTest {
 		final CommentProxy comment = repo.comment(PROJECT, issue.issueNumber, commentId);
 		assertContentMeta(mailSubject, mailSentDate, comment);
 
-		final String descriptionPrefix = mailText + "\n\n---\n\n" + mailText2 + "\n\n---\n\n- [" + fileName + "](attachment-";
+		final String descriptionPrefix = mailText + "\n\n---\n\n" + mailText2 + "\n\n---\n\n- [" + fileName + "]" +
+				"(attachment-";
 		final String description = comment.readDescription();
 		assertThat(description).startsWith(descriptionPrefix);
 		final String attachmentId = description.substring(descriptionPrefix.length()).substring(0, 5);
@@ -167,6 +169,10 @@ public class MailApiControllerTest {
 		assertThat(attachment.readInfo().files).hasSize(1).allSatisfy(file -> {
 			assertThat(file.fileName).isEqualTo(fileName);
 		});
+	}
+
+	private void whenMessage(final String messageId, final SimpleMessage message) throws Exception {
+		when(controller.imap.readMessage(eq(messageId), any())).then(i -> ((MessageReader) i.getArgument(1)).read(message));
 	}
 
 	private void assertContentMeta(String mailSubject, Date mailSentDate, CommentProxy comment) {

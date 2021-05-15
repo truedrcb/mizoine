@@ -48,11 +48,6 @@ public class MessageImpl implements Message {
 	}
 
 	@Override
-	public String getContentType() throws Exception {
-		return wrappedMessage.getContentType();
-	}
-
-	@Override
 	public Enumeration<Header> getAllHeaders() throws Exception {
 		return wrappedMessage.getAllHeaders();
 	}

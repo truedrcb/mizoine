@@ -56,29 +56,23 @@ public class MailApiController extends BaseController {
 		return sentDate != null ? sentDate : (receivedDate != null ? receivedDate : new Date());
 	}
 
-	/**
-	 * Safely extract a date from the mail message DTO
-	 *
-	 * @param message E-mail message for date extraction.
-	 * @return If available: Sent date. Otherwise, if available: Received date. Otherwise: current date.
-	 */
-	private static Date getMessageDate(final MailMessage message) {
-		final Date sentDate = message.sentDate;
-		final Date receivedDate = message.receivedDate;
-		return sentDate != null ? sentDate : (receivedDate != null ? receivedDate : new Date());
-	}
-
 	@GetMapping("list/unread")
 	@ResponseBody
 	public List<MailMessage> getUnreadMailList() {
 		return imap.readInbox(inbox ->
-				inbox.getUnseenMessages().map(message -> {
+				inbox.getUnseenMessages().sorted((m1, m2) -> {
+					// Sort messages from recent to oldest
+					try {
+						return getMessageDate(m2).compareTo(getMessageDate(m1));
+					} catch (final Exception e) {
+						LOGGER.warn("Date reading error", e);
+						return 0;
+					}
+				}).map(message -> {
 					try {
 						final MailMessage mailMessage = new MailMessage();
 						mailMessage.subject = message.getSubject();
 						mailMessage.from = message.getFrom();
-						mailMessage.sentDate = message.getSentDate();
-						mailMessage.receivedDate = message.getReceivedDate();
 						if (LOGGER.isDebugEnabled()) {
 							LOGGER.debug("sendDate: " + message.getSentDate() + " subject: " + message.getSubject());
 						}
@@ -92,8 +86,7 @@ public class MailApiController extends BaseController {
 						LOGGER.warn("Skipped reading message", e);
 					}
 					return null;
-				})).filter(Objects::nonNull).sorted((m1, m2) -> getMessageDate(m2).compareTo(getMessageDate(m1))
-		).collect(Collectors.toList());
+				}).filter(Objects::nonNull).collect(Collectors.toList()));
 	}
 
 	@GetMapping("preview/{uri}")
@@ -101,41 +94,42 @@ public class MailApiController extends BaseController {
 	public MailMessage getMailPreview(@PathVariable final String uri) throws Exception {
 		final MailMessage mailMessage = new MailMessage();
 
-		final Message message = imap.readMessage(decodeUri(uri));
+		return imap.readMessage(decodeUri(uri), message -> {
 
-		mailMessage.subject = message.getSubject();
-		mailMessage.from = message.getFrom();
-		if (LOGGER.isDebugEnabled()) {
-			LOGGER.debug("sendDate: " + message.getSentDate() + " subject: " + message.getSubject());
-		}
-		final Enumeration<Header> headers = message.getAllHeaders();
-		while (headers.hasMoreElements()) {
-			final Header header = headers.nextElement();
-			if (mailMessage.id == null && "Message-ID".equalsIgnoreCase(header.getName())) {
-				mailMessage.id = header.getValue();
-				mailMessage.uri = encodeUri(mailMessage.id);
+			mailMessage.subject = message.getSubject();
+			mailMessage.from = message.getFrom();
+			if (LOGGER.isDebugEnabled()) {
+				LOGGER.debug("sendDate: " + message.getSentDate() + " subject: " + message.getSubject());
 			}
-			mailMessage.headers.add(header);
-			if (LOGGER.isTraceEnabled()) {
-				LOGGER.trace("Header: " + header.getName() + " = " + header.getValue());
-			}
-		}
-		final PartCounter counter = new PartCounter();
-
-		message.getParts().forEach(part -> {
-			try {
-				final MailPartDto block = ImapUtils.extractMailBlock(part);
-				if (block.markdown != null) {
-					block.html = render(block.markdown);
+			final Enumeration<Header> headers = message.getAllHeaders();
+			while (headers.hasMoreElements()) {
+				final Header header = headers.nextElement();
+				if (mailMessage.id == null && "Message-ID".equalsIgnoreCase(header.getName())) {
+					mailMessage.id = header.getValue();
+					mailMessage.uri = encodeUri(mailMessage.id);
 				}
-				block.id = counter.nextId();
-				mailMessage.blocks.add(block);
-			} catch (Exception e) {
-				throw new RuntimeException(e);
+				mailMessage.headers.add(header);
+				if (LOGGER.isTraceEnabled()) {
+					LOGGER.trace("Header: " + header.getName() + " = " + header.getValue());
+				}
 			}
-		});
+			final PartCounter counter = new PartCounter();
 
-		return mailMessage;
+			message.getParts().forEach(part -> {
+				try {
+					final MailPartDto block = ImapUtils.extractMailBlock(part);
+					if (block.markdown != null) {
+						block.html = render(block.markdown);
+					}
+					block.id = counter.nextId();
+					mailMessage.blocks.add(block);
+				} catch (Exception e) {
+					throw new RuntimeException(e);
+				}
+			});
+
+			return mailMessage;
+		});
 	}
 
 	protected String encodeUri(final String id) {
@@ -168,162 +162,163 @@ public class MailApiController extends BaseController {
 
 		LOGGER.info("Importing mail with ID: " + messageId + " (" + commentPartId + ") to issue " + project + "-" + issueNumber);
 
-		final Message message = imap.readMessage(messageId);
-		final Repository repo = getRepo();
-		final Date messageDate = getMessageDate(message);
+		return imap.readMessage(messageId, message -> {
+			final Repository repo = getRepo();
+			final Date messageDate = getMessageDate(message);
 
-		final IssueProxy issue = repo.issue(project, issueNumber);
-		final String commentId = issue.newCommentId(ZonedDateTime.ofInstant(messageDate.toInstant(),
-				ZoneId.systemDefault()));
-		final CommentProxy comment = repo.comment(project, issueNumber, commentId);
-		comment.createDirs();
-		comment.updateMeta((meta) -> {
-			meta.creationDate = messageDate;
-			meta.title = message.getSubject();
-			meta.messageId = messageId;
-			final Address[] from = message.getFrom();
-			if (from != null && from.length > 0) {
-				meta.creator = from[0].toString();
+			final IssueProxy issue = repo.issue(project, issueNumber);
+			final String commentId = issue.newCommentId(ZonedDateTime.ofInstant(messageDate.toInstant(),
+					ZoneId.systemDefault()));
+			final CommentProxy comment = repo.comment(project, issueNumber, commentId);
+			comment.createDirs();
+			comment.updateMeta((meta) -> {
+				meta.creationDate = messageDate;
+				meta.title = message.getSubject();
+				meta.messageId = messageId;
+				final Address[] from = message.getFrom();
+				if (from != null && from.length > 0) {
+					meta.creator = from[0].toString();
+				} else {
+					meta.creator = currentUser.getName();
+				}
+				meta.messageHeaders = new TreeMap<>();
+				final Enumeration<Header> allHeaders = message.getAllHeaders();
+				if (allHeaders != null) {
+					while (allHeaders.hasMoreElements()) {
+						final Header header = allHeaders.nextElement();
+						meta.messageHeaders.put(header.getName(), header.getValue());
+					}
+				}
+			}, currentUser);
+			final List<Attachment> attachments = new ArrayList<>();
+
+			final PartCounter counter = new PartCounter();
+			final Map<String, MailPartDto> contentParts = new TreeMap<>();
+
+			message.getParts().forEach(part -> {
+				final String partId = counter.nextId();
+
+				try {
+					final MailPartDto partDto = ImapUtils.extractMailBlock(part);
+
+					if (partDto.content != null) {
+						contentParts.put(partId, partDto);
+						final String fileName = partId + (partDto.contentSubType.toLowerCase().contains("html") ? ".html" :
+								".txt");
+						LOGGER.info("Saving mail text to: " + fileName);
+						comment.writeFile(fileName, partDto.content);
+						return;
+					}
+
+					if (partDto.fileName == null) {
+						return;
+					}
+
+					LOGGER.info("Importing attachment: " + partDto.fileName + " type: " + partDto.contentType);
+
+
+					final MultipartFile uploadFile = new MultipartFile() {
+
+						@Override
+						public void transferTo(final File dest) throws IOException, IllegalStateException {
+							Files.copy(getInputStream(), dest.toPath());
+						}
+
+						@Override
+						public boolean isEmpty() {
+							return getSize() <= 0;
+						}
+
+						@Override
+						public long getSize() {
+							try {
+								return part.getSize();
+							} catch (final Exception e) {
+								LOGGER.error("getSize", e);
+								return 0;
+							}
+						}
+
+						@Override
+						public String getOriginalFilename() {
+							try {
+								return part.getFileName();
+							} catch (final Exception e) {
+								LOGGER.error("getOriginalFilename", e);
+								return null;
+							}
+						}
+
+						@Override
+						public String getName() {
+							return getOriginalFilename();
+						}
+
+						@Override
+						public @NotNull InputStream getInputStream() throws IOException {
+							try {
+								return part.getInputStream();
+							} catch (Exception e) {
+								throw new IOException(e);
+							}
+						}
+
+						@Override
+						public String getContentType() {
+							return partDto.contentType;
+						}
+
+						@Override
+						public byte @NotNull [] getBytes() throws IOException {
+							throw new IOException("Not implemented");
+						}
+					};
+
+					attachments.add(issue.uploadAttachment(uploadFile, messageDate));
+				} catch (Exception e) {
+					LOGGER.error("Upload failed for block #: " + counter.counter, e);
+				}
+
+			});
+
+			// Write description
+			final StringBuilder sb = new StringBuilder();
+			final List<MailPartDto> blocksToAdd = new ArrayList<>();
+
+
+			if (contentParts.containsKey(commentPartId)) {
+				blocksToAdd.add(contentParts.get(commentPartId));
 			} else {
-				meta.creator = currentUser.getName();
-			}
-			meta.messageHeaders = new TreeMap<>();
-			final Enumeration<Header> allHeaders = message.getAllHeaders();
-			if (allHeaders != null) {
-				while (allHeaders.hasMoreElements()) {
-					final Header header = allHeaders.nextElement();
-					meta.messageHeaders.put(header.getName(), header.getValue());
-				}
-			}
-		}, currentUser);
-		final List<Attachment> attachments = new ArrayList<>();
-
-		final PartCounter counter = new PartCounter();
-		final Map<String, MailPartDto> contentParts = new TreeMap<>();
-
-		message.getParts().forEach(part -> {
-			final String partId = counter.nextId();
-
-			try {
-				final MailPartDto partDto = ImapUtils.extractMailBlock(part);
-
-				if (partDto.content != null) {
-					contentParts.put(partId, partDto);
-					final String fileName = partId + (partDto.contentSubType.toLowerCase().contains("html") ? ".html" :
-							".txt");
-					LOGGER.info("Saving mail text to: " + fileName);
-					comment.writeFile(fileName, partDto.content);
-					return;
-				}
-
-				if (partDto.fileName == null) {
-					return;
-				}
-
-				LOGGER.info("Importing attachment: " + partDto.fileName + " type: " + partDto.contentType);
-
-
-				final MultipartFile uploadFile = new MultipartFile() {
-
-					@Override
-					public void transferTo(final File dest) throws IOException, IllegalStateException {
-						Files.copy(getInputStream(), dest.toPath());
-					}
-
-					@Override
-					public boolean isEmpty() {
-						return getSize() <= 0;
-					}
-
-					@Override
-					public long getSize() {
-						try {
-							return part.getSize();
-						} catch (final Exception e) {
-							LOGGER.error("getSize", e);
-							return 0;
-						}
-					}
-
-					@Override
-					public String getOriginalFilename() {
-						try {
-							return part.getFileName();
-						} catch (final Exception e) {
-							LOGGER.error("getOriginalFilename", e);
-							return null;
-						}
-					}
-
-					@Override
-					public String getName() {
-						return getOriginalFilename();
-					}
-
-					@Override
-					public @NotNull InputStream getInputStream() throws IOException {
-						try {
-							return part.getInputStream();
-						} catch (Exception e) {
-							throw new IOException(e);
-						}
-					}
-
-					@Override
-					public String getContentType() {
-						return partDto.contentType;
-					}
-
-					@Override
-					public byte @NotNull [] getBytes() throws IOException {
-						throw new IOException("Not implemented");
-					}
-				};
-
-				attachments.add(issue.uploadAttachment(uploadFile, messageDate));
-			} catch (Exception e) {
-				LOGGER.error("Upload failed for block #: " + counter.counter, e);
+				blocksToAdd.addAll(contentParts.values());
 			}
 
+			int i = 0;
+			for (final MailPartDto block : blocksToAdd) {
+				if (block.markdown != null && !block.markdown.isBlank()) {
+					if (i > 0) {
+						sb.append("\n\n---\n\n");
+					}
+					sb.append(block.markdown);
+					i++;
+				}
+			}
+
+			if (attachments.size() > 0) {
+				sb.append("\n\n---\n\n");
+
+				for (Attachment a : attachments) {
+					sb.append("- [");
+					sb.append(a.meta.fileName);
+					sb.append("](attachment-");
+					sb.append(a.id);
+					sb.append(")\n");
+				}
+			}
+
+			comment.writeDescription(sb.toString());
+
+			return commentId;
 		});
-
-		// Write description
-		final StringBuilder sb = new StringBuilder();
-		final List<MailPartDto> blocksToAdd = new ArrayList<>();
-
-
-		if (contentParts.containsKey(commentPartId)) {
-			blocksToAdd.add(contentParts.get(commentPartId));
-		} else {
-			blocksToAdd.addAll(contentParts.values());
-		}
-
-		int i = 0;
-		for (final MailPartDto block : blocksToAdd) {
-			if (block.markdown != null && !block.markdown.isBlank()) {
-				if (i > 0) {
-					sb.append("\n\n---\n\n");
-				}
-				sb.append(block.markdown);
-				i++;
-			}
-		}
-
-		if (attachments.size() > 0) {
-			sb.append("\n\n---\n\n");
-
-			for (Attachment a : attachments) {
-				sb.append("- [");
-				sb.append(a.meta.fileName);
-				sb.append("](attachment-");
-				sb.append(a.id);
-				sb.append(")\n");
-			}
-		}
-
-		comment.writeDescription(sb.toString());
-
-		return commentId;
 	}
 
 	private static class PartCounter {
