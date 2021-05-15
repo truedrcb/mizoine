@@ -62,11 +62,12 @@ public class ImapComponent {
 	 * search, but returned correctly when reading complete list.
 	 */
 	public <T> T readMessageUsingFullSearch(final String messageId, final MessageReader<T> reader) throws Exception {
-		return reader.read(readInbox((inbox) -> readMessageUsingFullSearch(inbox, messageId)));
+		return readInbox(inbox -> reader.read(readMessageUsingFullSearch(inbox, messageId)));
 	}
 
 	public <T> T readMessage(final String messageId, final MessageReader<T> reader) throws Exception {
-		return reader.read(readInbox(inbox -> inbox.searchById(messageId).findFirst().orElseGet(() -> readMessageUsingFullSearch(inbox, messageId))));
+		return readInbox(inbox -> reader.read(inbox.searchById(messageId).findFirst().orElseGet(() ->
+				readMessageUsingFullSearch(inbox, messageId))));
 	}
 
 	public interface FolderReader<T> {

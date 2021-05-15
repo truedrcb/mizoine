@@ -132,7 +132,7 @@ const unreadMailList = {
 <div>
 	<div v-if="mails == null">Loading...</div>
 	<div class="list-group">
-		<router-link :to="'preview-mail/' + mail.uri" 
+		<router-link :to="'preview-mail-' + mail.uri" 
 			class="list-group-item" 
 			v-for="mail in mails"
 			:key="mail.uri">

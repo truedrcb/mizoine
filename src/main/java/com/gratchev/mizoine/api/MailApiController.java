@@ -286,7 +286,7 @@ public class MailApiController extends BaseController {
 			final List<MailPartDto> blocksToAdd = new ArrayList<>();
 
 
-			if (contentParts.containsKey(commentPartId)) {
+			if (commentPartId != null && contentParts.containsKey(commentPartId)) {
 				blocksToAdd.add(contentParts.get(commentPartId));
 			} else {
 				blocksToAdd.addAll(contentParts.values());

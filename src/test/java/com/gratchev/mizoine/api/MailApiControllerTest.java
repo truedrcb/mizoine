@@ -153,7 +153,7 @@ public class MailApiControllerTest {
 						"/Invoice251217" +
 						".pdf", MediaType.APPLICATION_PDF_VALUE, fileName)), mailSubject, mailSentDate));
 
-		final String commentId = controller.importMailToIssue(controller.encodeUri(MESSAGE_ID), "?", PROJECT,
+		final String commentId = controller.importMailToIssue(controller.encodeUri(MESSAGE_ID), null, PROJECT,
 				issue.issueNumber);
 
 		final CommentProxy comment = repo.comment(PROJECT, issue.issueNumber, commentId);
