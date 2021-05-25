@@ -274,7 +274,8 @@ public class MailApiController extends BaseController {
 						}
 					};
 
-					attachments.add(issue.uploadAttachment(uploadFile, messageDate));
+					attachments.add(issue.uploadAttachment(uploadFile, ZonedDateTime.ofInstant(messageDate.toInstant(),
+							ZoneId.systemDefault())));
 				} catch (Exception e) {
 					LOGGER.error("Upload failed for block #: " + counter.counter, e);
 				}

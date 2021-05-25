@@ -1,7 +1,26 @@
 package com.gratchev.mizoine.api;
 
-import static com.gratchev.mizoine.FlexmarkUtils.generateMarkdownFooterRefs;
-import static com.gratchev.mizoine.api.AttachmentApiController.getPageBaseUri;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.gratchev.mizoine.repository.Attachment;
+import com.gratchev.mizoine.repository.Issue;
+import com.gratchev.mizoine.repository.Repository;
+import com.gratchev.mizoine.repository.Repository.AttachmentProxy;
+import com.gratchev.mizoine.repository.Repository.CommentProxy;
+import com.gratchev.mizoine.repository.Repository.IssueProxy;
+import com.gratchev.mizoine.repository.RepositoryCache;
+import com.gratchev.mizoine.repository.meta.IssueMeta;
+import com.gratchev.utils.FileUtils;
+import com.vladsch.flexmark.html.HtmlRenderer;
+import com.vladsch.flexmark.parser.Parser;
+import com.vladsch.flexmark.util.ast.Node;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.multipart.MultipartHttpServletRequest;
 
 import java.io.File;
 import java.io.IOException;
@@ -12,53 +31,28 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseBody;
-import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.multipart.MultipartHttpServletRequest;
-
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonInclude.Include;
-import com.gratchev.mizoine.repository.Attachment;
-import com.gratchev.mizoine.repository.Issue;
-import com.gratchev.mizoine.repository.Repository;
-import com.gratchev.mizoine.repository.Repository.AttachmentProxy;
-import com.gratchev.mizoine.repository.Repository.CommentProxy;
-import com.gratchev.mizoine.repository.Repository.IssueProxy;
-import com.gratchev.mizoine.repository.RepositoryCache;
-import com.gratchev.mizoine.repository.meta.AttachmentMeta;
-import com.gratchev.mizoine.repository.meta.IssueMeta;
-import com.gratchev.utils.FileUtils;
-import com.vladsch.flexmark.html.HtmlRenderer;
-import com.vladsch.flexmark.parser.Parser;
-import com.vladsch.flexmark.util.ast.Node;
+import static com.gratchev.mizoine.FlexmarkUtils.generateMarkdownFooterRefs;
+import static com.gratchev.mizoine.api.AttachmentApiController.getPageBaseUri;
 
 @Controller
 @EnableAutoConfiguration
 @RequestMapping("/api/issue/{project}-{issueNumber}")
 public class IssueApiController extends BaseDescriptionController {
 	private static final Logger LOGGER = LoggerFactory.getLogger(IssueApiController.class);
+
 	@PostMapping("upload")
 	@ResponseBody
-	public List<AttachmentMeta> uploadAttachment(@PathVariable final String project, 
-			@PathVariable final String issueNumber, final MultipartHttpServletRequest request) {
+	public List<String> uploadAttachment(@PathVariable final String project,
+										 @PathVariable final String issueNumber,
+										 final MultipartHttpServletRequest request) {
 		//LOGGER.debug(request.getParameterMap().toString());
 		if (LOGGER.isDebugEnabled()) {
 			LOGGER.debug("Upload attachment(s) for: " + project + "-" + issueNumber);
 		}
 
-		final List<AttachmentMeta> uploadedAttachments = new ArrayList<>();
+		final List<String> uploadedAttachmentIds = new ArrayList<>();
 
-		for (final Iterator<String> iterator = request.getFileNames(); iterator.hasNext();) {
+		for (final Iterator<String> iterator = request.getFileNames(); iterator.hasNext(); ) {
 			final String fileName = iterator.next();
 
 			LOGGER.debug("File: " + fileName);
@@ -66,13 +60,15 @@ public class IssueApiController extends BaseDescriptionController {
 			final MultipartFile uploadFile = request.getFile(fileName);
 
 			try {
-				getRepo().issue(project, issueNumber).uploadAttachment(uploadFile, new Date());
+				final Attachment attachment = getRepo().issue(project, issueNumber).uploadAttachment(uploadFile,
+						ZonedDateTime.now());
+				uploadedAttachmentIds.add(attachment.id);
 			} catch (IOException e) {
 				LOGGER.error("Upload failed for file: " + fileName + " " + uploadFile, e);
 			}
 
 		}
-		return uploadedAttachments;
+		return uploadedAttachmentIds;
 	}
 
 	@PostMapping("description")

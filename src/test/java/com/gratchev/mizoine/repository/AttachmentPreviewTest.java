@@ -5,7 +5,6 @@ import com.gratchev.mizoine.SignedInUserComponentMock;
 import com.gratchev.mizoine.repository.Repository.AttachmentProxy;
 import com.gratchev.mizoine.repository.Repository.IssueProxy;
 import com.gratchev.mizoine.repository.TempRepositoryUtils.TempRepository;
-import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,7 +39,7 @@ public class AttachmentPreviewTest {
 		issue.createDirs();
 		try (final InputStream pngStream = getPngStream()) {
 			issue.uploadAttachment(new MockMultipartFile("flyer.png", "FlyerBear3web.png", MediaType.IMAGE_PNG_VALUE,
-					pngStream), new Date());
+					pngStream), ZonedDateTime.now());
 		}
 	}
 

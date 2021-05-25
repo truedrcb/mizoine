@@ -1,7 +1,8 @@
 package com.gratchev.mizoine.repository;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.google.common.base.Strings;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -11,10 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.google.common.base.Strings;
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class TempRepositoryUtils {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TempRepositoryUtils.class);
@@ -121,7 +119,6 @@ public class TempRepositoryUtils {
 			
 			repo.createInitialRepositoryDirectories();
 			assertDirExists(repo.getProjectsRoot());
-			assertDirExists(repo.getUsersRoot());
 			printDirectory(repo.getRoot());
 
 			return repo;

@@ -1,11 +1,8 @@
 package com.gratchev.mizoine;
 
-import static com.gratchev.mizoine.ShortIdGenerator.intToMizCode;
-import static com.gratchev.mizoine.ShortIdGenerator.mizCodeFor;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -16,9 +13,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
-import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static com.gratchev.mizoine.ShortIdGenerator.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class ShortIdGeneratorTest {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ShortIdGeneratorTest.class);
@@ -47,7 +44,7 @@ public class ShortIdGeneratorTest {
 
 	@Test
 	void idCollision() {
-		final Set<String> usedIds = new TreeSet<String>();
+		final Set<String> usedIds = new TreeSet<>();
 		final ShortIdGenerator cut = new ShortIdGenerator();
 
 		final ZonedDateTime now = ZonedDateTime.now();
@@ -120,13 +117,20 @@ public class ShortIdGeneratorTest {
 		final ZonedDateTime code5EpochEnd = mizEpochStart.plus(60466175, ChronoUnit.MINUTES);
 		LOGGER.info("Mizoine Epoch End of 5 positions code: " + code5EpochEnd);
 		assertThat(mizCodeFor(code5EpochEnd)).isEqualTo("zzzzz");
-		
+
 		assertThat(mizCodeFor(mizEpochStart.minus(1, ChronoUnit.MINUTES))).isEqualTo("-00001");
 		assertThat(mizCodeFor(mizEpochStart.minus(60466175, ChronoUnit.MINUTES))).isEqualTo("-zzzzz");
-		
+
 		assertThrows(RuntimeException.class, () -> mizCodeFor(mizEpochStart.minus(60466176, ChronoUnit.MINUTES)));
 		assertThrows(RuntimeException.class, () -> mizCodeFor(mizEpochStart.plus(60466176, ChronoUnit.MINUTES)));
 
 		assertThat(mizCodeFor(ZonedDateTime.now(ZoneOffset.UTC))).isEqualTo(mizCodeFor(ZonedDateTime.now()));
+	}
+
+	@Test
+	void testMizCodeToInt() {
+		assertThat(mizCodeToInt("00000")).isEqualTo(0);
+		assertThat(mizCodeToInt("00074")).isEqualTo(256);
+		assertThat(mizCodeToInt("zzzzz")).isEqualTo(60466175);
 	}
 }

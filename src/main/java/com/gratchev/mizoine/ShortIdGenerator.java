@@ -6,13 +6,25 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.Temporal;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
 public class ShortIdGenerator {
 	final Random random = new Random();
-	public static final String ALL_64_CHARS_SORTED = "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz";
+	public static final String ALL_64_CHARS_SORTED =
+			"-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz";
 	public static final String ALL_36_CHARS_SORTED = "0123456789abcdefghijklmnopqrstuvwxyz";
+	public static final Map<Character, Integer> ALL_36_CHARS_CODES;
+
+	static {
+		ALL_36_CHARS_CODES = new HashMap<>();
+		for (int n = 0; n < ALL_36_CHARS_SORTED.length(); n++) {
+			ALL_36_CHARS_CODES.put(ALL_36_CHARS_SORTED.charAt(n), n);
+		}
+	}
+
 	/**
 	 * Mizone was introduced in 2017. Assume 2017-01-01 00:00 UTC as zero Id: 00000.
 	 */
@@ -68,41 +80,52 @@ public class ShortIdGenerator {
 		return sb.toString();
 	}
 
-	@Deprecated
-	public String createId(final Temporal dateTime) {
-		return mizCodeFor(dateTime);
-	}
-
-	public String createId(final Temporal dateTime, final Set<String> usedIds) {
-		for (long codeNow = toLongMizCode(dateTime);; codeNow++) {
-			final String id = mizCodeFor(codeNow, dateTime);
-			if (usedIds.contains(id)) {
-				continue;
-			}
-			return id;
+	public static int mizCodeToInt(final String code) {
+		if (code.length() != 5) {
+			throw new RuntimeException("mizCode length != 5: " + code);
 		}
+		int n = 0;
+		for (int i = 0; i < 5; i++) {
+			n = n * 36 + ALL_36_CHARS_CODES.get(code.charAt(i));
+		}
+		return n;
 	}
 
 	/**
 	 * Generate MizCode for given date/time
-	 * 
+	 *
 	 * @param dateTime Absolute time (will be truncated to minutes). For example:
 	 *                 <code>ZonedDateTime.now()</code>
 	 * @return MizCode for given minute
 	 */
-	public static String mizCodeFor(final Temporal dateTime) {
+	public static String mizCodeFor(final ZonedDateTime dateTime) {
 		return mizCodeFor(toLongMizCode(dateTime), dateTime);
 	}
 
-	public static String mizCodeFor(final long codeNow, final Temporal dateTime) {
+	private static String mizCodeFor(final long codeNow, final Temporal dateTime) {
 		if (codeNow < -MIZ_CODE_MAX || codeNow > MIZ_CODE_MAX) {
 			throw new RuntimeException("mizCode overflow for date/time: " + dateTime);
 		}
 		return intToMizCode((int) codeNow);
 	}
 
-	private static long toLongMizCode(final Temporal dateTime) {
+	private static long toLongMizCode(final ZonedDateTime dateTime) {
 		final long codeNow = ChronoUnit.MINUTES.between(MIZ_EPOCH_START, dateTime);
 		return codeNow;
+	}
+
+	@Deprecated
+	public String createId(final ZonedDateTime dateTime) {
+		return mizCodeFor(dateTime);
+	}
+
+	public String createId(final ZonedDateTime dateTime, final Set<String> usedIds) {
+		for (long codeNow = toLongMizCode(dateTime); ; codeNow++) {
+			final String id = mizCodeFor(codeNow, dateTime);
+			if (usedIds.contains(id)) {
+				continue;
+			}
+			return id;
+		}
 	}
 }

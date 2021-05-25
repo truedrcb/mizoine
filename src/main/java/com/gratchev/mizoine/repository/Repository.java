@@ -389,14 +389,13 @@ public class Repository {
 				+ ATTACHMENTS_DIRNAME + '/' + shortId + '/';
 	}
 
-	synchronized private File createAttachmentFolder(final File attachmentsDir) throws IOException {
-		final Set<String> existingFiles = new TreeSet<String>(Arrays.asList(attachmentsDir.list()));
+	synchronized private File createAttachmentFolder(final File attachmentsDir, final ZonedDateTime creationDate) throws IOException {
+		final Set<String> existingFiles = new TreeSet<>(Arrays.asList(attachmentsDir.list()));
 		LOGGER.debug("Already existing ids: " + existingFiles);
 
-		final ZonedDateTime now = ZonedDateTime.now();
-		final String shortId = shortIdGenerator.createId(now, existingFiles);
+		final String shortId = shortIdGenerator.createId(creationDate, existingFiles);
 
-		LOGGER.debug("New id: " + shortId + " generated from " + now);
+		LOGGER.debug("New id: {} generated from date {}", shortId, creationDate);
 
 		final File attachmentFolder = new File(attachmentsDir, shortId);
 		if (!attachmentFolder.mkdir()) {
@@ -985,7 +984,7 @@ public class Repository {
 		 * @deprecated TODO: Decouple dependency to {@link AttachmentProxy}
 		 */
 		@Deprecated
-		public Attachment uploadAttachment(final MultipartFile uploadFile, final Date creationDate) throws IOException {
+		public Attachment uploadAttachment(final MultipartFile uploadFile, final ZonedDateTime creationDate) throws IOException {
 			final File attachmentsDir = getAttachmentsDir();
 			checkOrCreateDirectory(attachmentsDir);
 
@@ -998,12 +997,12 @@ public class Repository {
 			uploadMeta.size = uploadFile.getSize();
 			LOGGER.debug("Upload: " + uploadMeta);
 
-			final File attachmentFolder = createAttachmentFolder(attachmentsDir);
+			final File attachmentFolder = createAttachmentFolder(attachmentsDir, creationDate);
 			final AttachmentMeta attachmentMeta = new AttachmentMeta();
 			attachmentMeta.upload = uploadMeta;
 			attachmentMeta.fileName = uploadMeta.originalFileName;
 			attachmentMeta.title = attachmentMeta.fileName;
-			attachmentMeta.creationDate = creationDate;
+			attachmentMeta.creationDate = Date.from(creationDate.toInstant());
 
 			writeMetaMeta(attachmentFolder, attachmentMeta);
 			attachment.meta = attachmentMeta;

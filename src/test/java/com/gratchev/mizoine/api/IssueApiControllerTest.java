@@ -19,8 +19,11 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.mock.web.MockMultipartHttpServletRequest;
 
 import java.io.IOException;
-import java.util.Date;
+import java.time.ZonedDateTime;
+import java.util.List;
 
+import static com.gratchev.mizoine.ShortIdGenerator.mizCodeFor;
+import static com.gratchev.mizoine.ShortIdGenerator.mizCodeToInt;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -50,13 +53,15 @@ public class IssueApiControllerTest {
 				"", controller.currentUser);
 		assertNotNull(issue);
 
-		final Date creationDate = new Date();
+		final ZonedDateTime creationDate = ZonedDateTime.now();
 		attachment = repo.issue(project, issue.issueNumber).uploadAttachment(getPngFile(), creationDate);
 
 		assertNotNull(attachment);
 		assertNotNull(attachment.id);
 		assertNotNull(attachment.meta);
-		assertEquals(creationDate, attachment.meta.creationDate);
+		assertThat(attachment.meta.creationDate).hasYear(creationDate.getYear()).hasMonth(creationDate.getMonthValue())
+				.hasDayOfMonth(creationDate.getDayOfMonth()).hasHourOfDay(creationDate.getHour())
+				.hasMinute(creationDate.getMinute()).hasSecond(creationDate.getSecond());
 
 		LOGGER.info("Attachment uploaded: " + attachment);
 	}
@@ -122,7 +127,12 @@ public class IssueApiControllerTest {
 	void uploadSimpleAttachment() throws IOException {
 		final MockMultipartHttpServletRequest request = new MockMultipartHttpServletRequest();
 		request.addFile(getPngFile());
-		controller.uploadAttachment(project, issue.issueNumber, request);
+		final List<String> attachmentIds = controller.uploadAttachment(project, issue.issueNumber, request);
+		final int mizNow = mizCodeToInt(mizCodeFor(ZonedDateTime.now()));
+		assertThat(attachmentIds).hasSize(1).allSatisfy(id -> {
+			assertThat(id).isNotBlank();
+			assertThat(mizCodeToInt(id)).isBetween(mizNow - 1, mizNow + 1);
+		});
 	}
 
 	@NotNull

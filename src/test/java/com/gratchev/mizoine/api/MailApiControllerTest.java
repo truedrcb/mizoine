@@ -29,6 +29,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.ZonedDateTime;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Enumeration;
@@ -70,7 +71,7 @@ public class MailApiControllerTest {
 				"", controller.currentUser);
 		assertNotNull(issue);
 
-		final Date creationDate = new Date();
+		final ZonedDateTime creationDate = ZonedDateTime.now();
 		attachment = repo.issue(PROJECT, issue.issueNumber).uploadAttachment(new MockMultipartFile(
 						"test.png", "original-test.png", "image/png",
 						MailApiControllerTest.class.getResourceAsStream("/com/gratchev/mizoine/Mizoine-logo" +
@@ -80,7 +81,9 @@ public class MailApiControllerTest {
 		assertNotNull(attachment);
 		assertNotNull(attachment.id);
 		assertNotNull(attachment.meta);
-		assertEquals(creationDate, attachment.meta.creationDate);
+		assertThat(attachment.meta.creationDate).hasYear(creationDate.getYear()).hasMonth(creationDate.getMonthValue())
+				.hasDayOfMonth(creationDate.getDayOfMonth()).hasHourOfDay(creationDate.getHour())
+				.hasMinute(creationDate.getMinute()).hasSecond(creationDate.getSecond());
 
 		LOGGER.info("Attachment uploaded: " + attachment);
 	}
