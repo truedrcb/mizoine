@@ -3,10 +3,8 @@ package com.gratchev.mizoine.repository;
 import com.gratchev.mizoine.ShortIdGenerator;
 import com.gratchev.mizoine.SignedInUserComponentMock;
 import com.gratchev.mizoine.repository.Repository.AttachmentProxy;
-import com.gratchev.mizoine.repository.Repository.CommentProxy;
 import com.gratchev.mizoine.repository.Repository.IssueProxy;
 import com.gratchev.mizoine.repository.TempRepositoryUtils.TempRepository;
-import org.apache.catalina.connector.OutputBuffer;
 import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,7 +44,6 @@ public class AttachmentPreviewTest {
 		}
 	}
 
-	@Nullable
 	private InputStream getPngStream() {
 		return AttachmentPreviewTest.class.getResourceAsStream("/com/gratchev/utils/FlyerBear3web.png");
 	}
@@ -55,10 +52,19 @@ public class AttachmentPreviewTest {
 	void testPreview1() throws IOException {
 		final AttachmentProxy attachment = repo.attachment("PRO", "1", ShortIdGenerator.mizCodeFor(now));
 		attachment.createDirs();
-		try (final InputStream pngStream = getPngStream(); final OutputStream os = new FileOutputStream(new File(attachment.getRoot(), "test.png"))) {
+		try (final InputStream pngStream = getPngStream(); final OutputStream os =
+				new FileOutputStream(new File(attachment.getRoot(), "test.png"))) {
 			pngStream.transferTo(os);
 		}
 		attachment.updatePreview();
+		assertPreviewsExist(attachment);
+
+		// idempotency
+		attachment.updatePreview();
+		assertPreviewsExist(attachment);
+	}
+
+	private void assertPreviewsExist(final AttachmentProxy attachment) {
 		final File mizDir = assertDirExists(repo.getRootMizoineDir(), "PRO", "1", attachment.getAttachmentId());
 		assertFileExists(mizDir, "preview.jpg");
 		assertFileExists(mizDir, "thumbnail.jpg");

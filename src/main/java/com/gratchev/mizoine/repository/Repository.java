@@ -2,11 +2,9 @@ package com.gratchev.mizoine.repository;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonFactory;
-import com.fasterxml.jackson.core.JsonGenerationException;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.util.DefaultIndenter;
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.gratchev.mizoine.GitComponent;
@@ -63,11 +61,11 @@ public class Repository {
 
 	private static final String PROJECTS_DIRNAME = "projects";
 
-	private static final String USERS_DIRNAME = "users";
-
 	public static final String DESCRIPTION_MD_FILENAME = "description.md";
 
 	public static final String META_JSON_FILENAME = "meta.json";
+
+	public static final String ATTACHMENT_COPY_FILENAME_WO_EXT = "original";
 
 	private final ObjectMapper objectMapper;
 	private final ShortIdGenerator shortIdGenerator = new ShortIdGenerator();
@@ -164,10 +162,6 @@ public class Repository {
 		return new File(getRoot(), MIZOINE_DIR);
 	}
 
-	public File getUsersRoot() {
-		return new File(getRoot(), USERS_DIRNAME);
-	}
-
 	public File getProjectsRoot() {
 		return new File(getRoot(), PROJECTS_DIRNAME);
 	}
@@ -253,7 +247,7 @@ public class Repository {
 			try {
 				tagFile.createNewFile();
 			} catch (IOException e) {
-				LOGGER.error("Unable to create tag: " + tag, e);
+				LOGGER.error("Unable to create tag: {}", tag, e);
 			}
 		}
 	}
@@ -280,9 +274,11 @@ public class Repository {
 				continue;
 			}
 			try {
-				tagFile.delete();
-			} catch (Exception e) {
-				LOGGER.error("Unable to remove tag: " + tag, e);
+				if (!tagFile.delete()) {
+					LOGGER.error("Unable to remove tag: {}", tag);
+				}
+			} catch (final Exception e) {
+				LOGGER.error("Unable to remove tag: {}", tag, e);
 			}
 		}
 	}
@@ -335,15 +331,13 @@ public class Repository {
 
 	}
 
-	private <T> void writeMetaMeta(final File baseDir, final T value)
-			throws JsonGenerationException, JsonMappingException, IOException {
+	private <T> void writeMetaMeta(final File baseDir, final T value) throws IOException {
 		final File metaDir = new File(baseDir, META_DIRNAME);
 		checkOrCreateDirectory(metaDir);
 		writeMeta(metaDir, value);
 	}
 
-	private <T> void writeMeta(final File baseDir, final T value)
-			throws JsonGenerationException, JsonMappingException, IOException {
+	private <T> void writeMeta(final File baseDir, final T value) throws IOException {
 		final File metaFile = new File(baseDir, META_JSON_FILENAME);
 		if (metaFile.exists()) {
 			LOGGER.info("Metadata already exists: " + metaFile.getAbsolutePath());
@@ -367,7 +361,7 @@ public class Repository {
 	}
 
 	private ArrayList<String> readAttachmentFileNames(final File baseDir) {
-		final ArrayList<String> attachmentFileNames = new ArrayList<String>();
+		final ArrayList<String> attachmentFileNames = new ArrayList<>();
 
 		for (final File file : baseDir.listFiles()) {
 			if (file.isDirectory()) {
@@ -413,7 +407,7 @@ public class Repository {
 	}
 
 	public List<Project> getProjects() {
-		final ArrayList<Project> projects = new ArrayList<Project>();
+		final ArrayList<Project> projects = new ArrayList<>();
 		final File[] listFiles = getProjectsRoot().listFiles();
 		if (listFiles != null) {
 			for (final File file : listFiles) {
@@ -450,7 +444,7 @@ public class Repository {
 	}
 
 	public List<Issue> getIssues(final String project) {
-		final ArrayList<Issue> issues = new ArrayList<Issue>();
+		final ArrayList<Issue> issues = new ArrayList<>();
 		final File projectIssuesRoot = getProjectIssuesRoot(project);
 		if (projectIssuesRoot.exists()) {
 			for (final File file : projectIssuesRoot.listFiles()) {
@@ -486,7 +480,6 @@ public class Repository {
 					}
 				} catch (NumberFormatException ne) {
 					// Skip not number
-					continue;
 				}
 			}
 			LOGGER.info("Max issue number: " + maxIssueNumber + " in directory " + projectIssuesRoot.getAbsolutePath());
@@ -512,8 +505,7 @@ public class Repository {
 
 	public File getVerificationLogFile() {
 		final File mizoineDir = getRootMizoineDir();
-		final File logFile = new File(mizoineDir, VERIFICATION_LOG);
-		return logFile;
+		return new File(mizoineDir, VERIFICATION_LOG);
 	}
 
 	public interface Visitor {
@@ -579,9 +571,7 @@ public class Repository {
 									v.err("Cannot determine attachment file. Count: " + count);
 								}
 								final File metaDir = attachment(project, issueNumber, attachmentId).getMetaRoot();
-								if (!v.checkMeta(metaDir)) {
-									continue;
-								}
+								v.checkMeta(metaDir);
 							}
 						}
 						v.log("</div>\n");
@@ -596,9 +586,7 @@ public class Repository {
 									continue;
 								}
 								final File metaDir = getCommentRoot(project, issueNumber, commentId);
-								if (!v.checkMeta(metaDir)) {
-									continue;
-								}
+								v.checkMeta(metaDir);
 							}
 						}
 						v.log("</div>\n");
@@ -606,14 +594,6 @@ public class Repository {
 					}
 					v.log("</div>\n");
 				}
-			}
-		}
-
-		final File usersRoot = getUsersRoot();
-		v.log("# Users");
-		if (v.dirExists("Users root", usersRoot)) {
-			if (usersRoot.listFiles().length < 1) {
-				v.warn("Empty");
 			}
 		}
 	}
@@ -641,7 +621,6 @@ public class Repository {
 
 	void createInitialRepositoryDirectories() throws IOException {
 		checkOrCreateDirectory(getProjectsRoot());
-		checkOrCreateDirectory(getUsersRoot());
 	}
 
 	@JsonInclude(JsonInclude.Include.NON_NULL)
@@ -746,7 +725,6 @@ public class Repository {
 									visitor.attachment(project, issueNumber, attachmentId);
 								} catch (Exception e) {
 									LOGGER.error("attachment", e);
-									continue;
 								}
 							}
 						}
@@ -761,18 +739,12 @@ public class Repository {
 									visitor.comment(project, issueNumber, commentId);
 								} catch (Exception e) {
 									LOGGER.error("comment", e);
-									continue;
 								}
 							}
 						}
 					}
 				}
 			}
-		}
-
-		final File usersRoot = getUsersRoot();
-		if (usersRoot.exists()) {
-
 		}
 	}
 
@@ -931,12 +903,12 @@ public class Repository {
 		}
 
 		public ArrayList<Comment> readComments() {
-			return readComments(() -> new Comment());
+			return readComments(Comment::new);
 		}
 
 		public <T extends Comment> ArrayList<T> readComments(final Supplier<T> commentFactory) {
 			final File commentsRoot = getIssueCommentsDir(project, issueNumber);
-			final ArrayList<T> comments = new ArrayList<T>();
+			final ArrayList<T> comments = new ArrayList<>();
 
 			if (commentsRoot.exists() && commentsRoot.isDirectory()) {
 				for (final File commentDir : commentsRoot.listFiles()) {
@@ -950,8 +922,7 @@ public class Repository {
 					}
 
 					final T comment = commentFactory.get();
-					final String dirName = commentDir.getName();
-					comment.id = dirName;
+					comment.id = commentDir.getName();
 					comments.add(comment);
 
 					comment.meta = comment(commentDir).readMeta();
@@ -982,7 +953,7 @@ public class Repository {
 
 		public ArrayList<Attachment> readAttachments() {
 			final File attachmentsRoot = getAttachmentsDir();
-			final ArrayList<Attachment> attachments = new ArrayList<Attachment>();
+			final ArrayList<Attachment> attachments = new ArrayList<>();
 
 			if (attachmentsRoot.exists() && attachmentsRoot.isDirectory()) {
 				for (final File attachmentDir : attachmentsRoot.listFiles()) {
@@ -1082,14 +1053,9 @@ public class Repository {
 			if (commentsDirFiles != null) {
 				existingFiles.addAll(Arrays.asList(commentsDirFiles));
 			}
-			LOGGER.debug("Already existing comment ids: " + existingFiles);
-
-			final ZonedDateTime now = ZonedDateTime.now();
-			final String shortId = shortIdGenerator.createId(now, existingFiles);
-
-			if (LOGGER.isDebugEnabled()) {
-				LOGGER.info("Comment Id: " + shortId);
-			}
+			LOGGER.debug("Already existing comment ids: {}", existingFiles);
+			final String shortId = shortIdGenerator.createId(creationDate, existingFiles);
+			LOGGER.debug("Comment Id: {}", shortId);
 			return shortId;
 		}
 	}
@@ -1260,7 +1226,7 @@ public class Repository {
 				LOGGER.debug("File(s) found: " + attachmentFileNames);
 			}
 
-			final ArrayList<FileInfo> infos = new ArrayList<FileInfo>();
+			final ArrayList<FileInfo> infos = new ArrayList<>();
 
 			if (attachmentFileNames != null) {
 				for (final String filename : attachmentFileNames) {
@@ -1347,7 +1313,8 @@ public class Repository {
 
 			for (final File mizoineDir : mizoineDirs) {
 				final String fileExtension = getFileExtension(file.getName());
-				Files.copy(file.toPath(), new File(mizoineDir, "original." + fileExtension).toPath());
+				Files.copy(file.toPath(),
+						new File(mizoineDir, ATTACHMENT_COPY_FILENAME_WO_EXT + "." + fileExtension).toPath());
 				generator.generatePreviews(file, mizoineDir);
 			}
 		}
@@ -1362,7 +1329,7 @@ public class Repository {
 			return new File(new File(new File(getRootMizoineDir(), project), issueNumber), getAttachmentId());
 		}
 
-		private void cleanUpPreviewDir(final File mizoineDir) throws IOException {
+		private void cleanUpPreviewDir(final File mizoineDir) {
 			for (final File file : mizoineDir.listFiles()) {
 				final String name = file.getName();
 				if (AttachmentPreviewGenerator.PREVIEW_PNG.equals(name)
@@ -1370,7 +1337,8 @@ public class Repository {
 						|| AttachmentPreviewGenerator.PREVIEW_JPG.equals(name)
 						|| AttachmentPreviewGenerator.THUMBNAIL_JPG.equals(name)
 						|| name.startsWith(AttachmentPreviewGenerator.PREVIEW_PAGE_PREFIX)
-						|| name.startsWith(AttachmentPreviewGenerator.THUMBNAIL_PAGE_PREFIX)) {
+						|| name.startsWith(AttachmentPreviewGenerator.THUMBNAIL_PAGE_PREFIX)
+						|| name.startsWith(ATTACHMENT_COPY_FILENAME_WO_EXT)) {
 					LOGGER.info("Removing previously created preview: " + file.getAbsolutePath());
 					file.delete();
 				}
