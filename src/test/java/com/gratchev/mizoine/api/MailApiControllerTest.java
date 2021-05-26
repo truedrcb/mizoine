@@ -37,7 +37,6 @@ import java.util.List;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -126,7 +125,7 @@ public class MailApiControllerTest {
 		final Date mailSentDate = new Date();
 
 		whenMessage(MESSAGE_ID, new SimpleMessage(List.of(new TextPart(mailText, MediaType.TEXT_PLAIN_VALUE),
-				new TextPart("<p>See <a href=https://agilemanifesto" + ".org/>Manifesto</a></p>",
+				new TextPart("<p>See <a href=https://agilemanifesto.org/>Manifesto</a></p>",
 						MediaType.TEXT_HTML_VALUE)), mailSubject, mailSentDate));
 
 		final String commentId = controller.importMailToIssue(controller.encodeUri(MESSAGE_ID), "part-1", PROJECT,
@@ -218,7 +217,7 @@ public class MailApiControllerTest {
 		}
 
 		@Override
-		public Address[] getAllRecipients() throws Exception {
+		public Address[] getAllRecipients() {
 			return new Address[0];
 		}
 

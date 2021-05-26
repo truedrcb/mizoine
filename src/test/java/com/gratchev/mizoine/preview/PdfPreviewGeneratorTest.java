@@ -1,24 +1,21 @@
 package com.gratchev.mizoine.preview;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-
-import javax.imageio.ImageIO;
-
-import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.gratchev.mizoine.preview.AttachmentPreviewGenerator.AttachmentPreview;
 import com.gratchev.mizoine.repository.TempRepositoryUtils;
 import com.gratchev.utils.FileUtils;
 import com.gratchev.utils.PDFBoxTest;
+import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.util.Objects;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 public class PdfPreviewGeneratorTest {
 	private static final Logger LOGGER = LoggerFactory.getLogger(PdfPreviewGeneratorTest.class);
@@ -30,11 +27,12 @@ public class PdfPreviewGeneratorTest {
 		final File tempDir = Files.createTempDirectory("test-pdf-out").toFile();
 		LOGGER.info("Generating previews into:  " +  tempDir.getAbsolutePath());
 		try {
-			final File samplePdfFile = FileUtils.urlToFile(PDFBoxTest.class.getResource(PDFBoxTest.APPLE_PDF));
+			final File samplePdfFile =
+					FileUtils.urlToFile(Objects.requireNonNull(PDFBoxTest.class.getResource(PDFBoxTest.APPLE_PDF)));
 			final AttachmentPreview ap = generator.generatePreviews(samplePdfFile, tempDir);
-			
+
 			assertNotNull(ap);
-			
+
 			assertEquals(6, ap.previews.size());
 			assertEquals(6, ap.thumbnails.size());
 

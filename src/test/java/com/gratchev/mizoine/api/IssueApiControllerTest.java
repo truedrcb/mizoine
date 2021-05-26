@@ -9,18 +9,21 @@ import com.gratchev.mizoine.repository.Repository;
 import com.gratchev.mizoine.repository.Repository.CommentProxy;
 import com.gratchev.mizoine.repository.TempRepositoryUtils.TempRepository;
 import com.gratchev.mizoine.repository.meta.CommentMeta;
+import com.gratchev.utils.PDFBoxTest;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.mock.web.MockMultipartHttpServletRequest;
 
 import java.io.IOException;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Objects;
 
 import static com.gratchev.mizoine.ShortIdGenerator.mizCodeFor;
 import static com.gratchev.mizoine.ShortIdGenerator.mizCodeToInt;
@@ -135,11 +138,32 @@ public class IssueApiControllerTest {
 		});
 	}
 
+	@Test
+	void uploadMultipleAttachments() throws IOException {
+		final MockMultipartHttpServletRequest request = new MockMultipartHttpServletRequest();
+		request.addFile(getPngFile());
+		request.addFile(getPdfFile());
+		final List<String> attachmentIds = controller.uploadAttachment(project, issue.issueNumber, request);
+		final int mizNow = mizCodeToInt(mizCodeFor(ZonedDateTime.now()));
+		assertThat(attachmentIds).hasSize(2).allSatisfy(id -> {
+			assertThat(id).isNotBlank();
+			assertThat(mizCodeToInt(id)).isBetween(mizNow - 1, mizNow + 3);
+		});
+	}
+
 	@NotNull
 	private MockMultipartFile getPngFile() throws IOException {
 		return new MockMultipartFile(
-				"test.png", "original-test.png", "image/png",
-				this.getClass().getResourceAsStream("/com/gratchev/mizoine/Mizoine-logo-transparent.png"));
+				"test.png", "original-test.png", MediaType.IMAGE_PNG_VALUE,
+				Objects.requireNonNull(this.getClass().getResourceAsStream("/com/gratchev/mizoine/Mizoine-logo" +
+						"-transparent.png")));
+	}
+
+	@NotNull
+	private MockMultipartFile getPdfFile() throws IOException {
+		return new MockMultipartFile(
+				"test.pdf", "original-test.pdf", MediaType.APPLICATION_PDF_VALUE,
+				Objects.requireNonNull(PDFBoxTest.class.getResourceAsStream(PDFBoxTest.APPLE_PDF)));
 	}
 
 	private DescriptionResponse updateDescription(final String description) throws IOException {
