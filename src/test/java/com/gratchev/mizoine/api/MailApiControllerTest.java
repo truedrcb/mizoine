@@ -20,7 +20,6 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
-import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.util.FileCopyUtils;
 
 import javax.mail.Address;
@@ -29,6 +28,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.time.ZonedDateTime;
 import java.util.Collections;
 import java.util.Date;
@@ -71,11 +71,10 @@ public class MailApiControllerTest {
 		assertNotNull(issue);
 
 		final ZonedDateTime creationDate = ZonedDateTime.now();
-		attachment = repo.issue(PROJECT, issue.issueNumber).uploadAttachment(new MockMultipartFile(
-						"test.png", "original-test.png", "image/png",
-						MailApiControllerTest.class.getResourceAsStream("/com/gratchev/mizoine/Mizoine-logo" +
-								"-transparent.png")),
-				creationDate);
+		attachment = repo.issue(PROJECT, issue.issueNumber).uploadAttachment("original-test.png", "image/png", 123456,
+				creationDate,
+				dest -> Files.copy(MailApiControllerTest.class.getResourceAsStream("/com/gratchev/mizoine/Mizoine-logo" +
+						"-transparent.png"), dest.toPath()));
 
 		assertNotNull(attachment);
 		assertNotNull(attachment.id);

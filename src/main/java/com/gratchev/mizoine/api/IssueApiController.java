@@ -60,13 +60,14 @@ public class IssueApiController extends BaseDescriptionController {
 			final MultipartFile uploadFile = request.getFile(fileName);
 
 			try {
-				final Attachment attachment = getRepo().issue(project, issueNumber).uploadAttachment(uploadFile,
-						ZonedDateTime.now());
+				final Attachment attachment = getRepo().issue(project, issueNumber).uploadAttachment(uploadFile);
 				uploadedAttachmentIds.add(attachment.id);
-			} catch (IOException e) {
-				LOGGER.error("Upload failed for file: " + fileName + " " + uploadFile, e);
+				final AttachmentProxy proxy = getRepo().attachment(project, issueNumber, attachment.id);
+				proxy.updatePreviewLogErrors();
+				proxy.extractDescriptionLogErrors();
+			} catch (final Exception e) {
+				LOGGER.error("Upload failed for file: {} {}", fileName, uploadFile, e);
 			}
-
 		}
 		return uploadedAttachmentIds;
 	}

@@ -865,6 +865,10 @@ public class Repository {
 		return new ProjectProxy(project);
 	}
 
+	public interface FileSaver {
+		void saveTo(final File attachmentFile) throws Exception;
+	}
+
 	public class IssueProxy extends Proxy<IssueMeta> {
 		final File rootDir;
 		final String project;
@@ -974,28 +978,37 @@ public class Repository {
 
 		/**
 		 * Creates new attachment within the current issue, copies a binary file from provided source to attachment
-		 * folder, generates an appropriate metadata.json, generates preview files (by calling
-		 * {@link AttachmentProxy#updatePreview()}).
+		 * folder, generates an appropriate metadata.json.
 		 *
 		 * @param uploadFile   File to copy
-		 * @param creationDate Creation date to store in metadata.json
 		 * @return DTO with fully expanded attachment info
 		 * @throws IOException At file operations errors
-		 * @deprecated TODO: Decouple dependency to {@link AttachmentProxy}
 		 */
-		@Deprecated
-		public Attachment uploadAttachment(final MultipartFile uploadFile, final ZonedDateTime creationDate) throws IOException {
-			final File attachmentsDir = getAttachmentsDir();
-			checkOrCreateDirectory(attachmentsDir);
-
-			final Attachment attachment = new Attachment();
-
+		public Attachment uploadAttachment(final MultipartFile uploadFile) throws Exception {
 			final AttachmentMeta.UploadMeta uploadMeta = new AttachmentMeta.UploadMeta();
 			uploadMeta.originalFileName = uploadFile.getOriginalFilename();
 			uploadMeta.name = uploadFile.getName();
 			uploadMeta.contentType = uploadFile.getContentType();
 			uploadMeta.size = uploadFile.getSize();
-			LOGGER.debug("Upload: " + uploadMeta);
+			LOGGER.debug("Upload: {}", uploadMeta);
+			return uploadAttachment2(uploadMeta, ZonedDateTime.now(), uploadFile::transferTo);
+		}
+
+		public Attachment uploadAttachment(final String originalFileName, final String contentType, final long size,
+										   final ZonedDateTime creationDate, final FileSaver saverCallback) throws Exception {
+			final AttachmentMeta.UploadMeta uploadMeta = new AttachmentMeta.UploadMeta();
+			uploadMeta.originalFileName = originalFileName;
+			uploadMeta.name = originalFileName;
+			uploadMeta.contentType = contentType;
+			uploadMeta.size = size;
+			LOGGER.debug("Upload: {} {}", uploadMeta, creationDate);
+			return uploadAttachment2(uploadMeta, creationDate, saverCallback);
+		}
+
+		public Attachment uploadAttachment2(final AttachmentMeta.UploadMeta uploadMeta,
+											final ZonedDateTime creationDate, final FileSaver saverCallback) throws Exception {
+			final File attachmentsDir = getAttachmentsDir();
+			checkOrCreateDirectory(attachmentsDir);
 
 			final File attachmentFolder = createAttachmentFolder(attachmentsDir, creationDate);
 			final AttachmentMeta attachmentMeta = new AttachmentMeta();
@@ -1005,6 +1018,7 @@ public class Repository {
 			attachmentMeta.creationDate = Date.from(creationDate.toInstant());
 
 			writeMetaMeta(attachmentFolder, attachmentMeta);
+			final Attachment attachment = new Attachment();
 			attachment.meta = attachmentMeta;
 			attachment.id = attachmentFolder.getName();
 
@@ -1013,19 +1027,7 @@ public class Repository {
 			if (attachmentFile.exists()) {
 				LOGGER.warn("Attachment file already exists: " + attachmentFile.getAbsolutePath());
 			}
-			uploadFile.transferTo(attachmentFile);
-
-			final AttachmentProxy attachmentProxy = attachment(attachmentFolder);
-			try {
-				attachmentProxy.updatePreview();
-			} catch (final IOException e) {
-				LOGGER.error("Update previews failed", e);
-			}
-			try {
-				attachmentProxy.extractDescription();
-			} catch (final IOException e) {
-				LOGGER.error("Description extraction failed", e);
-			}
+			saverCallback.saveTo(attachmentFile);
 			return attachment;
 		}
 
@@ -1271,6 +1273,14 @@ public class Repository {
 			return null;
 		}
 
+		public void extractDescriptionLogErrors() {
+			try {
+				extractDescription();
+			} catch (final IOException e) {
+				LOGGER.error("Extracting description failed in: {}", this.getRoot().getAbsolutePath(), e);
+			}
+		}
+
 		public void extractDescription() throws IOException {
 			final File file = getFirstFile();
 			if (file == null) {
@@ -1285,6 +1295,14 @@ public class Repository {
 			final String markdown = generator.extractMarkdown(file);
 			if (markdown != null && !markdown.isBlank()) {
 				writeDescription(markdown);
+			}
+		}
+
+		public void updatePreviewLogErrors() {
+			try {
+				updatePreview();
+			} catch (final IOException e) {
+				LOGGER.error("Update preview failed in: {}", this.getRoot().getAbsolutePath(), e);
 			}
 		}
 

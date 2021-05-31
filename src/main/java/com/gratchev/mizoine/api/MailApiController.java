@@ -10,20 +10,15 @@ import com.gratchev.utils.ImapUtils;
 import com.gratchev.utils.ImapUtils.MailMessage;
 import com.gratchev.utils.ImapUtils.MailPartDto;
 import org.apache.tomcat.util.codec.binary.Base64;
-import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import javax.mail.Address;
 import javax.mail.Header;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -216,66 +211,9 @@ public class MailApiController extends BaseController {
 
 					LOGGER.info("Importing attachment: " + partDto.fileName + " type: " + partDto.contentType);
 
-
-					final MultipartFile uploadFile = new MultipartFile() {
-
-						@Override
-						public void transferTo(final File dest) throws IOException, IllegalStateException {
-							Files.copy(getInputStream(), dest.toPath());
-						}
-
-						@Override
-						public boolean isEmpty() {
-							return getSize() <= 0;
-						}
-
-						@Override
-						public long getSize() {
-							try {
-								return part.getSize();
-							} catch (final Exception e) {
-								LOGGER.error("getSize", e);
-								return 0;
-							}
-						}
-
-						@Override
-						public String getOriginalFilename() {
-							try {
-								return part.getFileName();
-							} catch (final Exception e) {
-								LOGGER.error("getOriginalFilename", e);
-								return null;
-							}
-						}
-
-						@Override
-						public String getName() {
-							return getOriginalFilename();
-						}
-
-						@Override
-						public @NotNull InputStream getInputStream() throws IOException {
-							try {
-								return part.getInputStream();
-							} catch (Exception e) {
-								throw new IOException(e);
-							}
-						}
-
-						@Override
-						public String getContentType() {
-							return partDto.contentType;
-						}
-
-						@Override
-						public byte @NotNull [] getBytes() throws IOException {
-							throw new IOException("Not implemented");
-						}
-					};
-
-					attachments.add(issue.uploadAttachment(uploadFile, ZonedDateTime.ofInstant(messageDate.toInstant(),
-							ZoneId.systemDefault())));
+					attachments.add(issue.uploadAttachment(part.getFileName(), part.getContentType(), part.getSize(),
+							ZonedDateTime.ofInstant(messageDate.toInstant(), ZoneId.systemDefault()),
+							attachmentFile -> Files.copy(part.getInputStream(), attachmentFile.toPath())));
 				} catch (Exception e) {
 					LOGGER.error("Upload failed for block #: " + counter.counter, e);
 				}

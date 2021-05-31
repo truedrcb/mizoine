@@ -34,12 +34,12 @@ public class AttachmentPreviewTest {
 	}
 
 	@Test
-	void testUpload1() throws IOException {
+	void testUpload1() throws Exception {
 		final IssueProxy issue = repo.issue("ART", "16");
 		issue.createDirs();
 		try (final InputStream pngStream = getPngStream()) {
 			issue.uploadAttachment(new MockMultipartFile("flyer.png", "FlyerBear3web.png", MediaType.IMAGE_PNG_VALUE,
-					pngStream), ZonedDateTime.now());
+					pngStream));
 		}
 	}
 

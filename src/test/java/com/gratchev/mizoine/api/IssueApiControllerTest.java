@@ -57,14 +57,20 @@ public class IssueApiControllerTest {
 		assertNotNull(issue);
 
 		final ZonedDateTime creationDate = ZonedDateTime.now();
-		attachment = repo.issue(project, issue.issueNumber).uploadAttachment(getPngFile(), creationDate);
+		final MockMultipartFile pngFile = getPngFile();
+		attachment = repo.issue(project, issue.issueNumber).uploadAttachment("original-test.png",
+				pngFile.getContentType(), 12345, creationDate, pngFile::transferTo);
+		repo.attachment(project, issue.issueNumber, attachment.id).updatePreview();
 
 		assertNotNull(attachment);
 		assertNotNull(attachment.id);
 		assertNotNull(attachment.meta);
+		assertThat(attachment.meta.fileName).isEqualTo("original-test.png");
 		assertThat(attachment.meta.creationDate).hasYear(creationDate.getYear()).hasMonth(creationDate.getMonthValue())
 				.hasDayOfMonth(creationDate.getDayOfMonth()).hasHourOfDay(creationDate.getHour())
 				.hasMinute(creationDate.getMinute()).hasSecond(creationDate.getSecond());
+		assertNotNull(attachment.meta.upload);
+		assertThat(attachment.meta.upload.size).isEqualTo(12345);
 
 		LOGGER.info("Attachment uploaded: " + attachment);
 	}
