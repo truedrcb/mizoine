@@ -16,6 +16,7 @@ import com.gratchev.mizoine.preview.PdfPreviewGenerator;
 import com.gratchev.mizoine.preview.SvgPreviewGenerator;
 import com.gratchev.mizoine.repository.Attachment.FileInfo;
 import com.gratchev.mizoine.repository.meta.*;
+import com.gratchev.utils.FileNameDateParser;
 import com.gratchev.utils.FileUtils;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -28,6 +29,8 @@ import java.io.IOException;
 import java.io.Writer;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Files;
+import java.text.ParseException;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.function.Supplier;
@@ -156,6 +159,10 @@ public class Repository {
 
 	public File getRoot() {
 		return new File(rootPath);
+	}
+
+	public File getMetaFile() {
+		return new File(rootPath, META_JSON_FILENAME);
 	}
 
 	public File getRootMizoineDir() {
@@ -427,6 +434,23 @@ public class Repository {
 
 	public RepositoryMeta readRepositoryMeta() {
 		return readMeta(getRoot(), RepositoryMeta.class);
+	}
+
+	public Date extractDateFromFilename(final String fileName) {
+		final RepositoryMeta meta = readRepositoryMeta();
+		if (meta == null || meta.uploadFilenameDateTemplates == null || meta.uploadFilenameDateTemplates.size() < 1) {
+			return null;
+		}
+		final FileNameDateParser parser = new FileNameDateParser();
+		for (final String template : meta.uploadFilenameDateTemplates) {
+			parser.addTemplate(template);
+		}
+		try {
+			return parser.parse(fileName);
+		} catch (final ParseException e) {
+			LOGGER.error("Unable to extract date from file name: {}", fileName, e);
+			return null;
+		}
 	}
 
 	public Project readProjectInfo(final String project) {
@@ -991,7 +1015,9 @@ public class Repository {
 			uploadMeta.contentType = uploadFile.getContentType();
 			uploadMeta.size = uploadFile.getSize();
 			LOGGER.debug("Upload: {}", uploadMeta);
-			return uploadAttachment2(uploadMeta, ZonedDateTime.now(), uploadFile::transferTo);
+			final Date fileNameDate = extractDateFromFilename(uploadMeta.originalFileName);
+			return uploadAttachment2(uploadMeta, (fileNameDate == null) ? ZonedDateTime.now() :
+					ZonedDateTime.ofInstant(fileNameDate.toInstant(), ZoneId.systemDefault()), uploadFile::transferTo);
 		}
 
 		public Attachment uploadAttachment(final String originalFileName, final String contentType, final long size,

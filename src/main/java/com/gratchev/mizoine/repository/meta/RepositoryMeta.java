@@ -1,5 +1,6 @@
 package com.gratchev.mizoine.repository.meta;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -24,6 +25,7 @@ public class RepositoryMeta extends BaseMeta {
 	public Map<String, TagMeta> tags;
 	public Map<String, TagMeta> statuses;
 	public Map<String, ProjectMeta> projects;
+	public List<String> uploadFilenameDateTemplates;
 
 	@Override
 	public String toString() {
