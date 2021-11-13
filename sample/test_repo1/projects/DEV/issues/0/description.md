@@ -7,6 +7,7 @@
 * Markdown syntax (https://daringfireball.net/projects/markdown/syntax)
   * See also images/links syntax https://meta.stackexchange.com/questions/2133/whats-the-recommended-syntax-for-an-image-with-a-link
 * JSON metadata
+* API similar to OData
 
 # Simplified directory structure
 
