@@ -1,21 +1,8 @@
 package com.gratchev.mizoine.api;
 
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestBuilders.formLogin;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
-import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.authenticated;
-import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.unauthenticated;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrlPattern;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gratchev.mizoine.repository2.Configuration.RepositoryDto;
+import com.gratchev.mizoine.repository2.file.ConfigurationImpl.ConfigurationDto;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -29,22 +16,45 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultHandler;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Map;
 
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT, properties = { "users.amadeus.password=god" })
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestBuilders.formLogin;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.authenticated;
+import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.unauthenticated;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT, properties = {"users.amadeus.password=god"})
 @AutoConfigureMockMvc
 public class RestTest {
 	private static final Logger log = LoggerFactory.getLogger(RestTest.class);
-	private static Path configFile; 
+	public static final String REPO_ID1 = "test1";
+	public static final String REPO_ID2 = "test2";
+	private static Path configFile;
 
 	@Autowired
 	private MockMvc mvc;
-	
+
 	@BeforeAll
 	static void setup() throws IOException {
 		final String repoDir1 = Files.createTempDirectory("miz-test-repos").toAbsolutePath().toString();
 		final String repoDir2 = Files.createTempDirectory("miz-test-repos").toAbsolutePath().toString();
 		configFile = Files.createTempFile("miz-test-config", ".json").toAbsolutePath();
+		final ConfigurationDto config = new ConfigurationDto();
+		config.repositories = Map.of(
+				REPO_ID1, new RepositoryDto(repoDir1),
+				REPO_ID2, new RepositoryDto(repoDir2)
+		);
+		try (FileOutputStream f = new FileOutputStream(configFile.toFile())) {
+			new ObjectMapper().writeValue(f, config);
+		}
 	}
 
 	@DynamicPropertySource
@@ -92,18 +102,24 @@ public class RestTest {
 		mvc.perform(get("/api2/app").with(user("hacker"))).andDo(prettyPrintJson()).andExpect(status().isOk());
 	}
 
-	@Test
-	void api2repos() throws Exception {
-		mvc.perform(get("/api2/repositories").with(user("hacker"))).andDo(prettyPrintJson()).andExpect(status().isOk());
-	}
-
 	public static ResultHandler prettyPrintJson() {
 		return r -> {
 			log.info("Status: {}", r.getResponse().getStatus());
-			final ObjectMapper mapper = new ObjectMapper();
-			final Object jsonObject = mapper.readValue(r.getResponse().getContentAsString(), Object.class);
-			final String prettyJson = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(jsonObject);
-			log.info("Body: {}", prettyJson);
+			final String contentAsString = r.getResponse().getContentAsString();
+			try {
+				final ObjectMapper mapper = new ObjectMapper();
+				final Object jsonObject = mapper.readValue(contentAsString, Object.class);
+				final String prettyJson = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(jsonObject);
+				log.info("Body: {}", prettyJson);
+			} catch (Exception e) {
+				log.error("Cannot pretty-print body: \"" + contentAsString + "\"", e);
+			}
 		};
+	}
+
+	@Test
+	void api2repos() throws Exception {
+		mvc.perform(get("/api2/repositories").with(user("hacker"))).andDo(prettyPrintJson()).andExpect(status().isOk())
+				.andExpect(content().json("[{id:'" + REPO_ID1 + "'}, {id:'" + REPO_ID2 + "'}]"));
 	}
 }

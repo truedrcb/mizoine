@@ -18,8 +18,9 @@ public class ConfigurationImpl implements Configuration {
 	
 	private final ConfigurationDto configuration;
 
-	public ConfigurationImpl(final InputStream resourceAsStream) throws JsonParseException, JsonMappingException, IOException {
+	public ConfigurationImpl(final InputStream resourceAsStream) throws IOException {
 		configuration = new ObjectMapper().readValue(resourceAsStream, ConfigurationDto.class);
+		configuration.repositories.forEach((k, v) -> v.id = k);
 	}
 
 	@Override

@@ -1,7 +1,13 @@
 package com.gratchev.mizoine.api2;
 
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.Collection;
 import java.util.List;
 
+import com.gratchev.mizoine.repository2.Configuration;
+import com.gratchev.mizoine.repository2.file.ConfigurationImpl;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,6 +23,7 @@ import io.swagger.v3.oas.annotations.Operation;
 @RequestMapping("/api2")
 public class CommonApi2Controller {
 	private static final Logger log = LoggerFactory.getLogger(CommonApi2Controller.class);
+	private Configuration configuration;
 
 	@Value("${config:mizoine-config.json}")
 	protected String configPath;
@@ -46,6 +53,21 @@ public class CommonApi2Controller {
 		public String projectId;
 		
 		public List<DescriptionDto> texts;
+	}
+
+	@Operation(summary = "Retrieve repositories list")
+	@GetMapping("/repositories")
+	@ResponseBody
+	public Collection<Configuration.RepositoryDto> getRepositories() throws IOException {
+		return getConfiguration().getRepositories().values();
+	}
+
+	@NotNull
+	private Configuration getConfiguration() throws IOException {
+		if (configuration == null) {
+			configuration = new ConfigurationImpl(new FileInputStream(configPath));
+		}
+		return configuration;
 	}
 
 	@Operation(summary = "Retrieve projects list")

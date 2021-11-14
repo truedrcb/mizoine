@@ -4,9 +4,16 @@ import java.util.Map;
 
 public interface Configuration {
 
-	public static class RepositoryDto {
-		public String name;
+	class RepositoryDto {
+		public String id;
 		public String home;
+		
+		public RepositoryDto() {
+		}
+
+		public RepositoryDto(final String home) {
+			this.home = home;
+		}
 	}
 
 	Map<String, RepositoryDto> getRepositories();
