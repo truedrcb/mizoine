@@ -1,8 +1,25 @@
 package com.gratchev.mizoine.api;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gratchev.mizoine.repository2.Configuration.RepositoryDto;
-import com.gratchev.mizoine.repository2.file.ConfigurationImpl.ConfigurationDto;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestBuilders.formLogin;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.authenticated;
+import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.unauthenticated;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrlPattern;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Map;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -11,25 +28,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultHandler;
 
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Map;
-
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestBuilders.formLogin;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
-import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.authenticated;
-import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.unauthenticated;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gratchev.mizoine.repository2.Configuration.RepositoryDto;
+import com.gratchev.mizoine.repository2.file.ConfigurationImpl.ConfigurationDto;
 
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT, properties = {"users.amadeus.password=god"})
 @AutoConfigureMockMvc
@@ -41,16 +48,18 @@ public class RestTest {
 
 	@Autowired
 	private MockMvc mvc;
+	private static Path repoDir1;
+	private static Path repoDir2;
 
 	@BeforeAll
 	static void setup() throws IOException {
-		final String repoDir1 = Files.createTempDirectory("miz-test-repos").toAbsolutePath().toString();
-		final String repoDir2 = Files.createTempDirectory("miz-test-repos").toAbsolutePath().toString();
+		repoDir1 = Files.createTempDirectory("miz-test-repos").toAbsolutePath();
+		repoDir2 = Files.createTempDirectory("miz-test-repos").toAbsolutePath();
 		configFile = Files.createTempFile("miz-test-config", ".json").toAbsolutePath();
 		final ConfigurationDto config = new ConfigurationDto();
 		config.repositories = Map.of(
-				REPO_ID1, new RepositoryDto(repoDir1),
-				REPO_ID2, new RepositoryDto(repoDir2)
+				REPO_ID1, new RepositoryDto(repoDir1.toString()),
+				REPO_ID2, new RepositoryDto(repoDir2.toString())
 		);
 		try (FileOutputStream f = new FileOutputStream(configFile.toFile())) {
 			new ObjectMapper().writeValue(f, config);
@@ -120,6 +129,20 @@ public class RestTest {
 	@Test
 	void api2repos() throws Exception {
 		mvc.perform(get("/api2/repositories").with(user("hacker"))).andDo(prettyPrintJson()).andExpect(status().isOk())
+				.andExpect(content().json("[{id:'" + REPO_ID1 + "'}, {id:'" + REPO_ID2 + "'}]"));
+	}
+
+	@Test
+	void api2reposWriteMeta() throws Exception {
+		mvc.perform(put("/api2/repositories('" + REPO_ID1 + "')/meta").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"title\":\"First repo\"}").with(csrf()).with(user("hacker"))).andDo(prettyPrintJson())
+				.andExpect(status().isAccepted());
+		
+	}
+
+	@Test
+	void api2reposExpandMeta() throws Exception {
+		mvc.perform(get("/api2/repositories?$expand=meta").with(user("hacker"))).andDo(prettyPrintJson()).andExpect(status().isOk())
 				.andExpect(content().json("[{id:'" + REPO_ID1 + "'}, {id:'" + REPO_ID2 + "'}]"));
 	}
 }
