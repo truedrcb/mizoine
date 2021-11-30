@@ -16,6 +16,7 @@ import com.gratchev.mizoine.preview.PdfPreviewGenerator;
 import com.gratchev.mizoine.preview.SvgPreviewGenerator;
 import com.gratchev.mizoine.repository.Attachment.FileInfo;
 import com.gratchev.mizoine.repository.meta.*;
+import com.gratchev.mizoine.repository2.file.RepositoryConstants;
 import com.gratchev.utils.FileNameDateParser;
 import com.gratchev.utils.FileUtils;
 import org.jetbrains.annotations.NotNull;
@@ -66,7 +67,7 @@ public class Repository {
 
 	public static final String DESCRIPTION_MD_FILENAME = "description.md";
 
-	public static final String META_JSON_FILENAME = "meta.json";
+	public static final String META_JSON_FILENAME = RepositoryConstants.META_JSON_FILENAME;
 
 	public static final String ATTACHMENT_COPY_FILENAME_WO_EXT = "original";
 

@@ -2,6 +2,7 @@ package com.gratchev.mizoine.api2;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
 
@@ -18,9 +19,11 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.gratchev.mizoine.repository2.Configuration;
 import com.gratchev.mizoine.repository2.dto.RepositoryDto;
+import com.gratchev.mizoine.repository2.file.AdministratorImpl;
 import com.gratchev.mizoine.repository2.file.ConfigurationImpl;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -76,10 +79,26 @@ public class CommonApi2Controller {
 		return configuration;
 	}
 
+	@Operation(summary = "Re-read configuration")
+	@PutMapping("/updateConfig")
+	public ResponseEntity<String> updateConfiguration() {
+		configuration = null;
+		return ResponseEntity.status(HttpStatus.ACCEPTED).body("Config will be read: " + configPath);
+	}
+
 	@Operation(summary = "Update the repository metadata")
-	@PutMapping("/repositories({repositoryId})/meta")
-	public ResponseEntity<RepositoryDto> updateRepositoryMeta(@PathVariable final String repositoryId, @RequestBody final RepositoryDto meta) {
-		return ResponseEntity.status(HttpStatus.ACCEPTED).body(meta);
+	@PutMapping("/repositories('{repositoryId}')/meta")
+	public ResponseEntity<RepositoryDto> updateRepositoryMeta(@PathVariable final String repositoryId, @RequestBody final String metadata) throws IOException {
+		return ResponseEntity.status(HttpStatus.ACCEPTED).body(
+				getAdministrator(repositoryId).updateRepositoryMeta(metadata));
+	}
+
+	private AdministratorImpl getAdministrator(final String repositoryId) throws IOException {
+		final Configuration.RepositoryDto repositoryDto = getConfiguration().getRepositories().get(repositoryId);
+		if (repositoryDto == null) {
+			throw new ResponseStatusException(HttpStatus.NOT_FOUND, repositoryId);
+		}
+		return new AdministratorImpl(Path.of(repositoryDto.home));
 	}
 
 	@Operation(summary = "Retrieve projects list")

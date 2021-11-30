@@ -1,6 +1,8 @@
 package com.gratchev.mizoine.repository2.file;
 
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -9,8 +11,10 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gratchev.mizoine.repository2.Administrator;
 import com.gratchev.mizoine.repository2.dto.ProjectDto;
+import com.gratchev.mizoine.repository2.dto.RepositoryDto;
 
 
 /**
@@ -28,6 +32,14 @@ public class AdministratorImpl implements Administrator {
 
 	public Path getRootPath() {
 		return rootPath;
+	}
+
+	public RepositoryDto updateRepositoryMeta(final String metadata) throws IOException {
+		final RepositoryDto parsedMeta = new ObjectMapper().readValue(metadata, RepositoryDto.class);
+		try (FileOutputStream f = new FileOutputStream(rootPath.resolve(RepositoryConstants.META_JSON_FILENAME).toFile())) {
+			f.write(metadata.getBytes(StandardCharsets.UTF_8));
+		}
+		return parsedMeta;
 	}
 
 	@Override

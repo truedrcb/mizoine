@@ -1,5 +1,6 @@
 package com.gratchev.mizoine.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestBuilders.formLogin;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -14,13 +15,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrlPattern;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,9 +38,13 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultHandler;
 
+import com.fasterxml.jackson.core.JsonGenerationException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gratchev.mizoine.repository.TempRepositoryUtils;
 import com.gratchev.mizoine.repository2.Configuration.RepositoryDto;
 import com.gratchev.mizoine.repository2.file.ConfigurationImpl.ConfigurationDto;
+import com.gratchev.mizoine.repository2.file.RepositoryConstants;
 
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT, properties = {"users.amadeus.password=god"})
 @AutoConfigureMockMvc
@@ -53,9 +61,36 @@ public class RestTest {
 
 	@BeforeAll
 	static void setup() throws IOException {
+		configFile = Files.createTempFile("miz-test-config", ".json").toAbsolutePath();
+	}
+	
+	@BeforeEach
+	void setupTest() throws Exception {
+		newTempConfiguration();
+		mvc.perform(put("/api2/updateConfig").with(csrf()).with(user("hacker"))).andExpect(status().isAccepted());
+	}
+
+	@AfterEach
+	void disposeTest() {
+		log.info("Disposing {} : {}", REPO_ID1, repoDir1);
+		disposeRepository(repoDir1);
+		log.info("Disposing {} : {}", REPO_ID2, repoDir2);
+		disposeRepository(repoDir2);
+	}
+
+	private void disposeRepository(Path path) {
+		TempRepositoryUtils.printDirectory(path.toFile());
+		try {
+			TempRepositoryUtils.removeDirectory(path.toFile());
+		} catch (IOException e) {
+			log.error("Failed to remove {}", repoDir1, e);
+		}
+	}
+
+	private static void newTempConfiguration()
+			throws IOException, JsonGenerationException, JsonMappingException, FileNotFoundException {
 		repoDir1 = Files.createTempDirectory("miz-test-repos").toAbsolutePath();
 		repoDir2 = Files.createTempDirectory("miz-test-repos").toAbsolutePath();
-		configFile = Files.createTempFile("miz-test-config", ".json").toAbsolutePath();
 		final ConfigurationDto config = new ConfigurationDto();
 		config.repositories = Map.of(
 				REPO_ID1, new RepositoryDto(repoDir1.toString()),
@@ -134,10 +169,11 @@ public class RestTest {
 
 	@Test
 	void api2reposWriteMeta() throws Exception {
+		final String metadata = "{\"title\":\"First repo\"}";
 		mvc.perform(put("/api2/repositories('" + REPO_ID1 + "')/meta").contentType(MediaType.APPLICATION_JSON)
-				.content("{\"title\":\"First repo\"}").with(csrf()).with(user("hacker"))).andDo(prettyPrintJson())
+				.content(metadata).with(csrf()).with(user("hacker"))).andDo(prettyPrintJson())
 				.andExpect(status().isAccepted());
-		
+		assertThat(repoDir1.resolve(Path.of(RepositoryConstants.META_JSON_FILENAME))).hasContent(metadata);
 	}
 
 	@Test
