@@ -1,6 +1,7 @@
 package com.gratchev.mizoine.api;
 
 import com.gratchev.mizoine.ImapComponent;
+import com.gratchev.mizoine.SignedInUser;
 import com.gratchev.mizoine.mail.Message;
 import com.gratchev.mizoine.repository.Attachment;
 import com.gratchev.mizoine.repository.Repository;
@@ -19,6 +20,8 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.mail.Address;
 import javax.mail.Header;
+
+import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -152,112 +155,115 @@ public class MailApiController extends BaseController {
 	@PostMapping("import-to-issue")
 	@ResponseBody
 	public String importMailToIssue(final String uri, final String commentPartId, final String project,
-									final String issueNumber) throws Exception {
+			final String issueNumber) throws Exception {
 		final String messageId = decodeUri(uri);
 
-		LOGGER.info("Importing mail with ID: " + messageId + " (" + commentPartId + ") to issue " + project + "-" + issueNumber);
+		LOGGER.info("Importing mail with ID: " + messageId + " (" + commentPartId + ") to issue " + project + "-"
+				+ issueNumber);
+		return imap.readMessage(messageId,
+				message -> createCommentFromMessage(getRepo(), currentUser, messageId, message, project, issueNumber, commentPartId));
+	}
 
-		return imap.readMessage(messageId, message -> {
-			final Repository repo = getRepo();
-			final Date messageDate = getMessageDate(message);
+	static String createCommentFromMessage(final Repository repo, final SignedInUser currentUser, final String messageId,
+										   final Message message, final String project, final String issueNumber,
+										   final String commentPartId) throws Exception {
+		final Date messageDate = getMessageDate(message);
 
-			final IssueProxy issue = repo.issue(project, issueNumber);
-			final String commentId = issue.newCommentId(ZonedDateTime.ofInstant(messageDate.toInstant(),
-					ZoneId.systemDefault()));
-			final CommentProxy comment = repo.comment(project, issueNumber, commentId);
-			comment.createDirs();
-			comment.updateMeta((meta) -> {
-				meta.creationDate = messageDate;
-				meta.title = message.getSubject();
-				meta.messageId = messageId;
-				final Address[] from = message.getFrom();
-				if (from != null && from.length > 0) {
-					meta.creator = from[0].toString();
-				} else {
-					meta.creator = currentUser.getName();
-				}
-				meta.messageHeaders = new TreeMap<>();
-				final Enumeration<Header> allHeaders = message.getAllHeaders();
-				if (allHeaders != null) {
-					while (allHeaders.hasMoreElements()) {
-						final Header header = allHeaders.nextElement();
-						meta.messageHeaders.put(header.getName(), header.getValue());
-					}
-				}
-			}, currentUser);
-			final List<Attachment> attachments = new ArrayList<>();
-
-			final PartCounter counter = new PartCounter();
-			final Map<String, MailPartDto> contentParts = new TreeMap<>();
-
-			message.getParts().forEach(part -> {
-				final String partId = counter.nextId();
-
-				try {
-					final MailPartDto partDto = ImapUtils.extractMailBlock(part);
-
-					if (partDto.content != null) {
-						contentParts.put(partId, partDto);
-						final String fileName = partId + (partDto.contentSubType.toLowerCase().contains("html") ? ".html" :
-								".txt");
-						LOGGER.info("Saving mail text to: " + fileName);
-						comment.writeFile(fileName, partDto.content);
-						return;
-					}
-
-					if (partDto.fileName == null) {
-						return;
-					}
-
-					LOGGER.info("Importing attachment: " + partDto.fileName + " type: " + partDto.contentType);
-
-					attachments.add(issue.uploadAttachment(part.getFileName(), part.getContentType(), part.getSize(),
-							ZonedDateTime.ofInstant(messageDate.toInstant(), ZoneId.systemDefault()),
-							attachmentFile -> Files.copy(part.getInputStream(), attachmentFile.toPath())));
-				} catch (Exception e) {
-					LOGGER.error("Upload failed for block #: " + counter.counter, e);
-				}
-
-			});
-
-			// Write description
-			final StringBuilder sb = new StringBuilder();
-			final List<MailPartDto> blocksToAdd = new ArrayList<>();
-
-
-			if (commentPartId != null && contentParts.containsKey(commentPartId)) {
-				blocksToAdd.add(contentParts.get(commentPartId));
+		final IssueProxy issue = repo.issue(project, issueNumber);
+		final String commentId = issue.newCommentId(ZonedDateTime.ofInstant(messageDate.toInstant(),
+				ZoneId.systemDefault()));
+		final CommentProxy comment = repo.comment(project, issueNumber, commentId);
+		comment.createDirs();
+		comment.updateMeta((meta) -> {
+			meta.creationDate = messageDate;
+			meta.title = message.getSubject();
+			meta.messageId = messageId;
+			final Address[] from = message.getFrom();
+			if (from != null && from.length > 0) {
+				meta.creator = from[0].toString();
 			} else {
-				blocksToAdd.addAll(contentParts.values());
+				meta.creator = currentUser.getName();
 			}
-
-			int i = 0;
-			for (final MailPartDto block : blocksToAdd) {
-				if (block.markdown != null && !block.markdown.isBlank()) {
-					if (i > 0) {
-						sb.append("\n\n---\n\n");
-					}
-					sb.append(block.markdown);
-					i++;
+			meta.messageHeaders = new TreeMap<>();
+			final Enumeration<Header> allHeaders = message.getAllHeaders();
+			if (allHeaders != null) {
+				while (allHeaders.hasMoreElements()) {
+					final Header header = allHeaders.nextElement();
+					meta.messageHeaders.put(header.getName(), header.getValue());
 				}
 			}
+		}, currentUser);
+		final List<Attachment> attachments = new ArrayList<>();
 
-			if (attachments.size() > 0) {
-				sb.append("\n\n---\n\n");
+		final PartCounter counter = new PartCounter();
+		final Map<String, MailPartDto> contentParts = new TreeMap<>();
 
-				for (Attachment a : attachments) {
-					sb.append("- [");
-					sb.append(a.meta.fileName);
-					sb.append("](attachment-");
-					sb.append(a.id);
-					sb.append(")\n");
+		message.getParts().forEach(part -> {
+			final String partId = counter.nextId();
+
+			try {
+				final MailPartDto partDto = ImapUtils.extractMailBlock(part);
+
+				if (partDto.content != null) {
+					contentParts.put(partId, partDto);
+					final String fileName = partId + (partDto.contentSubType.toLowerCase().contains("html") ? ".html" :
+							".txt");
+					LOGGER.info("Saving mail text to: " + fileName);
+					comment.writeFile(fileName, partDto.content);
+					return;
 				}
+
+				if (partDto.fileName == null) {
+					return;
+				}
+
+				LOGGER.info("Importing attachment: " + partDto.fileName + " type: " + partDto.contentType);
+
+				attachments.add(issue.uploadAttachment(part.getFileName(), part.getContentType(), part.getSize(),
+						ZonedDateTime.ofInstant(messageDate.toInstant(), ZoneId.systemDefault()),
+						attachmentFile -> Files.copy(part.getInputStream(), attachmentFile.toPath())));
+			} catch (Exception e) {
+				LOGGER.error("Upload failed for block #: " + counter.counter, e);
 			}
 
-			comment.writeDescription(sb.toString());
-
-			return commentId;
 		});
+
+		// Write description
+		final StringBuilder sb = new StringBuilder();
+		final List<MailPartDto> blocksToAdd = new ArrayList<>();
+
+
+		if (commentPartId != null && contentParts.containsKey(commentPartId)) {
+			blocksToAdd.add(contentParts.get(commentPartId));
+		} else {
+			blocksToAdd.addAll(contentParts.values());
+		}
+
+		int i = 0;
+		for (final MailPartDto block : blocksToAdd) {
+			if (block.markdown != null && !block.markdown.isBlank()) {
+				if (i > 0) {
+					sb.append("\n\n---\n\n");
+				}
+				sb.append(block.markdown);
+				i++;
+			}
+		}
+
+		if (attachments.size() > 0) {
+			sb.append("\n\n---\n\n");
+
+			for (Attachment a : attachments) {
+				sb.append("- [");
+				sb.append(a.meta.fileName);
+				sb.append("](attachment-");
+				sb.append(a.id);
+				sb.append(")\n");
+			}
+		}
+
+		comment.writeDescription(sb.toString());
+		return commentId;
 	}
 
 	private static class PartCounter {

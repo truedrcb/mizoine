@@ -2,6 +2,7 @@ package com.gratchev.mizoine.api;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.gratchev.mizoine.mail.impl.MessageImpl;
 import com.gratchev.mizoine.repository.Attachment;
 import com.gratchev.mizoine.repository.Issue;
 import com.gratchev.mizoine.repository.Repository;
@@ -22,13 +23,13 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.multipart.MultipartHttpServletRequest;
 
+import javax.mail.MessagingException;
+import javax.mail.Session;
+import javax.mail.internet.MimeMessage;
 import java.io.File;
 import java.io.IOException;
 import java.time.ZonedDateTime;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.gratchev.mizoine.FlexmarkUtils.generateMarkdownFooterRefs;
@@ -38,35 +39,45 @@ import static com.gratchev.mizoine.api.AttachmentApiController.getPageBaseUri;
 @EnableAutoConfiguration
 @RequestMapping("/api/issue/{project}-{issueNumber}")
 public class IssueApiController extends BaseDescriptionController {
-	private static final Logger LOGGER = LoggerFactory.getLogger(IssueApiController.class);
+	private static final Logger log = LoggerFactory.getLogger(IssueApiController.class);
 
 	@PostMapping("upload")
 	@ResponseBody
 	public List<String> uploadAttachment(@PathVariable final String project,
 										 @PathVariable final String issueNumber,
-										 final MultipartHttpServletRequest request) {
+										 final MultipartHttpServletRequest request)
+			throws IOException {
 		//LOGGER.debug(request.getParameterMap().toString());
-		if (LOGGER.isDebugEnabled()) {
-			LOGGER.debug("Upload attachment(s) for: " + project + "-" + issueNumber);
+		if (log.isDebugEnabled()) {
+			log.debug("Upload attachment(s) for: " + project + "-" + issueNumber);
 		}
 
 		final List<String> uploadedAttachmentIds = new ArrayList<>();
 
 		for (final Iterator<String> iterator = request.getFileNames(); iterator.hasNext(); ) {
-			final String fileName = iterator.next();
+			final String fileShortName = iterator.next();
 
-			LOGGER.debug("File: " + fileName);
+			log.debug("File: {}", fileShortName);
 
-			final MultipartFile uploadFile = request.getFile(fileName);
+			final MultipartFile uploadFile = request.getFile(fileShortName);
+			final String originalFilename = uploadFile.getOriginalFilename();
+			log.debug("Original filename: {}", originalFilename);
 
 			try {
-				final Attachment attachment = getRepo().issue(project, issueNumber).uploadAttachment(uploadFile);
-				uploadedAttachmentIds.add(attachment.id);
-				final AttachmentProxy proxy = getRepo().attachment(project, issueNumber, attachment.id);
-				proxy.updatePreviewLogErrors();
-				proxy.extractDescriptionLogErrors();
+				if (originalFilename.toLowerCase(Locale.ROOT).endsWith(".eml")) {
+					final MimeMessage message = new MimeMessage(Session.getDefaultInstance(new Properties()),
+							uploadFile.getInputStream());
+					uploadedAttachmentIds.add(MailApiController.createCommentFromMessage(getRepo(), currentUser, "",
+							new MessageImpl(message), project, issueNumber, null));
+				} else {
+						final Attachment attachment = getRepo().issue(project, issueNumber).uploadAttachment(uploadFile);
+						uploadedAttachmentIds.add(attachment.id);
+						final AttachmentProxy proxy = getRepo().attachment(project, issueNumber, attachment.id);
+						proxy.updatePreviewLogErrors();
+						proxy.extractDescriptionLogErrors();
+				}
 			} catch (final Exception e) {
-				LOGGER.error("Upload failed for file: {} {}", fileName, uploadFile, e);
+				log.error("Upload failed for file: {} {}", fileShortName, uploadFile, e);
 			}
 		}
 		return uploadedAttachmentIds;
@@ -76,8 +87,8 @@ public class IssueApiController extends BaseDescriptionController {
 	@ResponseBody
 	public DescriptionResponse updateDescription(@PathVariable final String project, 
 			@PathVariable final String issueNumber, final String description) throws IOException {
-		LOGGER.debug("Update description for: " + project + "-" + issueNumber);
-		LOGGER.debug(description);
+		log.debug("Update description for: " + project + "-" + issueNumber);
+		log.debug(description);
 		final Repository repo = getRepo();
 		final File descriptionFile = repo.issue(project, issueNumber).getDescriptionFile();
 		FileUtils.overwriteTextFile(description, descriptionFile);
@@ -91,7 +102,7 @@ public class IssueApiController extends BaseDescriptionController {
 	@ResponseBody
 	public DescriptionResponse getDescription(@PathVariable final String project, 
 			@PathVariable final String issueNumber) throws IOException {
-		LOGGER.debug("Get description for: " + project + "-" + issueNumber);
+		log.debug("Get description for: " + project + "-" + issueNumber);
 
 		final Repository repo = getRepo();
 		final File descriptionFile = repo.issue(project, issueNumber).getDescriptionFile();
@@ -122,8 +133,8 @@ public class IssueApiController extends BaseDescriptionController {
 	@ResponseBody
 	public IssueInfo getInfo(@PathVariable final String project, @PathVariable final String issueNumber)
 			throws IOException {
-		if (LOGGER.isDebugEnabled()) {
-			LOGGER.debug("Reading project: " + project + " issue: " + issueNumber);
+		if (log.isDebugEnabled()) {
+			log.debug("Reading project: " + project + " issue: " + issueNumber);
 		}
 
 		final IssueInfo info = new IssueInfo();

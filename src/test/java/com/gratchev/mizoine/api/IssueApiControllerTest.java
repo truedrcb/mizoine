@@ -3,6 +3,7 @@ package com.gratchev.mizoine.api;
 import com.gratchev.mizoine.FlexmarkComponent;
 import com.gratchev.mizoine.SignedInUserComponentMock;
 import com.gratchev.mizoine.api.BaseDescriptionController.DescriptionResponse;
+import com.gratchev.mizoine.mail.impl.EmlReadTest;
 import com.gratchev.mizoine.repository.Attachment;
 import com.gratchev.mizoine.repository.Issue;
 import com.gratchev.mizoine.repository.Repository;
@@ -22,9 +23,11 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.mock.web.MockMultipartHttpServletRequest;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.Date;
 import java.util.List;
@@ -37,15 +40,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class IssueApiControllerTest {
-	private static final Logger LOGGER = LoggerFactory.getLogger(IssueApiController.class);
+	private static final Logger log = LoggerFactory.getLogger(IssueApiController.class);
+	public static final String EXTRACTED_PDF_ATTACHMENT_FILENAME = "scan_2021-12-07_20-46.pdf";
 	final String project = "TEST";
 	TempRepository repo;
 	IssueApiController controller;
 	Issue issue;
 	Attachment attachment;
+	int fileShortNameCounter;
 
 	@BeforeEach
 	void setUp() throws Exception {
+		fileShortNameCounter = 0;
 		repo = TempRepository.create();
 
 		controller = new IssueApiController() {
@@ -77,7 +83,7 @@ public class IssueApiControllerTest {
 		assertNotNull(attachment.meta.upload);
 		assertThat(attachment.meta.upload.size).isEqualTo(12345);
 
-		LOGGER.info("Attachment uploaded: " + attachment);
+		log.info("Attachment uploaded: " + attachment);
 	}
 
 	@AfterEach
@@ -150,6 +156,20 @@ public class IssueApiControllerTest {
 	}
 
 	@Test
+	void uploadSimplePdfAttachment() throws IOException {
+		final MockMultipartHttpServletRequest request = new MockMultipartHttpServletRequest();
+		request.addFile(getPdfFile(EXTRACTED_PDF_ATTACHMENT_FILENAME, EmlReadTest.class.getResourceAsStream(EXTRACTED_PDF_ATTACHMENT_FILENAME)));
+		final List<String> attachmentIds = controller.uploadAttachment(project, issue.issueNumber, request);
+		final int mizNow = mizCodeToInt(mizCodeFor(ZonedDateTime.now()));
+		assertThat(attachmentIds).hasSize(1).allSatisfy(id -> {
+			assertThat(id).isNotBlank();
+			assertThat(mizCodeToInt(id)).isBetween(mizNow - 1, mizNow + 1);
+		});
+		assertThat(repo.attachment(project, issue.issueNumber, attachmentIds.get(0)).readDescription())
+				.contains("Bitte beachten");
+	}
+
+	@Test
 	void uploadMultipleAttachments() throws IOException {
 		final MockMultipartHttpServletRequest request = new MockMultipartHttpServletRequest();
 		request.addFile(getJpgFile());
@@ -160,7 +180,29 @@ public class IssueApiControllerTest {
 		assertThat(attachmentIds).hasSize(3).allSatisfy(id -> {
 			assertThat(id).isNotBlank();
 			assertThat(mizCodeToInt(id)).isBetween(mizNow - 1, mizNow + 3);
+			assertThat(repo.attachment(project, issue.issueNumber, id).readMeta()).isNotNull();
 		});
+	}
+
+	@Test
+	void uploadEmlFileAsComment() throws IOException {
+		final MockMultipartHttpServletRequest request = new MockMultipartHttpServletRequest();
+		request.addFile(getEmlFile());
+		final List<String> commentIds = controller.uploadAttachment(project, issue.issueNumber, request);
+		final int miz = mizCodeToInt(mizCodeFor(ZonedDateTime.ofInstant(EmlReadTest.EML_SENT_DATE, ZoneOffset.UTC)));
+		assertThat(commentIds).hasSize(1).allSatisfy(id -> {
+			assertThat(id).isNotBlank();
+			assertThat(mizCodeToInt(id)).isBetween(miz - 1, miz + 3);
+		});
+		assertThat(repo.comment(project, issue.issueNumber, commentIds.get(0)).readMeta()).isNotNull().satisfies(meta -> {
+			log.info("Comment meta: {}", meta);
+		});
+		assertThat(repo.attachment(project, issue.issueNumber, commentIds.get(0)).readMeta()).isNotNull().satisfies(meta -> {
+			log.info("Attachment meta: {}", meta);
+			assertThat(meta.fileName).isEqualTo(EXTRACTED_PDF_ATTACHMENT_FILENAME);
+		});
+		assertThat(repo.attachment(project, issue.issueNumber, commentIds.get(0)).readDescription())
+				.contains("unerfahrene Personen");
 	}
 
 	@Test
@@ -190,29 +232,45 @@ public class IssueApiControllerTest {
 	@NotNull
 	private MockMultipartFile getPngFile() throws IOException {
 		return new MockMultipartFile(
-				"test.png", "original-test.png", MediaType.IMAGE_PNG_VALUE,
+				getShortName("png"), "original-test.png", MediaType.IMAGE_PNG_VALUE,
 				Objects.requireNonNull(this.getClass().getResourceAsStream("/com/gratchev/mizoine/Mizoine-logo" +
 						"-transparent.png")));
 	}
 
+
+	@NotNull
+	private MockMultipartFile getPdfFile(final String originalFilename, final InputStream dataInputStream) throws IOException {
+		return new MockMultipartFile(getShortName("pdf"), originalFilename, MediaType.APPLICATION_PDF_VALUE, dataInputStream);
+	}
+
 	@NotNull
 	private MockMultipartFile getPdfFile(final String originalFilename) throws IOException {
-		return new MockMultipartFile(
-				"test.pdf", originalFilename, MediaType.APPLICATION_PDF_VALUE,
-				Objects.requireNonNull(PDFBoxTest.class.getResourceAsStream(PDFBoxTest.APPLE_PDF)));
+		return getPdfFile(originalFilename, Objects.requireNonNull(PDFBoxTest.class.getResourceAsStream(PDFBoxTest.APPLE_PDF)));
 	}
 
 	@NotNull
 	private MockMultipartFile getJpgFile() throws IOException {
 		return new MockMultipartFile(
-				"test.jpg", "original-test.jpg", MediaType.IMAGE_PNG_VALUE,
+				getShortName("jpg"), "original-test.jpg", MediaType.IMAGE_PNG_VALUE,
 				Objects.requireNonNull(this.getClass().getResourceAsStream("/com/gratchev/utils/20190310_174614.jpg")));
+	}
+
+	@NotNull
+	private MockMultipartFile getEmlFile() throws IOException {
+		return new MockMultipartFile(
+				getShortName("eml"), EmlReadTest.EML_FILENAME, MediaType.APPLICATION_OCTET_STREAM_VALUE,
+				Objects.requireNonNull(EmlReadTest.class.getResourceAsStream(EmlReadTest.EML_FILENAME)));
+	}
+
+	@NotNull
+	private String getShortName(final String extension) {
+		return "test" + (fileShortNameCounter++) + "." + extension;
 	}
 
 	private DescriptionResponse updateDescription(final String description) throws IOException {
 		controller.updateDescription(project, issue.issueNumber, description);
 		final DescriptionResponse response = controller.getDescription(project, issue.issueNumber);
-		LOGGER.info("Response: " + response);
+		log.info("Response: " + response);
 
 		assertEquals(description, response.markdown);
 		return response;

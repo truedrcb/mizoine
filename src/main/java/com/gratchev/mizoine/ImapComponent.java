@@ -10,6 +10,8 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class ImapComponent {
+	public static final String MESSAGE_ID = "Message-ID";
+
 	public static final String FOLDER_INBOX = "INBOX";
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(ImapComponent.class);
@@ -38,9 +40,9 @@ public class ImapComponent {
 			return inbox.getMessages().filter(message -> {
 				final String[] messageIds;
 				try {
-					messageIds = message.getHeader("Message-ID");
+					messageIds = message.getHeader(MESSAGE_ID);
 				} catch (final Exception e) {
-					LOGGER.info("Cannot get header: Message-ID", e);
+					LOGGER.info("Cannot get header: " + MESSAGE_ID, e);
 					return false;
 				}
 				if (messageIds.length != 1) {

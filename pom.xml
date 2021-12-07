@@ -9,7 +9,7 @@
 	<description>Issue tracking</description>
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<pdfbox.version>3.0.0-RC1</pdfbox.version>
+		<pdfbox.version>3.0.0-alpha2</pdfbox.version>
 		<lucene.version>8.10.1</lucene.version>
 	</properties>
 
