@@ -196,6 +196,7 @@ public class IssueApiControllerTest {
 		});
 		assertThat(repo.comment(project, issue.issueNumber, commentIds.get(0)).readMeta()).isNotNull().satisfies(meta -> {
 			log.info("Comment meta: {}", meta);
+			assertThat(meta.messageId).isEqualTo("<CAHGB224yNTRMciwxmgYDwgrs5hiLa5K1wC-W=q9C2H+zjxqk9A@mail.gmail.com>");
 		});
 		assertThat(repo.attachment(project, issue.issueNumber, commentIds.get(0)).readMeta()).isNotNull().satisfies(meta -> {
 			log.info("Attachment meta: {}", meta);

@@ -2,6 +2,7 @@ package com.gratchev.mizoine.api;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.google.common.base.Joiner;
 import com.gratchev.mizoine.mail.impl.MessageImpl;
 import com.gratchev.mizoine.repository.Attachment;
 import com.gratchev.mizoine.repository.Issue;
@@ -23,7 +24,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.multipart.MultipartHttpServletRequest;
 
-import javax.mail.MessagingException;
 import javax.mail.Session;
 import javax.mail.internet.MimeMessage;
 import java.io.File;
@@ -47,7 +47,6 @@ public class IssueApiController extends BaseDescriptionController {
 										 @PathVariable final String issueNumber,
 										 final MultipartHttpServletRequest request)
 			throws IOException {
-		//LOGGER.debug(request.getParameterMap().toString());
 		if (log.isDebugEnabled()) {
 			log.debug("Upload attachment(s) for: " + project + "-" + issueNumber);
 		}
@@ -67,19 +66,25 @@ public class IssueApiController extends BaseDescriptionController {
 				if (originalFilename.toLowerCase(Locale.ROOT).endsWith(".eml")) {
 					final MimeMessage message = new MimeMessage(Session.getDefaultInstance(new Properties()),
 							uploadFile.getInputStream());
-					uploadedAttachmentIds.add(MailApiController.createCommentFromMessage(getRepo(), currentUser, "",
-							new MessageImpl(message), project, issueNumber, null));
+					final String[] idHeaders = message.getHeader("Message-ID");
+					MailApiController.createCommentFromMessage(getRepo(), currentUser,
+							idHeaders != null ? Joiner.on("|").join(idHeaders) : "",
+							new MessageImpl(message), project, issueNumber, null).attachments.forEach(attachment -> {
+								uploadedAttachmentIds.add(attachment.id);
+					});
 				} else {
 						final Attachment attachment = getRepo().issue(project, issueNumber).uploadAttachment(uploadFile);
 						uploadedAttachmentIds.add(attachment.id);
-						final AttachmentProxy proxy = getRepo().attachment(project, issueNumber, attachment.id);
-						proxy.updatePreviewLogErrors();
-						proxy.extractDescriptionLogErrors();
 				}
 			} catch (final Exception e) {
 				log.error("Upload failed for file: {} {}", fileShortName, uploadFile, e);
 			}
 		}
+		uploadedAttachmentIds.forEach(attachmentId -> {
+			final AttachmentProxy proxy = getRepo().attachment(project, issueNumber, attachmentId);
+			proxy.updatePreviewAndLogErrors();
+			proxy.extractDescriptionAndLogErrors();
+		});
 		return uploadedAttachmentIds;
 	}
 

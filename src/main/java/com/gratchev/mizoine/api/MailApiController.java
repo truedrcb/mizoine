@@ -20,8 +20,6 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.mail.Address;
 import javax.mail.Header;
-
-import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -160,11 +158,30 @@ public class MailApiController extends BaseController {
 
 		LOGGER.info("Importing mail with ID: " + messageId + " (" + commentPartId + ") to issue " + project + "-"
 				+ issueNumber);
-		return imap.readMessage(messageId,
-				message -> createCommentFromMessage(getRepo(), currentUser, messageId, message, project, issueNumber, commentPartId));
+
+		final List<Attachment> attachments = new ArrayList<>();
+		final String commentId = imap.readMessage(messageId,
+				message -> {
+					final CreatedComment createdComment =
+							createCommentFromMessage(getRepo(), currentUser, messageId, message, project, issueNumber,
+									commentPartId);
+					attachments.addAll(createdComment.attachments);
+					return createdComment.commentId;
+				});
+		attachments.forEach(attachment -> {
+			final Repository.AttachmentProxy proxy = getRepo().attachment(project, issueNumber, attachment.id);
+			proxy.updatePreviewAndLogErrors();
+			proxy.extractDescriptionAndLogErrors();
+		});
+		return commentId;
 	}
 
-	static String createCommentFromMessage(final Repository repo, final SignedInUser currentUser, final String messageId,
+	static class CreatedComment {
+		String commentId;
+		List<Attachment> attachments;
+	}
+
+	static CreatedComment createCommentFromMessage(final Repository repo, final SignedInUser currentUser, final String messageId,
 										   final Message message, final String project, final String issueNumber,
 										   final String commentPartId) throws Exception {
 		final Date messageDate = getMessageDate(message);
@@ -219,9 +236,10 @@ public class MailApiController extends BaseController {
 
 				LOGGER.info("Importing attachment: " + partDto.fileName + " type: " + partDto.contentType);
 
-				attachments.add(issue.uploadAttachment(part.getFileName(), part.getContentType(), part.getSize(),
+				final Attachment attachment = issue.uploadAttachment(part.getFileName(), part.getContentType(), part.getSize(),
 						ZonedDateTime.ofInstant(messageDate.toInstant(), ZoneId.systemDefault()),
-						attachmentFile -> Files.copy(part.getInputStream(), attachmentFile.toPath())));
+						attachmentFile -> Files.copy(part.getInputStream(), attachmentFile.toPath()));
+				attachments.add(attachment);
 			} catch (Exception e) {
 				LOGGER.error("Upload failed for block #: " + counter.counter, e);
 			}
@@ -263,7 +281,10 @@ public class MailApiController extends BaseController {
 		}
 
 		comment.writeDescription(sb.toString());
-		return commentId;
+		final CreatedComment createdComment = new CreatedComment();
+		createdComment.commentId = commentId;
+		createdComment.attachments = attachments;
+		return createdComment;
 	}
 
 	private static class PartCounter {

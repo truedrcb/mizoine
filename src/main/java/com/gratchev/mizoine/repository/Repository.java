@@ -1300,7 +1300,7 @@ public class Repository {
 			return null;
 		}
 
-		public void extractDescriptionLogErrors() {
+		public void extractDescriptionAndLogErrors() {
 			try {
 				extractDescription();
 			} catch (final IOException e) {
@@ -1325,7 +1325,7 @@ public class Repository {
 			}
 		}
 
-		public void updatePreviewLogErrors() {
+		public void updatePreviewAndLogErrors() {
 			try {
 				updatePreview();
 			} catch (final IOException e) {

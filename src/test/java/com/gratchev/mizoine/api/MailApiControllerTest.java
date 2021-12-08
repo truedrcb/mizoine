@@ -150,9 +150,9 @@ public class MailApiControllerTest {
 
 		final String fileName = "invoice.pdf";
 		whenMessage(MESSAGE_ID, new SimpleMessage(List.of(new TextPart(mailText, MediaType.TEXT_PLAIN_VALUE),
-				new TextPart(mailText2, MediaType.TEXT_PLAIN_VALUE), new BinaryPart("/com/gratchev/utils" +
-						"/Invoice251217" +
-						".pdf", MediaType.APPLICATION_PDF_VALUE, fileName)), mailSubject, mailSentDate));
+				new TextPart(mailText2, MediaType.TEXT_PLAIN_VALUE),
+				new BinaryPart("/com/gratchev/utils/Invoice251217.pdf",
+						MediaType.APPLICATION_PDF_VALUE, fileName)), mailSubject, mailSentDate));
 
 		final String commentId = controller.importMailToIssue(controller.encodeUri(MESSAGE_ID), null, PROJECT,
 				issue.issueNumber);
@@ -170,6 +170,7 @@ public class MailApiControllerTest {
 		assertThat(attachment.readInfo().files).hasSize(1).allSatisfy(file -> {
 			assertThat(file.fileName).isEqualTo(fileName);
 		});
+		assertThat(attachment.readDescription()).contains("Please do not pay.");
 	}
 
 	private void whenMessage(final String messageId, final SimpleMessage message) throws Exception {
