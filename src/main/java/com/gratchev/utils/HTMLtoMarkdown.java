@@ -993,7 +993,8 @@ public class HTMLtoMarkdown {
 		}
 		
 		LOGGER.debug("Unknown name: " + name);
-		return convertChilds(name + ">[", n, "]< ", inLine);
+		//return convertChilds(name + ">[", n, "]< ", inLine);
+		return convertChilds(n, inLine);
 	}
 
 	private MDNode convertChildsOfInline(final String prefixAndSuffix, final Node n) {

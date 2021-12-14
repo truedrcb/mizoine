@@ -1,5 +1,6 @@
 package com.gratchev.mizoine.mail.impl;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,6 +20,7 @@ public class GmailCharacterizationIT {
 	 * an access token (offline access)</a>
 	 */
 	@Test
+	@Disabled
 	void refreshingAnAccessTokenOfflineAccess() {
 		RestTemplate restTemplate = new RestTemplate();
 		HttpHeaders headers = new HttpHeaders();

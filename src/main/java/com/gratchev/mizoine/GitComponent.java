@@ -39,7 +39,7 @@ import org.slf4j.LoggerFactory;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.google.common.base.Splitter;
-import com.gratchev.mizoine.WebSecurityConfig.UserCredentials;
+import com.gratchev.mizoine.Application.UserCredentials;
 import com.gratchev.mizoine.api.SearchApiController;
 import com.gratchev.mizoine.repository.Repository;
 import com.gratchev.mizoine.repository.RepositoryCache;

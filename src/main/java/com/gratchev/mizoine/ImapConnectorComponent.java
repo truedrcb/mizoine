@@ -22,7 +22,7 @@ public class ImapConnectorComponent implements ImapConnector {
 
 	@Override
 	public Store getStore() throws MessagingException {
-		final WebSecurityConfig.ImapConnection connection = currentUser.getCredentials().getImap();
+		final Application.ImapConnection connection = currentUser.getCredentials().getImap();
 		if (connection == null || connection.getHost() == null || connection.getUsername() == null
 				|| connection.getPassword() == null) {
 			LOGGER.warn("E-Mail IMAP connection is undefined for the user.");

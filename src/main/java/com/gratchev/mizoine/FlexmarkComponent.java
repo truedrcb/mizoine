@@ -57,56 +57,7 @@ public class FlexmarkComponent {
 
 		options.set(TablesExtension.CLASS_NAME, "table table-striped table-bordered table-light");
 
-		if (linkTemplatesConfiguration != null) {
-			final Map<String, String> linkTemplates = linkTemplatesConfiguration.getLinkTemplates();
-			LOGGER.info("Link templates: {}", linkTemplates);
-			final List<String> prefixes = new ArrayList<>(linkTemplates.keySet());
-			LOGGER.info("Link templates prefixes: {}", prefixes);
-			
-			// Avoid short to long prefixes interference: For example - "note" and "note:" 
-			Collections.sort(prefixes);
-			
-			final List<LinkTemplate> templates = new ArrayList<>();
-			for (final String prefix : prefixes) {
-				final String templateConf = linkTemplates.get(prefix);
-				LOGGER.info("Configuring link template prefix: {} = {}", prefix, templateConf);
-				final String[] split = templateConf.split(";");
-				LOGGER.info("Template parameters: {}", split.length);
-				if (split.length < 1) {
-					LOGGER.info("Skipped");
-					continue;
-				}
-				final String urlTemplate = split[0];
-				final String styleClass = split.length > 1 ? split[1] : null;
-				final boolean newTab = split.length <= 2 || (!split[2].equals("false"));
-				
-				// Revert sorted order
-				templates.add(0, new LinkTemplate(prefix, urlTemplate, styleClass, newTab));
-			}
-			options.set(FlexmarkExtension.TEMPLATES, templates);
-		}
-
 		parser = Parser.builder(options).build();
 		renderer = HtmlRenderer.builder(options).build();
 	}
-	
-	@Autowired
-	private LinkTemplatesConfiguration linkTemplatesConfiguration;
-
-	@Bean
-	@ConfigurationProperties
-	public LinkTemplatesConfiguration linkTemplatesConfigurationBean() {
-		return new LinkTemplatesConfiguration();
-	}
-
-	public static class LinkTemplatesConfiguration {
-
-		private final Map<String, String> linkTemplates = new HashMap<>();
-
-		public Map<String, String> getLinkTemplates() {
-			return this.linkTemplates;
-		}
-	}	
-
-
 }

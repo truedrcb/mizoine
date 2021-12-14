@@ -9,8 +9,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.WebApplicationContext;
 
-import com.gratchev.mizoine.WebSecurityConfig.BasicUsersConfiguration;
-import com.gratchev.mizoine.WebSecurityConfig.UserCredentials;
+import com.gratchev.mizoine.Application.BasicUsersConfiguration;
+import com.gratchev.mizoine.Application.UserCredentials;
 
 /**
  * See http://www.baeldung.com/get-user-in-spring-security
