@@ -105,10 +105,14 @@ public class FlexmarkExtension implements Parser.ParserExtension, HtmlRendererEx
 	}
 
 	static class ImgExtensionProvider implements AttributeProvider {
-		private final List<LinkTemplate> linkTemplates;
+		public static final LinkTemplate ISSUE = new LinkTemplate("issue", "/issue/{0}", "text-primary", false);
+		public static final LinkTemplate ISSUE_NAMED = new LinkTemplate("issue-", "/issue/{1}", "text-primary", false);
+		private final List<LinkTemplate> linkTemplates = new ArrayList<>();
 		
 		public ImgExtensionProvider(DataHolder dataHolder) {
-			linkTemplates = TEMPLATES.get(dataHolder);
+			linkTemplates.add(ISSUE_NAMED);
+			linkTemplates.add(ISSUE);
+			linkTemplates.addAll(TEMPLATES.get(dataHolder));
 		}
 
 		@Override

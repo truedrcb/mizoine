@@ -32,8 +32,7 @@ public class FlexmarkExtensionTest {
 		options.set(HtmlRenderer.SOFT_BREAK, "<br/>");
 		
 		options.set(FlexmarkExtension.TEMPLATES, List.of(
-				new LinkTemplate("issue", "/issue/{0}", "text-primary", false),
-				new LinkTemplate("note-", "http://test.com/notes/{1}/sub/{0}", null, true), 
+				new LinkTemplate("note-", "http://test.com/notes/{1}/sub/{0}", null, true),
 				new LinkTemplate("note", "http://test.com/notes/{0}", null, true)
 				));
 
@@ -89,7 +88,13 @@ public class FlexmarkExtensionTest {
 		final String html = commonMark("hello [DEV-45](issue)");
 		assertEquals("<p>hello <a href=\"/issue/DEV-45\" class=\"text-primary\">DEV-45</a></p>\n", html);
 	}
-	
+
+	@Test
+	public void testIssueNamedLink() {
+		final String html = commonMark("hello [my work](issue-WORK-33)");
+		assertEquals("<p>hello <a href=\"/issue/WORK-33\" class=\"text-primary\">my work</a></p>\n", html);
+	}
+
 	@Test
 	public void testCustomUrl1() {
 		final String html = commonMark("hello [12345](note)");
