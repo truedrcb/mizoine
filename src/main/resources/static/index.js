@@ -128,8 +128,8 @@ Vue.component('global-messages', {
 	}, 
 	template: `
 <div class="position-fixed w-100 p-4 d-flex flex-column align-items-end"
-	:key="messagesKey" style="top: 0; z-index: 9999; pointer-events: none;">
-	<div style="pointer-events: all;" v-for="(message, messageIndex) in messages" 
+	:key="messagesKey" style="top: 0; z-index: 9999; pointer-events: none; height: 7em;">
+	<div style="pointer-events: all;" v-for="(message, messageIndex) in messages"
 		v-if="message" :key="messageIndex" 
 		class="toast show">
 		<div class="toast-header">
