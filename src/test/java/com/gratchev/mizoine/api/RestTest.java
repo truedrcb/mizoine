@@ -141,11 +141,6 @@ public class RestTest {
 
 	}
 
-	@Test
-	void api2app() throws Exception {
-		mvc.perform(get("/api2/app").with(user("hacker"))).andDo(prettyPrintJson()).andExpect(status().isOk());
-	}
-
 	public static ResultHandler prettyPrintJson() {
 		return r -> {
 			log.info("Status: {}", r.getResponse().getStatus());
@@ -159,26 +154,6 @@ public class RestTest {
 				log.error("Cannot pretty-print body: \"" + contentAsString + "\"", e);
 			}
 		};
-	}
+}
 
-	@Test
-	void api2repos() throws Exception {
-		mvc.perform(get("/api2/repositories").with(user("hacker"))).andDo(prettyPrintJson()).andExpect(status().isOk())
-				.andExpect(content().json("[{id:'" + REPO_ID1 + "'}, {id:'" + REPO_ID2 + "'}]"));
-	}
-
-	@Test
-	void api2reposWriteMeta() throws Exception {
-		final String metadata = "{\"title\":\"First repo\"}";
-		mvc.perform(put("/api2/repositories('" + REPO_ID1 + "')/meta").contentType(MediaType.APPLICATION_JSON)
-				.content(metadata).with(csrf()).with(user("hacker"))).andDo(prettyPrintJson())
-				.andExpect(status().isAccepted());
-		assertThat(repoDir1.resolve(Path.of(RepositoryConstants.META_JSON_FILENAME))).hasContent(metadata);
-	}
-
-	@Test
-	void api2reposExpandMeta() throws Exception {
-		mvc.perform(get("/api2/repositories?$expand=meta").with(user("hacker"))).andDo(prettyPrintJson()).andExpect(status().isOk())
-				.andExpect(content().json("[{id:'" + REPO_ID1 + "'}, {id:'" + REPO_ID2 + "'}]"));
-	}
 }

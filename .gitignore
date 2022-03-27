@@ -8,3 +8,4 @@
 /.sts4-cache
 .idea
 mizoine.iml
+**/node_modules/
