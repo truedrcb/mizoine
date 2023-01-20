@@ -85,8 +85,7 @@ public class Api2RestTest {
 		}
 	}
 
-	private static void newTempConfiguration()
-			throws IOException, JsonGenerationException, JsonMappingException, FileNotFoundException {
+	private static void newTempConfiguration() throws IOException {
 		repoDir1 = Files.createTempDirectory("miz-test-repos").toAbsolutePath();
 		repoDir2 = Files.createTempDirectory("miz-test-repos").toAbsolutePath();
 		final ConfigurationDto config = new ConfigurationDto();

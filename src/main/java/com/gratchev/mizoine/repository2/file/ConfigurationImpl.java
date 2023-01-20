@@ -2,6 +2,7 @@ package com.gratchev.mizoine.repository2.file;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.HashMap;
 import java.util.Map;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,7 +12,7 @@ public class ConfigurationImpl implements Configuration {
 
 	public static class ConfigurationDto {
 		public Map<String, Map> users;
-		public Map<String, RepositoryDto> repositories;
+		public Map<String, RepositoryDto> repositories = new HashMap<>();
 	}
 	
 	private final ConfigurationDto configuration;
