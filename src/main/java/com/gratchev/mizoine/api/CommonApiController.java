@@ -154,7 +154,8 @@ public class CommonApiController extends BaseController {
 	public FileContentResponse putFile(@PathVariable final String filePath, final String fileContent) throws NotFoundException, NotAllowedException {
 		final File file = getRepoFile(filePath);
 		try {
-			FileUtils.overwriteTextFile(fileContent, file);
+			// Force Unix LF instead of Windows CRLF
+			FileUtils.overwriteTextFile(fileContent.replace("\r\n", "\n"), file);
 		} catch (IOException e) {
 			LOGGER.warn("Issue overwriting file:" + filePath, e);
 			throw new NotFoundException(filePath, e);
