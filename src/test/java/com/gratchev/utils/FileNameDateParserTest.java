@@ -26,4 +26,16 @@ public class FileNameDateParserTest {
 		assertThat(parser.parse("Depotauszug_vom_01.04.2021_zu_Depot_1234567_-_202104020987JD65.pdf")).hasYear(2021).hasMonth(4).hasDayOfMonth(1);
 		assertThat(parser.parse("Kreditkartenabrechnung_1234xxxxxxxx5678_per_2021_01_22.pdf")).hasYear(2021).hasMonth(1).hasDayOfMonth(22);
 	}
+
+	@Test
+	void extractMultipleDateTimeFormats() throws ParseException {
+		final FileNameDateParser parser = new FileNameDateParser();
+		parser.addTemplate(".*{yyyy}-{MM}-{dd}_{hh}-{mm}.*");
+		parser.addTemplate(".*{yyyy}-{MM}-{dd}.*");
+		assertThat(parser.parse("scan_2023-07-28_20-49.pdf")).hasYear(2023).hasMonth(7).hasDayOfMonth(28).hasHourOfDay(20).hasMinute(49);
+		assertThat(parser.parse("test_2023-07-28.pdf")).hasYear(2023).hasMonth(7).hasDayOfMonth(28).hasHourOfDay(0).hasMinute(0);
+		assertThat(parser.parse("test_2023-07-28_66-33.pdf")).hasYear(2023).hasMonth(7).hasDayOfMonth(28).hasHourOfDay(0).hasMinute(0);
+		assertThat(parser.parse("test_2023-07-28_23-59.jpg")).hasHourOfDay(23).hasMinute(59);
+		assertThat(parser.parse("test_2023-07-28_23-60.jpg")).hasHourOfDay(0).hasMinute(0);
+	}
 }

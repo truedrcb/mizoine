@@ -13,7 +13,9 @@ public class FileNameDateParser {
 	private static final Map<String, String> PLACEHOLDERS = Map.of(
 			"{yyyy}", "(?<yyyy>(20|19)\\d\\d)",
 			"{MM}", "(?<MM>(0|1)\\d)",
-			"{dd}", "(?<dd>\\d\\d)"
+			"{dd}", "(?<dd>(0|1|2|3)\\d)",
+			"{hh}", "(?<hh>(0|1|2)\\d)",
+			"{mm}", "(?<mm>(0|1|2|3|4|5)\\d)"
 	);
 	private final List<Pattern> patterns = new ArrayList<>();
 
@@ -43,7 +45,16 @@ public class FileNameDateParser {
 				String y = matcher.group("yyyy");
 				String m = matcher.group("MM");
 				String d = matcher.group("dd");
-				return new SimpleDateFormat("yyyyMMdd").parse(y + m + d);
+				String hour;
+				String minute;
+				try {
+					hour = matcher.group("hh");
+					minute = matcher.group("mm");
+				} catch (IllegalArgumentException e) {
+					// hours or minutes not found
+					return new SimpleDateFormat("yyyyMMdd").parse(y + m + d);
+				}
+				return new SimpleDateFormat("yyyyMMddhhmm").parse(y + m + d + hour + minute);
 			}
 		}
 		return null;
