@@ -2,7 +2,7 @@
 
 :/: Upgrade to JDK 11 https://winterbe.com/posts/2018/08/29/migrate-maven-projects-to-java-11-jigsaw/
 
-* Spring boot (2.6.5) https://spring.io/projects/spring-boot | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.springframework.boot%22%20AND%20a%3A%22spring-boot%22)
+* Spring boot (2.7.14) https://spring.io/projects/spring-boot | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.springframework.boot%22%20AND%20a%3A%22spring-boot%22)
 * Springdoc (1.7.0) https://www.baeldung.com/spring-rest-openapi-documentation | [Maven Central](https://search.maven.org/search?q=g:org.springdoc%20AND%20a:springdoc-openapi-ui)
 * Flexmark (0.64.8) https://github.com/vsch/flexmark-java/wiki | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.vladsch.flexmark%22%20AND%20a%3A%22flexmark-all%22)
 * JGit (6.6.0.202305301015-r) https://www.eclipse.org/jgit/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.eclipse.jgit%22%20AND%20a%3A%22org.eclipse.jgit%22)
