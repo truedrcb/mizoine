@@ -20,7 +20,7 @@ import org.slf4j.LoggerFactory;
 public class ImagePreviewGenerator implements AttachmentPreviewGenerator {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ImagePreviewGenerator.class);
 	
-	private String[] compatibleExtensions = {".png", ".jpg", ".jpeg", ".gif"};
+	private final String[] compatibleExtensions = {".png", ".jpg", ".jpeg", ".gif", ".webp"};
 
 	@Override
 	public boolean isCompatibleWith(final File file) {
@@ -54,7 +54,7 @@ public class ImagePreviewGenerator implements AttachmentPreviewGenerator {
 	/**
 	 * Use in case if compression quality is to be set explicitly.
 	 * See https://stackoverflow.com/questions/17108234/setting-jpg-compression-level-with-imageio-in-java
-	 * 
+	 *
 	 * @param outputFile
 	 * @param image
 	 * @param compressionQuality
@@ -77,6 +77,7 @@ public class ImagePreviewGenerator implements AttachmentPreviewGenerator {
 
 	private static BufferedImage convertTo(final InputStream sourceImageStream, final int maxWidth, final int maxHeight, int imageType) throws IOException {
 		// https://docs.oracle.com/javase/tutorial/2d/images/loadimage.html
+		// https://github.com/haraldk/TwelveMonkeys
 		final BufferedImage bi = ImageIO.read(sourceImageStream);
 		
 		if (bi == null) {
@@ -117,7 +118,7 @@ public class ImagePreviewGenerator implements AttachmentPreviewGenerator {
 	
 	
 	@Override
-	public AttachmentPreview generatePreviews(final File file, final File targetDir) throws IOException {
+	public AttachmentPreview generatePreviews(final File file, final File targetDir) {
 		LOGGER.debug("Generating image previews");
 		final AttachmentPreview ap = new AttachmentPreview();
 		ap.preview = new File(targetDir, PREVIEW_JPG);
@@ -138,7 +139,7 @@ public class ImagePreviewGenerator implements AttachmentPreviewGenerator {
 	}
 
 	@Override
-	public String extractMarkdown(final File file) throws IOException {
+	public String extractMarkdown(final File file) {
 		return null;
 	}
 

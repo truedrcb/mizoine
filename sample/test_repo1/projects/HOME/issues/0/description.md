@@ -23,6 +23,10 @@ Created by [DRCB](http://artem.gratchev.com)(c)
 
 # Experimenting
 
+WebP image:
+
+![22gz0]
+
 ![SVG image sample](https://upload.wikimedia.org/wikipedia/commons/4/4f/SVG_Logo.svg)
 
 ![PNG image](/attachments/projects/HOME/issues/0/attachments/--_980/Screenshot-2017-12-1%20spring%20io.png)

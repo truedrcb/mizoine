@@ -11,7 +11,6 @@ import java.nio.file.Files;
 import javax.imageio.ImageIO;
 
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +29,7 @@ public class PngGifJpgPreviewTest {
 	public static final String SVG_LOGO = "icon-spring-boot.svg";
 	public static final String SVG_DEVCALC_LOGO = "V.svg";
 	public static final String WMF_LOGO = "V.wmf";
+	public static final String WEBP_PHOTO = "23-Kopie-min-100x100.webp";
 	private static File tempDir;
 	
 	@BeforeAll
@@ -53,11 +53,10 @@ public class PngGifJpgPreviewTest {
 	}
 
 	@Test
-	@Disabled("https://stackoverflow.com/questions/7177655/java-imageio-iioexception-unsupported-image-type")
 	public void testCmykJpgToPng() throws IOException {
-		assertExactImageConversionToPng(JPG_CMYK_LOGO, 4032, 2268);
-		assertImageConversionToPng(JPG_CMYK_LOGO, 403, 226);
-		assertImageConversionToPng(JPG_CMYK_LOGO, 804, 452);
+		assertExactImageConversionToPng(JPG_CMYK_LOGO, 2115, 407);
+		assertImageConversionToPng(JPG_CMYK_LOGO, 403, 77);
+		assertImageConversionToPng(JPG_CMYK_LOGO, 804, 154);
 	}
 
 	@Test
@@ -66,6 +65,7 @@ public class PngGifJpgPreviewTest {
 		assertImageConversionToPng(GIF_DEVCALC, 384, 100);
 	}
 
+	@Test
 	public void testGifToJpg() throws IOException {
 		assertImageConversionToJpg(GIF_DEVCALC, 384, 100);
 	}
@@ -86,8 +86,14 @@ public class PngGifJpgPreviewTest {
 		assertImageConversionToJpg(PNG_SCREENSHOT, 854/2, 751/2);
 		assertImageConversionToJpg(PNG_TRANSPARENT, 133, 133);
 	}
-	
-	private void assertExactImageConversionToPng(final String resourceFileName, 
+
+	@Test
+	public void testWebpToJpg() throws IOException {
+		assertExactImageConversionToPng(WEBP_PHOTO, 100, 100);
+		assertImageConversionToJpg(WEBP_PHOTO, 50, 50);
+	}
+
+	private void assertExactImageConversionToPng(final String resourceFileName,
 		final int expectedWidth,
 		final int expectedHeight) throws IOException {
 		// https://docs.oracle.com/javase/tutorial/2d/images/loadimage.html

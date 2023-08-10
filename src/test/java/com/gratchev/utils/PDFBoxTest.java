@@ -7,8 +7,8 @@ import java.io.File;
 import java.io.IOException;
 
 import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.io.RandomAccessReadBuffer;
 import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 import org.apache.pdfbox.rendering.ImageType;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -28,7 +28,7 @@ public class PDFBoxTest {
 	public static final String PRINTED_WEB_PAGE_PDF = "Aiptek MobileCinema Q20 Pico Projektor Produktbeschreibung.pdf";
 	public static final String DATASHEET_PDF = "MobileCinema-Q20_Datasheet.pdf";
 
-	private HTMLtoMarkdown htmLtoMarkdown = new HTMLtoMarkdown();
+	private final HTMLtoMarkdown htmLtoMarkdown = new HTMLtoMarkdown();
 
 	private void logText(final PDDocument document) throws IOException {
 		final PDFTextStripper stripper = new PDFTextStripper();
@@ -47,10 +47,11 @@ public class PDFBoxTest {
 
 
 	@Test
-	public void testRenderPdfToImage() throws InvalidPasswordException, IOException {
+	public void testRenderPdfToImage() throws IOException {
 		// https://stackoverflow.com/questions/23326562/apache-pdfbox-convert-pdf-to-images
 
-		try (final PDDocument document = Loader.loadPDF(PDFBoxTest.class.getResourceAsStream(INVOICE_PDF))) {
+		try (final PDDocument document = Loader.loadPDF(
+				new RandomAccessReadBuffer(PDFBoxTest.class.getResourceAsStream(INVOICE_PDF)))) {
 			
 			assertEquals(1, document.getNumberOfPages());
 			
@@ -69,54 +70,58 @@ public class PDFBoxTest {
 	}
 
 	@Test
-	public void testParsePdfText() throws InvalidPasswordException, IOException {
-		
-		try (final PDDocument document = Loader.loadPDF(PDFBoxTest.class.getResourceAsStream(INVOICE_PDF))) {
-			
-			assertEquals(1, document.getNumberOfPages());
-			
-			logText(document);
-		}
-	}
-
-	@Test
-	public void testParseGermanPdfText() throws InvalidPasswordException, IOException {
-		
-		try (final PDDocument document = Loader.loadPDF(PDFBoxTest.class.getResourceAsStream(PRINTED_WEB_PAGE_PDF))) {
-			
-			assertEquals(1, document.getNumberOfPages());
-			
-			logText(document);
-		}
-	}
-
-	@Test
-	public void testParsePdfDatasheet() throws InvalidPasswordException, IOException {
-		
-		try (final PDDocument document = Loader.loadPDF(PDFBoxTest.class.getResourceAsStream(DATASHEET_PDF))) {
-			
-			assertEquals(2, document.getNumberOfPages());
-			
-			logText(document);
-		}
-	}
-
-	@Test
-	public void testParsePdfDatasheetOverHTML() throws InvalidPasswordException, IOException {
-		
-		try (final PDDocument document = Loader.loadPDF(PDFBoxTest.class.getResourceAsStream(DATASHEET_PDF))) {
-			
-			assertEquals(2, document.getNumberOfPages());
-			
-			logText(document);
-		}
-	}
-
-	@Test
-	public void testParseLongPdfText() throws InvalidPasswordException, IOException {
+	public void testParsePdfText() throws IOException {
 		
 		try (final PDDocument document = Loader.loadPDF(
-				PDFBoxTest.class.getResourceAsStream(APPLE_PDF))) {
+				new RandomAccessReadBuffer(PDFBoxTest.class.getResourceAsStream(INVOICE_PDF)))) {
+			
+			assertEquals(1, document.getNumberOfPages());
+			
+			logText(document);
+		}
+	}
+
+	@Test
+	public void testParseGermanPdfText() throws IOException {
+		
+		try (final PDDocument document = Loader.loadPDF(
+				new RandomAccessReadBuffer(PDFBoxTest.class.getResourceAsStream(PRINTED_WEB_PAGE_PDF)))) {
+			
+			assertEquals(1, document.getNumberOfPages());
+			
+			logText(document);
+		}
+	}
+
+	@Test
+	public void testParsePdfDatasheet() throws IOException {
+		
+		try (final PDDocument document = Loader.loadPDF(
+				new RandomAccessReadBuffer(PDFBoxTest.class.getResourceAsStream(DATASHEET_PDF)))) {
+			
+			assertEquals(2, document.getNumberOfPages());
+			
+			logText(document);
+		}
+	}
+
+	@Test
+	public void testParsePdfDatasheetOverHTML() throws IOException {
+		
+		try (final PDDocument document = Loader.loadPDF(
+				new RandomAccessReadBuffer(PDFBoxTest.class.getResourceAsStream(DATASHEET_PDF)))) {
+			
+			assertEquals(2, document.getNumberOfPages());
+			
+			logText(document);
+		}
+	}
+
+	@Test
+	public void testParseLongPdfText() throws IOException {
+		
+		try (final PDDocument document = Loader.loadPDF(
+				new RandomAccessReadBuffer(PDFBoxTest.class.getResourceAsStream(APPLE_PDF)))) {
 			
 			assertEquals(6, document.getNumberOfPages());
 			
