@@ -1,11 +1,10 @@
 package com.gratchev.utils;
 
+import java.awt.*;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -42,19 +41,24 @@ public class FileNameDateParser {
 		for (final Pattern pattern : patterns) {
 			final Matcher matcher = pattern.matcher(fileName);
 			if (matcher.find()) {
-				String y = matcher.group("yyyy");
-				String m = matcher.group("MM");
-				String d = matcher.group("dd");
-				String hour;
-				String minute;
+				final String year = matcher.group("yyyy");
+				final String month = matcher.group("MM");
+				final String day = matcher.group("dd");
+				final GregorianCalendar calendar = new GregorianCalendar();
+				calendar.set(Calendar.YEAR, Integer.parseInt(year));
+				calendar.set(Calendar.MONTH, Integer.parseInt(month) - 1);
+				calendar.set(Calendar.DAY_OF_MONTH, Integer.parseInt(day));
 				try {
-					hour = matcher.group("hh");
-					minute = matcher.group("mm");
+					final String hour= matcher.group("hh");
+					final String minute = matcher.group("mm");
+					calendar.set(Calendar.HOUR_OF_DAY, Integer.parseInt(hour));
+					calendar.set(Calendar.MINUTE, Integer.parseInt(minute));
 				} catch (IllegalArgumentException e) {
 					// hours or minutes not found
-					return new SimpleDateFormat("yyyyMMdd").parse(y + m + d);
+					calendar.set(Calendar.HOUR_OF_DAY, 0);
+					calendar.set(Calendar.MINUTE, 0);
 				}
-				return new SimpleDateFormat("yyyyMMddhhmm").parse(y + m + d + hour + minute);
+				return calendar.getTime();
 			}
 		}
 		return null;

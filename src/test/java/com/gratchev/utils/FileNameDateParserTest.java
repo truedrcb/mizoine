@@ -38,4 +38,12 @@ public class FileNameDateParserTest {
 		assertThat(parser.parse("test_2023-07-28_23-59.jpg")).hasHourOfDay(23).hasMinute(59);
 		assertThat(parser.parse("test_2023-07-28_23-60.jpg")).hasHourOfDay(0).hasMinute(0);
 	}
+
+	@Test
+	void extract1200Time() throws ParseException {
+		final FileNameDateParser parser = new FileNameDateParser();
+		parser.addTemplate(".*{yyyy}-{MM}-{dd}_{hh}-{mm}.*");
+		assertThat(parser.parse("scan_2023-10-01_12-00.pdf")).hasYear(2023).hasMonth(10).hasDayOfMonth(1)
+				.hasHourOfDay(12).hasMinute(0);
+	}
 }
