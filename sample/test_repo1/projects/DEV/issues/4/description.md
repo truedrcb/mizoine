@@ -2,16 +2,16 @@
 
 :/: Upgrade to JDK 11 https://winterbe.com/posts/2018/08/29/migrate-maven-projects-to-java-11-jigsaw/
 
-* Spring boot (2.7.14) https://spring.io/projects/spring-boot | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.springframework.boot%22%20AND%20a%3A%22spring-boot%22)
+* Spring boot (2.7.18) https://spring.io/projects/spring-boot | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.springframework.boot%22%20AND%20a%3A%22spring-boot%22)
 * Springdoc (1.7.0) https://www.baeldung.com/spring-rest-openapi-documentation | [Maven Central](https://search.maven.org/search?q=g:org.springdoc%20AND%20a:springdoc-openapi-ui)
 * Flexmark (0.64.8) https://github.com/vsch/flexmark-java/wiki | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.vladsch.flexmark%22%20AND%20a%3A%22flexmark-all%22)
-* JGit (6.6.0.202305301015-r) https://www.eclipse.org/jgit/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.eclipse.jgit%22%20AND%20a%3A%22org.eclipse.jgit%22)
-* PDFBox (3.0.0-beta1) https://pdfbox.apache.org/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.apache.pdfbox%22%20AND%20a%3A%22pdfbox-tools%22)
-* Lucene (9.7.0) https://wiki.apache.org/lucene-java/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.apache.lucene%22%20AND%20a%3A%22lucene-codecs%22)
-* Guava (32.1.1-jre) https://github.com/google/guava | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.google.guava%22%20AND%20a%3A%22guava%22)
-* Jsoup (1.16.1) https://jsoup.org/ | [Maven Central](https://search.maven.org/search?q=a:jsoup)
+* JGit (6.7.0.202309050840-r) https://www.eclipse.org/jgit/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.eclipse.jgit%22%20AND%20a%3A%22org.eclipse.jgit%22)
+* PDFBox (3.0.0) https://pdfbox.apache.org/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.apache.pdfbox%22%20AND%20a%3A%22pdfbox-tools%22)
+* Lucene (9.8.0) https://wiki.apache.org/lucene-java/ | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.apache.lucene%22%20AND%20a%3A%22lucene-codecs%22)
+* Guava (32.1.3-jre) https://github.com/google/guava | [Maven Central](https://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.google.guava%22%20AND%20a%3A%22guava%22)
+* Jsoup (1.16.2) https://jsoup.org/ | [Maven Central](https://search.maven.org/search?q=a:jsoup)
 * JavaMail API (1.6.2) https://mvnrepository.com/artifact/com.sun.mail/javax.mail | [Maven Central](https://search.maven.org/search?q=g:com.sun.mail%20AND%20a:javax.mail)
-* TwelveMonkeys ImageIO (3.9.4) https://github.com/haraldk/TwelveMonkeys/releases | [Maven Central](https://central.sonatype.com/namespace/com.twelvemonkeys)
+* TwelveMonkeys ImageIO (3.10.1) https://github.com/haraldk/TwelveMonkeys/releases | [Maven Central](https://central.sonatype.com/namespace/com.twelvemonkeys.imageio)
 
 # Web/Javascript
 
