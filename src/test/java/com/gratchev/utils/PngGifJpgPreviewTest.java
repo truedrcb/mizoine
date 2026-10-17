@@ -22,6 +22,7 @@ public class PngGifJpgPreviewTest {
 
 	public static final String GIF_DEVCALC = "DevCalc-2.02.gif";
 	public static final String JPG_GUITAR = "20190310_174614.jpg";
+	public static final String JPG_KEYBOARD = "20231212_001014.jpg";
 	public static final String JPG_CMYK_LOGO = "Logo MaQua Neckarstadt-West 2017.jpg";
 	public static final String PNG_SCREENSHOT = "Eclipse-Maven-dependencies.png";
 	public static final String PNG_FLYER = "FlyerBear3web.png";
@@ -50,6 +51,11 @@ public class PngGifJpgPreviewTest {
 	public void testBigJpgToJpg() throws IOException {
 		assertImageConversionToJpg(JPG_GUITAR, 403, 226);
 		assertImageConversionToJpg(JPG_GUITAR, 804, 452);
+	}
+
+	@Test
+	public void testRotatedBigJpgToJpg() throws IOException {
+		assertImageConversionToJpg(JPG_KEYBOARD, 226, 403);
 	}
 
 	@Test
