@@ -114,4 +114,42 @@
 			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<!--
+			Known vulnerabilities in dependencies (OWASP dependency-check). Not part of the default build: slow.
+			Requires an NVD API key (version 13 fails without one): get a free key at
+			https://nvd.nist.gov/developers/request-an-api-key, then run
+			NVD_API_KEY=<key> mvn verify -Psecurity-check -DskipTests
+			The first run downloads the NVD database (several minutes); later runs only update it.
+		-->
+		<profile>
+			<id>security-check</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.owasp</groupId>
+						<artifactId>dependency-check-maven</artifactId>
+						<version>13.0.0</version>
+						<configuration>
+							<nvdApiKeyEnvironmentVariable>NVD_API_KEY</nvdApiKeyEnvironmentVariable>
+							<failBuildOnCVSS>7</failBuildOnCVSS>
+							<skipTestScope>true</skipTestScope>
+							<formats>
+								<format>HTML</format>
+								<format>JSON</format>
+							</formats>
+						</configuration>
+						<executions>
+							<execution>
+								<goals>
+									<goal>check</goal>
+								</goals>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 </project>

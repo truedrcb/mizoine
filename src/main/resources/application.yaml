@@ -1,3 +1,11 @@
 spring:
   application:
     name: mizoine
+
+server:
+  error:
+    # Spring Boot defaults, pinned: error responses never show internals
+    include-stacktrace: never
+    include-message: never
+    include-exception: false
+    include-binding-errors: never

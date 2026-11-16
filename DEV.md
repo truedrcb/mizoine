@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-16): steps 0–7 done (59 tests green). Next: step 8.
+**Status** (updated: 2026-11-16): steps 0–9 done (77 tests green). Next: step 10.
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -159,15 +159,23 @@ Pure unit tests, no Spring context. Use `@TempDir` for files.
 - **Green:** pass `Principal` to the view. Small step, confirms the end-to-end flow.
 - *Done, with additions:* the page heading is now `Hello, <username>` (no longer `Hello, World`). *(added)* a username with HTML is escaped (`th:text`); integration test checks `Hello, guest` over HTTP Basic. Smoke-tested with the jar and curl: valid user → `Hello, artem`, wrong password → 401, anonymous browser → 302 to `/login`.
 
-### 8. Security hardening  ☐
+### 8. Security hardening  ☑
 - **Red** — tests for:
   1. security headers present (`X-Content-Type-Options`, `X-Frame-Options: DENY`, `Content-Security-Policy`)
   2. error responses do not leak stack traces
   3. same response/timing path for unknown user and wrong password (Spring default — assert 401 for both, no different message)
 - **Green:** header config, `server.error.include-stacktrace=never`.
 - Add OWASP `dependency-check-maven` (or `mvn versions:display-dependency-updates`) to a separate profile `-Psecurity-check`. Not part of default build (slow).
+- *Done, with additions and findings:*
+  - Spring Security already sent `nosniff`, `X-Frame-Options: DENY` and no-cache headers. Added: `Content-Security-Policy: default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'` and `Referrer-Policy: same-origin`. Tested on the page, the login page and a 401 response (`SecurityHeadersTest`).
+  - The default login page loads `/default-ui.css` from the same server and has no inline styles or scripts, so the strict CSP does not break it (tested that the stylesheet is public).
+  - 8.2 and 8.3 passed straight away (Boot and Spring Security defaults); the tests now guard them. 8.2 needs a real server (`ErrorResponseTest`, random port, `java.net.http.HttpClient`): MockMvc does not render error responses. A test-only endpoint throws an exception with a secret message; neither the message nor a stack trace appears in JSON or HTML errors.
+  - The error defaults are pinned in `application.yaml` (`server.error.include-*`).
+  - Timing: for an unknown user Spring Security still checks a dummy BCrypt hash, so timing is similar. It uses the encoder's default cost (10); with cost-12 user hashes a small difference remains. Not tested (timing tests are flaky).
+  - Profile `security-check` uses `dependency-check-maven` 13.0.0, failing on CVSS ≥ 7. **It needs an NVD API key** (`NVD_API_KEY`); without one, version 13 fails at once ("Invalid API Key"). Not run yet.
+  - Spring Framework 7 removed `ResultMatcher.matchAll`; use `andExpectAll`. `@LocalServerPort` is in `org.springframework.boot.test.web.server`.
 
-### 9. Reload users file without restart  ☐
+### 9. Reload users file without restart  ☑
 Lets a person edit `users.yaml` and have it take effect.
 - **Red** — `FileUserDetailsServiceReloadTest` (unit, `@TempDir`, injectable `Clock`/check):
   1. file changed (new user added) → new user can be loaded
@@ -176,6 +184,12 @@ Lets a person edit `users.yaml` and have it take effect.
   4. file not changed → file is not read again (check via counter on a test parser)
 - **Green:** re-read when file's last-modified time changes (checked on lookup; no background thread needed).
 - Note: already logged-in sessions of a removed user stay valid until they expire — document this, or add a test + session invalidation later.
+- *Done, with additions:*
+  - No `Clock` needed: a file version is (modification time, size); the tests set the modification time explicitly, so they do not depend on file system time resolution.
+  - *(added)* invalid change is logged once, not on every login; fixing the file afterwards takes effect; deleted file keeps the old users; unsupported hash in a change is rejected like at startup.
+  - Startup stays strict (step 6): only changes *after* startup fall back to the old users.
+  - Live-tested with the jar: user added while running could log in; a broken edit kept both users and logged one error.
+  - **Known limit:** a removed user who logged in with the form keeps the session until it expires (default 30 min idle). HTTP Basic checks the user on every request, so there the removal works at once. Possible later step: invalidate sessions of removed users.
 
 ### 10. Run as a jar + documentation  ☐
 - **Red:** none new; `mvn verify` builds an executable jar.
