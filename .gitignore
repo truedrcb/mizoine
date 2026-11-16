@@ -10,3 +10,5 @@
 mizoine.iml
 **/node_modules/
 /archive/mizoine0/
+# real users file: contains password hashes (see users.example.yaml)
+/users.yaml

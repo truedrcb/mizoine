@@ -1,0 +1,10 @@
+# Users who may log in to Mizoine. Copy to users.yaml and edit; changes take effect without a restart.
+#
+# - username: case-sensitive ("alice" and "Alice" are different users)
+# - password: a BCrypt hash, never the password itself. Create one with:
+#     java -jar mizoine.jar hash-password
+#
+# The hash below belongs to a random password nobody knows: replace it.
+users:
+  - username: alice
+    password: "{bcrypt}$2a$12$f0gLnMh4TkpKsNzHpArqie9VR/Ny5RC0S949ztBz6.4V5/zzX5qlK"

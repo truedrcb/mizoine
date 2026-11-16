@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-16): steps 0–9 done (77 tests green). Next: step 10.
+**Status** (updated: 2026-11-16): steps 0–13 done (109 tests green). All planned steps are done; see "Open decisions" for follow-ups.
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -40,7 +40,7 @@ Steps are numbered so you can refer to them ("do step 4"). Every step follows TD
 
 ```yaml
 # users.yaml — edit by hand. Generate a hash with:
-#   htpasswd -bnBC 12 "" 'secret' | tr -d ':\n' | sed 's/$2y/$2a/'
+#   java -jar mizoine.jar hash-password
 users:
   - username: artem
     password: "{bcrypt}$2a$12$...."
@@ -50,7 +50,7 @@ users:
 
 Rules:
 - `username` must be non-empty and unique.
-- `password` must be a hash with an `{id}` prefix. Plain-text values and `{noop}` are rejected at load time.
+- `password` must be a BCrypt hash with the `{bcrypt}` prefix (step 5). Plain-text values and `{noop}` are rejected at load time.
 - The real `users.yaml` is **not committed** (git-ignored). A `users.example.yaml` is committed.
 
 ### Error behaviour
@@ -191,19 +191,74 @@ Lets a person edit `users.yaml` and have it take effect.
   - Live-tested with the jar: user added while running could log in; a broken edit kept both users and logged one error.
   - **Known limit:** a removed user who logged in with the form keeps the session until it expires (default 30 min idle). HTTP Basic checks the user on every request, so there the removal works at once. Possible later step: invalidate sessions of removed users.
 
-### 10. Run as a jar + documentation  ☐
+### 10. Run as a jar + documentation  ☑
 - **Red:** none new; `mvn verify` builds an executable jar.
 - Add `users.example.yaml`, add `users.yaml` to `.gitignore`.
 - Update `README.md`: how to install JDK, generate a password hash, create `users.yaml`, run
   `java -jar target/mizoine-*.jar --mizoine.users-file=./users.yaml`.
 - Manual smoke test: start the jar, open `http://localhost:8080`, log in with a configured user, get rejected with a wrong one.
+- *Done, with additions:*
+  - Done after step 11, so the README uses `hash-password` instead of the `htpasswd` pipeline.
+  - *(added)* `UsersExampleFileTest`: `users.example.yaml` is loaded by the real `FileUserDetailsService` without warnings, so the example cannot drift from the format.
+  - The example user `alice` has the hash of a random password that was never stored: copying the example unchanged gives no working login.
+  - `.gitignore`: `/users.yaml`. Checked with `git check-ignore`.
+  - Smoke test followed the README literally: own user → `Hello, artem`; wrong password → 401; `alice` → 401; browser → 302 to `/login`.
 
-### 11. (Optional) Password hash helper  ☐
+### 11. Password hash helper  ☑
 - **Red:** `HashPasswordCommandTest`: given a password → output starts with `{bcrypt}` and matches via the encoder.
 - **Green:** `java -jar mizoine.jar hash-password` reads password from stdin (no password in shell history) and prints the hash, then exits without starting the web server.
+- *Done, with additions:*
+  - In a terminal (`Console.isTerminal()`, JDK 22+) the password is asked twice and not shown; piped input is read once. Only the hash goes to stdout (one line, for `$(...)`), messages to stderr. Exit code 1 for empty password, no input or mismatch.
+  - Input comes through a small `PasswordReader` interface, so all cases are unit tests (9 tests). Leading/trailing spaces are part of the password.
+  - `main` checks the first argument before Spring starts: runs in about 0.6 s.
+  - *(added)* new hashes use **BCrypt cost 12**. Spring Security uses the same encoder for its dummy check of unknown users, so that check now takes as long as a real login (closes the timing note in step 8).
+  - Smoke-tested with the jar: piped, empty input, and in a pseudo terminal (`script`).
 
-### 12. (Optional, later) HTTPS  ☐
-- Either a reverse proxy (Caddy/nginx, recommended) or Spring Boot SSL bundles with a test that the HTTP port redirects to HTTPS.
+### 12. HTTPS behind nginx  ☑
+*Decided 2026-11-16:* **nginx** as reverse proxy terminates TLS; the app itself speaks plain HTTP. (Replaces "proxy or Spring Boot SSL bundles".)
+
+```
+browser ──HTTPS──▶ nginx (TLS, certificates) ──HTTP──▶ 127.0.0.1:8080 mizoine
+```
+
+- **Red** — `ReverseProxyTest` (real server, random port, `java.net.http.HttpClient`, because Tomcat handles the forwarded headers):
+  1. request with `X-Forwarded-Proto: https` and `X-Forwarded-Host: example.org` → anonymous browser is redirected to `https://example.org/login`, not `http://…`
+  2. such a request gets `Strict-Transport-Security` (Spring Security sends HSTS only for secure requests)
+  3. the session cookie after form login is `Secure`, `HttpOnly`, `SameSite=Lax`
+  4. a forwarded header from a non-local address is not trusted (no https redirect)
+- **Green:**
+  - `server.forward-headers-strategy: native` (Tomcat `RemoteIpValve`: trusts `X-Forwarded-*` only from internal addresses such as 127.0.0.1)
+  - `server.address: 127.0.0.1` by default, so only nginx on the same machine can reach the app; can be overridden for other setups
+  - session cookie: `same-site: lax`, `http-only: true`
+- Add `docs/nginx.conf.example`: TLS, `proxy_pass http://127.0.0.1:8080`, `X-Forwarded-Proto/Host/For` headers, HTTP→HTTPS redirect, and `limit_req` on `/login` against password guessing.
+- Add a "Behind nginx" section to the README.
+- Open question for this step: test 4 needs a request from a non-local address; if that is not practical in a test, rely on Tomcat's documented default and say so here.
+- *Done, with findings:*
+  - Red showed the real problem: without the setting, a browser behind nginx was redirected to `http://127.0.0.1:<port>/login`.
+  - Test 4 solved in `UntrustedProxyTest`: trusted proxies narrowed to `192.0.2.1/32`, so the test client on 127.0.0.1 is untrusted → forwarded `https` is ignored (no HSTS, cookie not `Secure`).
+  - 12.1 accepts both `/login` and `https://example.org/login` (it is absolute in practice).
+  - Boot 4 writes `server.tomcat.remoteip.internal-proxies` as CIDR (default: loopback and private networks).
+  - "Secure" on the session cookie needs no setting: Tomcat adds it for HTTPS requests.
+  - `docs/nginx.conf.example` tested live: nginx 1.28 unpacked without root (`apt-get download`), self-signed certificate, the example with only ports, paths and name replaced. `nginx -t` ok; HTTP→HTTPS 301; anonymous → `https://…/login`; HSTS; cookie `Secure; HttpOnly; SameSite=Lax`; form login with CSRF and HTTP Basic work; app not reachable on the LAN address.
+  - Live test found the first rate limit too strict (it also counted loading the login page). Now only `POST /login` counts: 10/min per address, burst 5. Retested: 15 page loads pass; 6 quick wrong logins pass, then 429.
+  - `X-Forwarded-For` is overwritten with `$remote_addr`, not appended: otherwise a client could put a fake private address in it, which Tomcat would skip as a "proxy".
+  - Not limited by nginx: password guessing over HTTP Basic (any path). Possible follow-up.
+
+### 13. Limit failed logins (HTTP Basic and form)  ☑
+*Requested 2026-11-16, follow-up of step 12.* nginx cannot do it for HTTP Basic: a valid client sends credentials with every request, and nginx does not know which attempts failed.
+- **Rule:** per client address, after `mizoine.login-limit.max-failures` (default 5) failures, each less than `mizoine.login-limit.window` (default 5m) after the previous one, login attempts from that address get **429** with `Retry-After` until one window after the last failure. A successful login resets the count. Requests without credentials (e.g. the login page) are not blocked.
+- **Per address, not per username:** otherwise anyone could lock out a known user. The address is the real client address from nginx (`X-Forwarded-For`, step 12).
+- **Red/Green:**
+  - `LoginAttemptLimiterTest` (unit, test clock, 8 tests): threshold, end of block, old failures forgotten, success resets, addresses independent, `retryAfter`, expired addresses removed (memory stays bounded).
+  - `LoginRateLimitTest` (MockMvc, own address per test, limit 3): Basic blocked even with the right password, unknown usernames count, other addresses unaffected, form login blocked, form and Basic failures add up, login page still works, success resets.
+  - `MizoinePropertiesTest`: defaults and overrides of `mizoine.login-limit.*`.
+- **Design:** `LoginAttemptEvents` listens to Spring Security's `AuthenticationFailureBadCredentialsEvent` / `AuthenticationSuccessEvent` (unknown users also arrive as bad credentials). `LoginLimitFilter` runs in the security chain before the login filters and rejects blocked attempts before any password check. It is not a bean, so Boot does not register it a second time as a servlet filter.
+- **Findings:**
+  - MockMvc leaves `getServletPath()` empty: matching `POST /login` uses `PathPatternRequestMatcher` (works in MockMvc and Tomcat).
+  - `formLogin()` from `spring-security-test` cannot set the remote address; the test builds the POST itself.
+  - Other tests log in wrongly many times from the same address in one shared Spring context, so `src/test/resources/config/application.yaml` raises the limit for tests (Boot reads `classpath:/config/` after `classpath:/`, without replacing the main `application.yaml`).
+  - Live-tested with the jar and `X-Forwarded-For` as nginx sends it: 5 wrong → 429 with `Retry-After: 300` even with the right password; another address → 200; login page → 200; one warning in the log.
+- State is in memory: a restart forgets it. Fine for one instance.
 
 ---
 
@@ -212,3 +267,6 @@ Lets a person edit `users.yaml` and have it take effect.
 - ~~Step 3.8: ignore or reject unknown fields in `users.yaml`?~~ **Decided:** ignore them and log a warning.
 - ~~Step 4.3: case-sensitive usernames?~~ **Decided:** yes, case-sensitive.
 - Roles: everyone is `USER` for now. AI-agent role from BACKLOG §7 comes later as a new field `role` in `users.yaml`.
+- Sessions of users removed from `users.yaml` stay valid until they expire (step 9): add invalidation if needed.
+- Run the dependency check once an NVD API key is available (step 8).
+- ~~Rate-limit HTTP Basic login attempts~~ **Done:** step 13.

@@ -1,0 +1,6 @@
+# Test-only additions to the main application.yaml (Spring Boot reads classpath:/config/ after classpath:/).
+mizoine:
+  login-limit:
+    # Many tests log in wrongly from the same address within one shared Spring context.
+    # LoginRateLimitTest sets its own low limit.
+    max-failures: 1000

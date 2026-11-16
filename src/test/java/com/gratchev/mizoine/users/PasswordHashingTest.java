@@ -23,7 +23,9 @@ class PasswordHashingTest {
 	void encoderCreatesBcryptHashes() {
 		final String hash = PasswordHashing.encoder().encode("secret");
 
-		assertThat(hash).startsWith("{bcrypt}$2");
+		// cost 12: also used by Spring Security for the dummy check of unknown users,
+		// so that check takes as long as a real one
+		assertThat(hash).startsWith("{bcrypt}$2a$12$");
 		assertThat(PasswordHashing.isSupported(hash)).isTrue();
 	}
 

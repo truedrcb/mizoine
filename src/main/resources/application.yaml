@@ -3,6 +3,18 @@ spring:
     name: mizoine
 
 server:
+  # Runs behind nginx on the same machine (see docs/nginx.conf.example):
+  # listen on loopback only, so nginx is the only way in. Override with --server.address=... if needed.
+  address: 127.0.0.1
+  # Trust X-Forwarded-Proto/Host/For from nginx. Tomcat accepts them only from internal addresses
+  # (server.tomcat.remoteip.internal-proxies, default: loopback and private networks).
+  forward-headers-strategy: native
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
+        # "Secure" is set by Tomcat for HTTPS requests, i.e. when nginx forwards X-Forwarded-Proto: https
   error:
     # Spring Boot defaults, pinned: error responses never show internals
     include-stacktrace: never

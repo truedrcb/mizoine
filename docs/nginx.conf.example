@@ -1,0 +1,59 @@
+# nginx in front of Mizoine: HTTPS here, plain HTTP to the application on the same machine.
+#
+#   browser ──HTTPS──▶ nginx ──HTTP──▶ 127.0.0.1:8080 (java -jar mizoine.jar)
+#
+# Install as /etc/nginx/conf.d/mizoine.conf (it is included in the "http" block),
+# replace mizoine.example.org and the certificate paths, then: nginx -t && systemctl reload nginx
+#
+# The application trusts the X-Forwarded-* headers only from loopback and private addresses,
+# and listens on 127.0.0.1 only, so it cannot be reached around nginx.
+
+# Login attempts (POST only; loading the login page is not counted) per client address:
+# 10 per minute, a burst of 5 more allowed.
+map $request_method $mizoine_login_key {
+    POST    $binary_remote_addr;
+    default "";
+}
+limit_req_zone $mizoine_login_key zone=mizoine_login:10m rate=10r/m;
+
+# HTTP → HTTPS
+server {
+    listen 80;
+    listen [::]:80;
+    server_name mizoine.example.org;
+
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name mizoine.example.org;
+
+    # e.g. from Let's Encrypt (certbot)
+    ssl_certificate     /etc/letsencrypt/live/mizoine.example.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/mizoine.example.org/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+
+    server_tokens off;
+
+    # Inherited by the locations below. HSTS and the other security headers come from the application.
+    proxy_set_header Host              $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Host  $host;
+    # Overwrite, do not append: nginx is the only proxy, so the client cannot inject addresses.
+    proxy_set_header X-Forwarded-For   $remote_addr;
+
+    # Login form: limit password guessing early. The application itself also limits failed logins per
+    # client address, for the form and HTTP Basic (mizoine.login-limit.*).
+    location = /login {
+        limit_req zone=mizoine_login burst=5 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:8080;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+    }
+}

@@ -7,3 +7,23 @@ Version 1.0 is starting fresh: a small Java / Spring Boot web server that only u
 - Plan and status: [DEV.md](DEV.md)
 - Goals and principles: [BACKLOG.md](BACKLOG.md)
 - Old version (issue tracker): https://github.com/truedrcb/mizoine/tree/master
+
+## Run
+
+Needs Java 25 and, to build, Maven 3.9+.
+
+```sh
+mvn verify                                # build and test → target/mizoine-1.0.0-SNAPSHOT.jar
+cp users.example.yaml users.yaml
+java -jar target/mizoine-*.jar hash-password  # asks for a password, prints its hash
+# put your username and the hash into users.yaml
+java -jar target/mizoine-*.jar --mizoine.users-file=./users.yaml
+```
+
+Open http://localhost:8080 and log in. Edits to `users.yaml` take effect without a restart.
+
+## Behind nginx (HTTPS)
+
+The application speaks plain HTTP and listens on `127.0.0.1:8080` only. nginx on the same machine handles HTTPS
+and forwards requests to it. See [docs/nginx.conf.example](docs/nginx.conf.example): HTTP→HTTPS redirect,
+forwarded headers, and a rate limit on login attempts.
