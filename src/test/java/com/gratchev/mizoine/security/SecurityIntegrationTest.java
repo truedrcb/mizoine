@@ -65,9 +65,10 @@ class SecurityIntegrationTest {
 	}
 
 	@Test
-	void basicAuthWithSecondUserWorksToo() throws Exception {
+	void basicAuthWithSecondUserIsGreetedByName() throws Exception {
 		mockMvc.perform(get("/").with(httpBasic("guest", "guest-pass")))
-				.andExpect(status().isOk());
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Hello, guest")));
 	}
 
 	@Test

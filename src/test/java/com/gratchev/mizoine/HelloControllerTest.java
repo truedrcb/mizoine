@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,12 +23,21 @@ class HelloControllerTest {
 	}
 
 	@Test
-	@WithMockUser
-	void rootShowsHelloWorldPage() throws Exception {
+	@WithMockUser("artem")
+	void rootGreetsLoggedInUser() throws Exception {
 		mockMvc.perform(get("/"))
 				.andExpect(status().isOk())
 				.andExpect(view().name("hello"))
 				.andExpect(content().contentTypeCompatibleWith("text/html"))
-				.andExpect(content().string(containsString("Hello, World")));
+				.andExpect(content().string(containsString("Hello, artem")));
+	}
+
+	@Test
+	@WithMockUser("<script>alert(1)</script>")
+	void usernameIsHtmlEscaped() throws Exception {
+		mockMvc.perform(get("/"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Hello, &lt;script&gt;alert(1)&lt;/script&gt;")))
+				.andExpect(content().string(not(containsString("<script>"))));
 	}
 }

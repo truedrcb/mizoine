@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-16): steps 0–5 done (50 tests green). Next: step 6.
+**Status** (updated: 2026-11-16): steps 0–7 done (59 tests green). Next: step 8.
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -139,7 +139,7 @@ Pure unit tests, no Spring context. Use `@TempDir` for files.
   - Boot 4 needs `spring-boot-starter-security-test` for `spring-security-test`.
   - `HelloControllerTest` (`@WebMvcTest`) does not load `SecurityConfig`; it uses `@WithMockUser` against Boot's default security. The real chain is covered by `SecurityIntegrationTest`.
 
-### 6. Startup validation (fail fast)  ☐
+### 6. Startup validation (fail fast)  ☑
 - *Note:* 6.1 is already covered by `MizoinePropertiesTest` (step 4). Since the users file is read when the `UserDetailsService` bean is created, 6.2 and 6.3 probably pass straight away; still write them first and check that the messages are clear.
 - **Red** — tests using `ApplicationContextRunner`:
   1. property not set → context fails, message mentions `mizoine.users-file`
@@ -147,10 +147,17 @@ Pure unit tests, no Spring context. Use `@TempDir` for files.
   3. invalid file → context fails
   4. valid file with zero users → context starts, warning logged (`OutputCaptureExtension`)
 - **Green:** load and validate the file once at startup.
+- *Done, with additions:*
+  - Refactoring first: users beans moved from `SecurityConfig` to `users/UsersConfig`, so `UsersStartupTest` can start them without web security.
+  - 6.2 and 6.3 passed right away, as expected. The test searches the cause chain for `UsersFileException` (the root cause of a missing file is `NoSuchFileException`).
+  - 6.4: the warning is logged by `FileUserDetailsService` on load.
+  - *(added)* `UsersFileFailureAnalyzer` (registered in `META-INF/spring.factories`): a users file problem prints a short "APPLICATION FAILED TO START" with description and action instead of a bean creation stack trace. Checked by running the jar too.
+  - The analyzer's action text points to `users.example.yaml`, which step 10 creates.
 
-### 7. Show the logged-in user on the page  ☐
+### 7. Show the logged-in user on the page  ☑
 - **Red:** `GET /` as `artem` → page contains `Hello, artem`.
 - **Green:** pass `Principal` to the view. Small step, confirms the end-to-end flow.
+- *Done, with additions:* the page heading is now `Hello, <username>` (no longer `Hello, World`). *(added)* a username with HTML is escaped (`th:text`); integration test checks `Hello, guest` over HTTP Basic. Smoke-tested with the jar and curl: valid user → `Hello, artem`, wrong password → 401, anonymous browser → 302 to `/login`.
 
 ### 8. Security hardening  ☐
 - **Red** — tests for:

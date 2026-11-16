@@ -6,6 +6,8 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -17,6 +19,8 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
  * Usernames are case-sensitive. Every user has role {@code USER}.
  */
 public class FileUserDetailsService implements UserDetailsService {
+
+	private static final Logger log = LoggerFactory.getLogger(FileUserDetailsService.class);
 
 	private static final String ROLE = "USER";
 
@@ -33,6 +37,9 @@ public class FileUserDetailsService implements UserDetailsService {
 		}
 		this.users = entries.stream()
 				.collect(Collectors.toUnmodifiableMap(UserEntry::username, Function.identity()));
+		if (users.isEmpty()) {
+			log.warn("Users file {} has no users: nobody can log in", usersFile);
+		}
 	}
 
 	@Override
