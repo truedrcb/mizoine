@@ -1,7 +1,0 @@
-{
-  "repositories" : {
-    "test1": {
-      "home": "sample/test_repo1"
-    }
-  }
-}
