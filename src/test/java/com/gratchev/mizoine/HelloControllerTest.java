@@ -9,6 +9,7 @@ import static org.hamcrest.Matchers.containsString;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(HelloController.class)
@@ -21,6 +22,7 @@ class HelloControllerTest {
 	}
 
 	@Test
+	@WithMockUser
 	void rootShowsHelloWorldPage() throws Exception {
 		mockMvc.perform(get("/"))
 				.andExpect(status().isOk())

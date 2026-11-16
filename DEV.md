@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-16): steps 0–3 done (19 tests green). Next: step 4.
+**Status** (updated: 2026-11-16): steps 0–5 done (50 tests green). Next: step 6.
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -104,15 +104,20 @@ Pure unit tests, no Spring context. Use `@TempDir` for files.
   For 3.8 the file is read as a `JsonNode` tree and checked field by field, so every unknown field can be logged.
 - The parser checks only the `{id}` syntax. Checking that the id is one the password encoder knows (e.g. typo `{bcrpyt}`) moves to step 5, where the encoder exists.
 
-### 4. `UserDetailsService` backed by the file  ☐
+### 4. `UserDetailsService` backed by the file  ☑
 - **Red** — `FileUserDetailsServiceTest` (unit):
   1. known user → `UserDetails` with the hash and role `USER`
   2. unknown user → `UsernameNotFoundException`
   3. username lookup is case-sensitive: user `artem` exists → `loadUserByUsername("Artem")` throws `UsernameNotFoundException`. *Decided 2026-11-16.*
 - **Green:** `FileUserDetailsService implements UserDetailsService`, reads users via `UsersFileParser`.
 - Configuration property `mizoine.users-file` bound to a `@ConfigurationProperties` record `MizoineProperties`, validated (`@NotNull`).
+- *Done, with additions:*
+  - 4.4 *(added)* every lookup returns a new `UserDetails`: Spring Security erases the password after login, so a cached instance would break every later login.
+  - `MizoinePropertiesTest` (`ApplicationContextRunner`): path is bound; missing property fails with a message naming `mizoine.users-file` (custom `@NotNull` message — the default one says `usersFile`). This already covers 6.1.
+  - The file is read once, in the constructor. Step 9 changes that.
+  - Only `spring-security-core` was added in this step; the full starter came in step 5.
 
-### 5. Security configuration  ☐
+### 5. Security configuration  ☑
 - **Red** — `SecurityIntegrationTest` (`@SpringBootTest` + MockMvc, test users file in `src/test/resources/users-test.yaml` with known hashes):
   1. anonymous `GET /` → redirect to `/login`
   2. anonymous `GET /` with `Accept: application/json` or Basic header missing → 401
@@ -125,8 +130,17 @@ Pure unit tests, no Spring context. Use `@TempDir` for files.
   9. *(from step 3)* user whose hash has an unknown `{id}` (e.g. `{bcrpyt}`) → rejected when the file is loaded, not only at login
 - **Green:** `SecurityConfig` with `SecurityFilterChain`: everything authenticated except `/login`, form login, HTTP Basic, `DelegatingPasswordEncoder`.
 - Update the step 2 test if needed so it runs with real security.
+- *Done, with additions and findings:*
+  - Test users in `src/test/resources/users-test.yaml`: `artem`/`artem-pass`, `guest`/`guest-pass`, BCrypt cost 4 (fast tests; cost only matters when hashing).
+  - Test 9 is a unit test: `PasswordHashing` (in `users` package) supports **only `{bcrypt}`** and checks the hash format, so a typo in the id or a truncated hash fails at load. `FileUserDetailsService` checks every user on load; the message names the user, never the hash.
+  - *(added)* login page is public; second user works; case-sensitive username over HTTP; same user can log in twice; POST `/login` with CSRF token works.
+  - Logout depends on the client (Spring Security default when HTTP Basic is on): browser (`Accept: text/html`) → 302 to `/login?logout`, session invalidated; other clients → 204, no redirect. Both are tested.
+  - Spring Security 7 redirects to the relative URL `/login`.
+  - Boot 4 needs `spring-boot-starter-security-test` for `spring-security-test`.
+  - `HelloControllerTest` (`@WebMvcTest`) does not load `SecurityConfig`; it uses `@WithMockUser` against Boot's default security. The real chain is covered by `SecurityIntegrationTest`.
 
 ### 6. Startup validation (fail fast)  ☐
+- *Note:* 6.1 is already covered by `MizoinePropertiesTest` (step 4). Since the users file is read when the `UserDetailsService` bean is created, 6.2 and 6.3 probably pass straight away; still write them first and check that the messages are clear.
 - **Red** — tests using `ApplicationContextRunner`:
   1. property not set → context fails, message mentions `mizoine.users-file`
   2. file missing → context fails, message mentions the path

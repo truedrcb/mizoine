@@ -1,0 +1,6 @@
+# Users for tests. Passwords: artem -> artem-pass, guest -> guest-pass (BCrypt cost 4 for speed).
+users:
+  - username: artem
+    password: "{bcrypt}$2a$04$0Lrt8DwJgJ44jVTKzCnmhu5LnOZEGAI2jdGylGLW/JgYQZ5r/oJ4m"
+  - username: guest
+    password: "{bcrypt}$2a$04$gErjw5GH5tGA5QFqNBbDS.cfGqRdaFw1fgnE1C.jBHcH063E.5YSW"
