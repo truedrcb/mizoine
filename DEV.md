@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-16): plan drafted, no code yet.
+**Status** (updated: 2026-11-16): steps 0–3 done (19 tests green). Next: step 4.
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -8,7 +8,7 @@ are built on top of it.
 
 Steps are numbered so you can refer to them ("do step 4"). Every step follows TDD:
 **Red** (write a failing test and run it) → **Green** (write the least code that makes it pass) →
-**Refactor** (clean up while tests stay green). A step is done only when `./mvnw verify` passes.
+**Refactor** (clean up while tests stay green). A step is done only when `mvn verify` passes.
 
 ---
 
@@ -27,13 +27,14 @@ Steps are numbered so you can refer to them ("do step 4"). Every step follows TD
 |-------|--------|-----|
 | Language | **Java 25** (current LTS) | Long support window, records, pattern matching |
 | Framework | **Spring Boot 4.1.x** (4.1.2 is the latest GA on Maven Central as of 2026-11-16; move to 4.2.x when it is GA) | Most widely used Java web stack, security patches come fast, Spring Security built in |
-| Build | **Maven** with **Maven Wrapper** (`./mvnw`) | Reproducible builds without a global Maven install |
-| Web | Spring MVC (`spring-boot-starter-web`), plain HTML template (Thymeleaf) | Simple and enough for a hello page |
+| Build | **Maven 3.9+**, installed (no Maven Wrapper) | No generated `mvnw`/`mvnw.cmd` scripts in the repo; `maven-enforcer-plugin` fails the build with a clear message on Maven < 3.9 or Java < 25 |
+| Web | Spring MVC (`spring-boot-starter-webmvc`, the Boot 4 name), plain HTML template (Thymeleaf) | Simple and enough for a hello page |
 | Security | Spring Security: form login for browsers + HTTP Basic for scripts/curl | Both ways are standard and tested |
 | Passwords | Stored as **BCrypt hashes** with `{bcrypt}` prefix (Spring `DelegatingPasswordEncoder`) | The file is editable, but plain-text passwords are never stored |
 | Users file | **YAML** (`users.yaml`), path set by property `mizoine.users-file` | Easier to read and edit by hand than JSON, allows comments |
-| Tests | JUnit 5, AssertJ, Spring Boot Test, MockMvc, `spring-security-test` | Standard Spring testing stack |
+| Tests | JUnit 5, AssertJ, Spring Boot Test, MockMvc (`spring-boot-starter-webmvc-test`), `spring-security-test` | Standard Spring testing stack |
 | Package | `com.gratchev.mizoine` | Same as the archived version |
+| Code style | `final` on fields, locals and parameters (not lambda parameters); Checkstyle `FinalLocalVariable` + `FinalParameters` run in `validate` and fail the build | Decided 2026-11-16 |
 
 ### Users file format
 
@@ -49,7 +50,7 @@ users:
 
 Rules:
 - `username` must be non-empty and unique.
-- `password` must be a hash with a known `{id}` prefix. Plain-text values are rejected at load time.
+- `password` must be a hash with an `{id}` prefix. Plain-text values and `{noop}` are rejected at load time.
 - The real `users.yaml` is **not committed** (git-ignored). A `users.example.yaml` is committed.
 
 ### Error behaviour
@@ -62,26 +63,29 @@ Rules:
 
 ## Steps
 
-### 0. Prerequisites  ☐
+### 0. Prerequisites  ☑
 - Install JDK 25 (e.g. `sdk install java 25-tem` or the distro package). Java and Maven are **not** installed in the current WSL environment.
-- No global Maven needed — step 1 adds the Maven Wrapper.
+- Install Maven 3.9+.
+- *Done:* Temurin JDK 25.0.5 and Maven 3.9.16 unpacked to `~/.local/opt/` (no sudo available). Not on `PATH`; before building run
+  `export JAVA_HOME=$(ls -d ~/.local/opt/jdk-25*); export PATH=$JAVA_HOME/bin:$HOME/.local/opt/apache-maven-3.9.16/bin:$PATH`.
 
-### 1. Project skeleton  ☐
+### 1. Project skeleton  ☑
 - Create `pom.xml` at the repo root: parent `spring-boot-starter-parent` 4.1.x, Java 25,
   starters `web`, `security`, `thymeleaf`, `validation`; test deps `spring-boot-starter-test`, `spring-security-test`.
-- Add Maven Wrapper (`mvn wrapper:wrapper` once, or copy from start.spring.io).
+- No Maven Wrapper (decided 2026-11-16). Instead, `maven-enforcer-plugin` requires Maven `[3.9,)` and Java `[25,)`.
 - Main class `com.gratchev.mizoine.MizoineApplication`.
 - **Red:** `MizoineApplicationTests.contextLoads()` (`@SpringBootTest`) — fails until the app exists.
 - **Green:** app class + minimal `application.yaml`.
-- Done when: `./mvnw verify` is green.
+- Done when: `mvn verify` is green.
+- *Changed from the plan:* only `webmvc` and `thymeleaf` added (Boot 4 renamed `web` → `webmvc`). `security` and `spring-security-test` are added in step 5, `validation` in step 4, when a test first needs them.
 
-### 2. Hello World page (security off for this step only)  ☐
+### 2. Hello World page (security off for this step only)  ☑
 - **Red:** `HelloControllerTest` (`@WebMvcTest`): `GET /` returns 200, view shows `Hello, World`.
-  Use `@WithMockUser` so the test does not depend on security yet.
+  *(No `@WithMockUser` needed: security is not on the classpath yet.)* `@WebMvcTest` is in `org.springframework.boot.webmvc.test.autoconfigure` in Boot 4.
 - **Green:** `HelloController` + `templates/hello.html`.
 - Refactor: nothing expected.
 
-### 3. Users file model and parser  ☐
+### 3. Users file model and parser  ☑
 Pure unit tests, no Spring context. Use `@TempDir` for files.
 - **Red** — `UsersFileParserTest`:
   1. valid file with 2 users → 2 entries with correct usernames and hashes
@@ -92,8 +96,13 @@ Pure unit tests, no Spring context. Use `@TempDir` for files.
   6. blank username → `UsersFileException`
   7. password without `{id}` prefix (plain text) → `UsersFileException`
   8. unknown fields (top level or per user) are ignored, and a warning naming each field is logged (`OutputCaptureExtension`). *Decided 2026-11-16.*
-- **Green:** `record UserEntry(String username, String passwordHash)`, `UsersFileParser` (Jackson YAML, already on the Boot classpath via `jackson-dataformat-yaml`).
-  For 3.8, don't just disable `FAIL_ON_UNKNOWN_PROPERTIES`: Jackson would then drop unknown fields silently. Collect them instead (`@JsonAnySetter` or a `DeserializationProblemHandler`) so each one can be logged.
+  9. *(added)* empty file, file without `users` key → `UsersFileException`; `users:` with no value → empty result
+  10. *(added)* missing password → `UsersFileException`; `{noop}` password is rejected (it is plain text)
+  11. *(added)* error messages never contain the password value, also for YAML syntax errors (Jackson quotes the broken line, so only line/column is reported)
+  12. *(added)* `artem` and `Artem` are two different users
+- **Green:** `record UserEntry(String username, String passwordHash)`, `UsersFileParser` in package `com.gratchev.mizoine.users`. Boot 4 uses **Jackson 3**: dependency `tools.jackson.dataformat:jackson-dataformat-yaml` (version managed by Boot).
+  For 3.8 the file is read as a `JsonNode` tree and checked field by field, so every unknown field can be logged.
+- The parser checks only the `{id}` syntax. Checking that the id is one the password encoder knows (e.g. typo `{bcrpyt}`) moves to step 5, where the encoder exists.
 
 ### 4. `UserDetailsService` backed by the file  ☐
 - **Red** — `FileUserDetailsServiceTest` (unit):
@@ -113,6 +122,7 @@ Pure unit tests, no Spring context. Use `@TempDir` for files.
   6. form login (`formLogin()` request post-processor) valid → redirect to `/`; invalid → `/login?error`
   7. logout works and session is gone
   8. CSRF is active for form posts (post without token → 403)
+  9. *(from step 3)* user whose hash has an unknown `{id}` (e.g. `{bcrpyt}`) → rejected when the file is loaded, not only at login
 - **Green:** `SecurityConfig` with `SecurityFilterChain`: everything authenticated except `/login`, form login, HTTP Basic, `DelegatingPasswordEncoder`.
 - Update the step 2 test if needed so it runs with real security.
 
@@ -147,7 +157,7 @@ Lets a person edit `users.yaml` and have it take effect.
 - Note: already logged-in sessions of a removed user stay valid until they expire — document this, or add a test + session invalidation later.
 
 ### 10. Run as a jar + documentation  ☐
-- **Red:** none new; `./mvnw verify` builds an executable jar.
+- **Red:** none new; `mvn verify` builds an executable jar.
 - Add `users.example.yaml`, add `users.yaml` to `.gitignore`.
 - Update `README.md`: how to install JDK, generate a password hash, create `users.yaml`, run
   `java -jar target/mizoine-*.jar --mizoine.users-file=./users.yaml`.
