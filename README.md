@@ -1,10 +1,9 @@
 # Mizoine
-Personal Lightweight Issue Tracker
 
-http://mizoine.info
+Personal knowledge base and file storage on plain Markdown files and Git.
 
+Version 1.0 is starting fresh: a small Java / Spring Boot web server that only users listed in `users.yaml` can access.
 
-# Installation
-
-See dedicated Mizoine Issue:
-https://github.com/truedrcb/mizoine/blob/open/sample/test_repo1/projects/DEV/issues/5/description.md
+- Plan and status: [DEV.md](DEV.md)
+- Goals and principles: [BACKLOG.md](BACKLOG.md)
+- Old version (issue tracker): https://github.com/truedrcb/mizoine/tree/master
