@@ -26,8 +26,30 @@ class MizoinePropertiesTest {
 	@Test
 	void bindsUsersFile() {
 		runner.withPropertyValues("mizoine.users-file=/some/dir/users.yaml")
-				.run(context -> assertThat(context.getBean(MizoineProperties.class).usersFile())
+				.run(context -> assertThat(context.getBean(MizoineProperties.class).usersFilePath())
 						.isEqualTo(Path.of("/some/dir/users.yaml")));
+	}
+
+	@Test
+	void pathsAreFileSystemPathsNotClasspathResources() {
+		// application.yaml exists on the classpath: Spring's default conversion would resolve it there
+		runner.withPropertyValues("mizoine.users-file=application.yaml")
+				.run(context -> assertThat(context.getBean(MizoineProperties.class).usersFilePath())
+						.isEqualTo(Path.of("application.yaml")));
+	}
+
+	@Test
+	void repositoriesDirIsTheCurrentDirectoryByDefault() {
+		runner.withPropertyValues("mizoine.users-file=users.yaml")
+				.run(context -> assertThat(context.getBean(MizoineProperties.class).repositoriesDirPath())
+						.isEqualTo(Path.of(".")));
+	}
+
+	@Test
+	void bindsRepositoriesDir() {
+		runner.withPropertyValues("mizoine.users-file=users.yaml", "mizoine.repositories-dir=/srv/repositories")
+				.run(context -> assertThat(context.getBean(MizoineProperties.class).repositoriesDirPath())
+						.isEqualTo(Path.of("/srv/repositories")));
 	}
 
 	@Test

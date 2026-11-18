@@ -21,7 +21,53 @@ java -jar target/mizoine-*.jar hash-password  # asks for a password, prints its 
 java -jar target/mizoine-*.jar --mizoine.users-file=./users.yaml
 ```
 
-Open http://localhost:8080 and log in. Edits to `users.yaml` take effect without a restart.
+Open http://127.0.0.1:8080 and log in. Edits to `users.yaml` take effect without a restart.
+
+## Settings
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `mizoine.users-file` | — (required) | The users file |
+| `mizoine.repositories-dir` | `.` (current directory) | Folder with one `<name>.yaml` per repository |
+| `mizoine.login-limit.max-failures` | `5` | Failed logins per client address before it is blocked |
+| `mizoine.login-limit.window` | `5m` | How long failures count and the block lasts |
+| `server.address` | `127.0.0.1` | Listen address (only nginx on the same machine can connect) |
+| `server.port` | `8080` | Listen port |
+
+Set them in any of these ways (standard Spring Boot):
+
+- on the command line: `java -jar mizoine.jar --mizoine.repositories-dir=/srv/mizoine/repositories`
+- as environment variable: `MIZOINE_REPOSITORIESDIR=/srv/mizoine/repositories`
+- in `application.yaml` (or `config/application.yaml`) in the directory the jar is started from:
+
+  ```yaml
+  mizoine:
+    users-file: users.yaml
+    repositories-dir: repositories
+  ```
+
+Relative paths are relative to the directory the jar is started from.
+
+## Repositories
+
+A repository is a folder on disk, described by one YAML file in the repositories folder. The file name is
+the repository name: `notes.yaml` → `notes`.
+
+```yaml
+# repositories/notes.yaml
+path: /home/artem/notes        # root folder; relative paths start at this file's folder
+access:                        # username → folders the user may access, with everything below them
+  artem: ["/"]                 # "/" = the whole repository
+  guest: [public, projects/shared]
+```
+
+- Files are read when a repository is requested, not at startup; edits take effect without a restart.
+- Every `*.yaml` in the repositories folder counts, except the users file. With the default (the current
+  directory), other YAML files there are read too: a folder of their own keeps them apart.
+- Names: letters, digits, `.`, `_`, `-`; not starting with `.`; not `login`, `logout`, `error`.
+- Folders starting with `.` (such as `.git`) are never shown.
+
+Repositories are not reachable over the web yet: that is in development ([DEV.md](DEV.md), steps 17–21).
 
 ## Behind nginx (HTTPS)
 

@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-18): steps 0–15 done (174 tests green). Next: step 16 (lazy repository lookup), then 17–22.
+**Status** (updated: 2026-11-18): steps 0–16 done (206 tests green). Next: step 17 (access rules), then 18–22.
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -26,6 +26,7 @@ Steps are numbered so you can refer to them ("do step 4"). Every step follows TD
 | R8 | Folders under `/{repository}/…/` list their subfolders: JSON when the client accepts JSON, HTML with clickable links when it accepts HTML |
 | R9 | The start page `/` lists the repositories the logged-in user can access, as links; if there are none, it says so |
 | R10 | No repositories configured is not an error: the application starts |
+| R11 | The repositories folder is the current directory unless `mizoine.repositories-dir` says otherwise |
 
 ## Technology decisions
 
@@ -42,7 +43,7 @@ Steps are numbered so you can refer to them ("do step 4"). Every step follows TD
 | Package | `com.gratchev.mizoine` | Same as the archived version |
 | Code style | `final` on fields, locals and parameters (not lambda parameters); Checkstyle `FinalLocalVariable` + `FinalParameters` run in `validate` and fail the build | Decided 2026-11-16 |
 | HTTPS | **nginx** in front (TLS), the application speaks plain HTTP on `127.0.0.1` (step 12) | Certificates and TLS handled by a standard tool |
-| Repositories | One **YAML** file per repository in `mizoine.repositories-dir`, read lazily on request (steps 14–16) | Same hand-editable format as users; no restart needed |
+| Repositories | One **YAML** file per repository in `mizoine.repositories-dir` (default: current directory), read lazily on request (steps 14–16) | Same hand-editable format as users; no restart needed |
 | API documentation | OpenAPI annotations (`swagger-annotations-jakarta`) on endpoints; springdoc **test-only** generates `docs/openapi.yaml`; not served by the application, no Swagger UI (step 15, D9) | Description lives in the repository, nothing extra exposed |
 
 ### Users file format
@@ -64,7 +65,7 @@ Rules:
 
 ### Repository file format (steps 14–22)
 
-One file per repository in the folder set by `mizoine.repositories-dir`. The file name is the repository name: `notes.yaml` → `/notes/`.
+One file per repository in the folder set by `mizoine.repositories-dir` — **default: the current directory** (decided 2026-11-18). The file name is the repository name: `notes.yaml` → `/notes/`. Every `*.yaml` in that folder counts, except the users file (never a repository). A dedicated folder (e.g. `--mizoine.repositories-dir=repositories`) keeps other YAML files out.
 
 ```yaml
 # repositories/notes.yaml
@@ -89,7 +90,7 @@ Users file:
 - Zero users in a valid file → allowed, but nobody can log in (logged as a warning).
 
 Repository files (read on request, never at startup — step 16):
-- No repositories configured (property not set, folder missing or empty) → application starts, warning; the start page says so.
+- No repositories (folder missing or without repository files) → application starts; warning if the folder is missing; the start page says so.
 - File unreadable (permissions unknown) → repository unknown, 404 for everyone, error logged once; an older valid version is not kept (D7).
 - File readable with problems (e.g. wrong root folder) → 500 with details for users with grant `/`, 500 without details for partial grants, 404 without grant (D8).
 
@@ -338,7 +339,7 @@ Pure unit tests, `@TempDir`, like step 3.
   - The description endpoint `/v3/api-docs` (constant `OpenApiDocumentationTest.API_DOCS_PATH`) exists only in `OpenApiDocumentationTest`: springdoc is switched off for all other tests in `src/test/resources/config/application.yaml`; `ApiDocsNotServedTest` checks 404 there (added 2026-11-18).
   - Checked: the jar contains `swagger-annotations-jakarta` only, no springdoc; on the running jar `/v3/api-docs`, `/v3/api-docs.yaml` and `/swagger-ui.html` → 404 for a logged-in user.
 
-### 16. Lazy repository lookup  ☐
+### 16. Lazy repository lookup  ☑
 *Decided 2026-11-18:* repository files are **not** loaded at startup. On each request to `/{repository}/…` the matching file `<repositories-dir>/<repository>.yaml` is looked up and read when needed.
 - **Red** — `RepositoryRegistryTest` (unit, `@TempDir`, counting parser as in step 9):
   1. first request for `notes` reads `notes.yaml` and returns its config; other files in the folder are not read
@@ -352,11 +353,21 @@ Pure unit tests, `@TempDir`, like step 3.
   9. lookups of names without a file do not grow the cache (random URLs cannot fill memory)
   10. a username in `access` that is not in `users.yaml` → warning when the file is read, naming user and repository
 - **Red** — `RepositoriesStartupTest` (`ApplicationContextRunner`):
-  1. `mizoine.repositories-dir` not set → **starts** (no repositories), warning naming the property *(decided 2026-11-18: no repositories is not an error)*
+  1. `mizoine.repositories-dir` not set → the current directory is used, no warning *(decided 2026-11-18; first planned as "no repositories, warning")*
   2. folder missing → starts, warning; requests answer 404 until the folder exists
   3. empty folder → starts (no warning needed; the start page tells the user)
+  4. *(added)* the users file in the repositories folder (e.g. `./users.yaml` with the default `.`) is never a repository
 - **Red** — also in `RepositoryRegistryTest`: `all()` lists the repositories of all `*.yaml` files in the folder, reading only new or changed files (same cache as `find`); non-`.yaml` files and invalid names are skipped; unreadable files are left out (permissions unknown).
 - **Green:** `RepositoryRegistry.find(name)` → `Optional<RepositoryConfig>` and `all()`; cache `name → (file version, config)`; `RepositoryFileParser` from step 14.
+- *Done, with findings:*
+  - 22 unit tests (`RepositoryRegistryTest`) + 5 startup tests (`RepositoriesStartupTest`) + 2 property tests.
+  - Unreadable files are cached as "unreadable" with their file version, so they are neither parsed nor logged again until they change.
+  - "User exists" for the warning uses Spring's `UserDetailsService` (`loadUserByUsername`), so the users code did not change. Unit tests pass a plain predicate.
+  - *(added)* broken files in the folder are not even mentioned at startup (nothing is read); `all()` also drops cache entries of removed files; a folder created after startup is picked up.
+  - `mizoine.repositories-dir` defaults to `.` (the current directory). `RepositoriesConfig` warns at startup only when the folder is missing; an empty folder gives no warning.
+  - The users file is never a repository: compared as normalized absolute path, so `./users.yaml` and `data/../users.yaml` match.
+  - **Finding:** Spring's default text → `Path` conversion first looks for the text on the **classpath**: `.` became `target/test-classes`, and `mizoine.users-file=application.yaml` would have pointed to the copy inside the application. A `@ConfigurationPropertiesBinding` converter fixed only defaults, not explicit values. So `MizoineProperties` binds both paths as text and offers `usersFilePath()` / `repositoriesDirPath()` (`Path.of`, relative to the working directory). Test: `MizoinePropertiesTest.pathsAreFileSystemPathsNotClasspathResources`.
+  - Checked with the jar: starts without the setting, logs the warning, start page as before.
 
 ### 17. Access rules  ☐
 Pure unit tests — the core of the security of this feature.
@@ -388,7 +399,7 @@ Pure unit tests — the core of the security of this feature.
 - **Red** — `StartPageTest` (`@SpringBootTest` + MockMvc, test repositories folder):
   1. user with grants in two of three repositories → page lists exactly those two, as links `<a href="notes/">notes</a>`, sorted by name
   2. user without any grant → page says "No accessible repositories configured for you." (HTML-escaped username in heading as before)
-  3. no repositories configured at all (property not set, folder missing or empty) → same message; status 200
+  3. no repositories at all (folder missing or without repository files) → same message; status 200
   4. repository whose file is readable with problems (D8): listed with a "not available" note; the note shows the problem only to users with grant `/`
   5. unreadable repository files are not listed (permissions unknown, D7)
   6. `Accept: application/json` → `{"repositories":[{"name":"notes","available":true}, …]}` (same content negotiation as step 21, D6)
@@ -421,7 +432,7 @@ Replaces the "ok" page of step 18 for folders.
 
 ### 22. Documentation  ☐
 - `repositories.example/notes.yaml` (committed, checked by a test like step 10); real repository folder git-ignored if kept in the project.
-- README: `--mizoine.repositories-dir=...`, file format, URLs, JSON example (`curl -H 'Accept: application/json' -u artem …/notes/`).
+- README: already describes `mizoine.repositories-dir` and the file format (2026-11-18); add URLs and a JSON example (`curl -H 'Accept: application/json' -u artem …/notes/`) once they work.
 
 ---
 
@@ -447,4 +458,5 @@ Replaces the "ok" page of step 18 for folders.
 - **D9 — Swagger UI:** **Decided 2026-11-18:** no Swagger UI, and the application does not serve the API description at all; it is generated during the build into `docs/openapi.yaml` in the repository (step 15).
 - Repository names share the URL space with the application (`/login`, `/logout`, …): reserved names are rejected (step 14). Alternative: a prefix like `/r/{repository}/` — not chosen: `/{repository}/` was requested.
 - ~~The start page `/` could list the user's repositories~~ **Decided 2026-11-18:** yes, step 19.
-- ~~Fail to start without repositories?~~ **Decided 2026-11-18:** no; property not set, folder missing or empty → start, warning in the log, message on the start page.
+- ~~Fail to start without repositories?~~ **Decided 2026-11-18:** no; folder missing or empty → start (warning in the log if missing), message on the start page.
+- ~~Repositories folder when not set?~~ **Decided 2026-11-18:** the current directory (`.`); the users file in it is never a repository.

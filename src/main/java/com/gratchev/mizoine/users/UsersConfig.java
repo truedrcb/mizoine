@@ -18,7 +18,7 @@ public class UsersConfig {
 
 	@Bean
 	UserDetailsService userDetailsService(final MizoineProperties properties) {
-		return new FileUserDetailsService(properties.usersFile(), new UsersFileParser());
+		return new FileUserDetailsService(properties.usersFilePath(), new UsersFileParser());
 	}
 
 	@Bean
