@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-18): steps 0–16 done (206 tests green). Next: step 17 (access rules), then 18–22.
+**Status** (updated: 2026-11-18): steps 0–17 done (218 tests green). Next: step 18 (`/{repository}/` "ok" page), then 19–22.
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -369,7 +369,7 @@ Pure unit tests, `@TempDir`, like step 3.
   - **Finding:** Spring's default text → `Path` conversion first looks for the text on the **classpath**: `.` became `target/test-classes`, and `mizoine.users-file=application.yaml` would have pointed to the copy inside the application. A `@ConfigurationPropertiesBinding` converter fixed only defaults, not explicit values. So `MizoineProperties` binds both paths as text and offers `usersFilePath()` / `repositoriesDirPath()` (`Path.of`, relative to the working directory). Test: `MizoinePropertiesTest.pathsAreFileSystemPathsNotClasspathResources`.
   - Checked with the jar: starts without the setting, logs the warning, start page as before.
 
-### 17. Access rules  ☐
+### 17. Access rules  ☑
 Pure unit tests — the core of the security of this feature.
 - **Red** — `RepositoryAccessTest`:
   1. grant `/` → user may enter every folder
@@ -378,6 +378,11 @@ Pure unit tests — the core of the security of this feature.
   4. user without any grant → no access to the repository at all
   5. usernames are case-sensitive
 - **Green:** `RepositoryAccess` with `canEnter(user, folder)` and `visibleChildren(user, folder, children)`.
+- *Done, with additions:* 12 unit tests (`RepositoryAccessTest`).
+  - API: `RepositoryAccess.of(config, username)` → `hasAccess()`, `isWholeRepository()` (decides D8 details), `canEnter(folder)`, `visibleChildren(folder, children)`. Folders are path segments, like `FolderGrant`.
+  - *(added)* several grants add up; an empty folder list means no access; anonymous (`null`) has no access; folder names are case-sensitive.
+  - *(added)* hidden names (D3) are filtered here too — never visible nor enterable, even with grant `/` — so no caller can forget it. Step 20 still blocks them at the path level.
+  - `visibleChildren` keeps the given order; sorting is the listing's job (step 21).
 
 ### 18. `/{repository}/` — "ok" page  ☐
 - **Red** — `RepositoryControllerTest` (`@SpringBootTest` + MockMvc, test repositories in `src/test/resources/repositories/`):
