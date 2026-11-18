@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-18): steps 0–18 done (235 tests green). Next: step 19 (start page with the user's repositories), then 20–22.
+**Status** (updated: 2026-11-18): steps 0–19 done (250 tests green). Next: step 20 (safe paths inside a repository), then 21–22.
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -406,7 +406,7 @@ Pure unit tests — the core of the security of this feature.
   - **springdoc leaves out methods that return `ModelAndView`.** First taken for "springdoc drops trailing slashes" — wrong; with a view name (`String`) and the 500 status set on the response, both `/{repository}` and `/{repository}/` are documented under their real paths.
   - Live-tested with the jar: all cases as in the tests; the problem file and the unreadable file are logged once each.
 
-### 19. Start page: the user's repositories  ☐
+### 19. Start page: the user's repositories  ☑
 *Requested 2026-11-18.* Extends the start page of step 7: the greeting stays as heading, the list of repositories comes below it.
 - **Red** — `StartPageTest` (`@SpringBootTest` + MockMvc, test repositories folder):
   1. user with grants in two of three repositories → page lists exactly those two, as links `<a href="notes/">notes</a>`, sorted by name
@@ -418,6 +418,12 @@ Pure unit tests — the core of the security of this feature.
   7. anonymous → login (unchanged)
 - **Green:** `HelloController` → `StartPageController`, using `RepositoryRegistry.all()` and `RepositoryAccess`; template `hello.html` → `start.html`. Update `HelloControllerTest` and the greeting tests from step 7.
 - **OpenAPI** (step 15): `GET /` gets the JSON response (`application/json`) next to `text/html`; `docs/openapi.yaml` changes accordingly.
+- *Done, with findings:* 16 tests (`StartPageTest`) + 1 (`StartPageWithoutRepositoriesTest`); `HelloControllerTest` was folded into `StartPageTest` (it would have needed a mocked registry); `HelloController` → `StartPageController`, `hello.html` → `start.html`.
+  - JSON: `{"user":"guest","repositories":[{"name":"moved","available":false},{"name":"notes","available":true}]}`; `problems` only for users with grant `/` (D8), otherwise left out.
+  - **D6 needed a setting:** with an HTML and a JSON method for one URL, Spring chose **JSON** for no `Accept` header and for `*/*` (plain curl). `WebConfig` sets HTML as default content type for requests without preference. App-wide: error responses without `Accept` are HTML pages now too (JSON when asked for) — consistent with D6. Browsers send `text/html` explicitly and were not affected.
+  - Side effect in tests: `OpenApiDocumentationTest` now asks for `application/json` / `application/vnd.oai.openapi` explicitly.
+  - springdoc merges the HTML and JSON methods into one operation and takes the texts from one of them: both methods use the same summary, description and response texts.
+  - Live-tested with the jar: plain curl → HTML list; JSON for guest without and for artem with problems; 404 as HTML by default, as JSON when asked for.
 
 ### 20. Safe paths inside a repository  ☐
 Before anything below the root is exposed.
@@ -439,7 +445,7 @@ Replaces the "ok" page of step 18 for folders. Also: replace the temporary test 
   5. no `Accept` header or `*/*` → HTML (D6); `Accept: application/xml` only → 406
   6. folder names with spaces, `#`, `%`, non-ASCII → correctly encoded in links and JSON, HTML-escaped in the page
   7. `/notes/projects` (no trailing slash) → redirect to `/notes/projects/` so relative links work
-- **Green:** controller method with `GET /{repository}/**`, content negotiation by `produces` (`application/json` and `text/html` handler methods), `record FolderListing(repository, path, folders)`, template `folder.html`.
+- **Green:** controller method with `GET /{repository}/**`, content negotiation by `produces` (`application/json` and `text/html` handler methods; HTML default already set by `WebConfig`, step 19), `record FolderListing(repository, path, folders)`, template `folder.html`.
 - **OpenAPI** (step 15): both media types, the path parameter, 302/404/406/500.
 
 ### 22. Documentation  ☐

@@ -73,8 +73,10 @@ class OpenApiDocumentationTest {
 		this.mockMvc = mockMvc;
 	}
 
+	/** Asks for JSON or YAML explicitly: without an Accept header the application prefers HTML (D6). */
 	private static MockHttpServletRequestBuilder apiDocs(final String path) {
-		return get(path).with(httpBasic("artem", "artem-pass"));
+		final String accept = path.endsWith(".yaml") ? "application/vnd.oai.openapi" : "application/json";
+		return get(path).with(httpBasic("artem", "artem-pass")).header("Accept", accept);
 	}
 
 	@Test
@@ -99,6 +101,8 @@ class OpenApiDocumentationTest {
 				.andExpect(jsonPath("$.paths['/'].get.summary").isNotEmpty())
 				.andExpect(jsonPath("$.paths['/'].get.tags").isNotEmpty())
 				.andExpect(jsonPath("$.paths['/'].get.responses['200'].content", hasKey("text/html")))
+				.andExpect(jsonPath("$.paths['/'].get.responses['200'].content", hasKey("application/json")))
+				.andExpect(jsonPath("$.paths['/'].get.responses['406'].description").isNotEmpty())
 				.andExpect(jsonPath("$.paths['/'].get.responses['401'].description").isNotEmpty());
 	}
 

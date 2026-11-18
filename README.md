@@ -67,7 +67,9 @@ access:                        # username → folders the user may access, with 
 - Names: letters, digits, `.`, `_`, `-`; not starting with `.`; not `login`, `logout`, `error`.
 - Folders starting with `.` (such as `.git`) are never shown.
 
-Repositories are not reachable over the web yet: that is in development ([DEV.md](DEV.md), steps 17–21).
+The start page `/` lists the repositories you can access; `/<name>/` opens one (for now it only answers "ok").
+Browsing folders is in development ([DEV.md](DEV.md), steps 20–21). The start page is HTML by default and JSON
+when asked for, e.g. `curl -u artem -H 'Accept: application/json' http://127.0.0.1:8080/`.
 
 ## Behind nginx (HTTPS)
 

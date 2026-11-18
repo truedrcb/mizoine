@@ -71,19 +71,48 @@ paths:
     get:
       tags:
       - Start page
-      summary: Start page
-      description: Greets the logged-in user.
-      operationId: hello
+      summary: "Start page: the user's repositories"
+      description: "Greets the logged-in user and lists the repositories they can\
+        \ access, sorted by name: an HTML page with links (default), or JSON when\
+        \ asked for. Without repositories the page says \"No accessible repositories\
+        \ configured for you.\" and the JSON list is empty."
+      operationId: startPage
       responses:
         "200":
-          description: The start page
+          description: The start page (HTML) or the user's repositories (JSON)
           content:
             text/html: {}
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartPage"
         "302":
           description: "Browser not logged in: redirect to the login page"
         "401":
           description: "Not logged in (non-browser clients): HTTP Basic challenge"
+        "406":
+          description: Neither text/html nor application/json accepted
 components:
+  schemas:
+    Repository:
+      type: object
+      properties:
+        name:
+          type: string
+        available:
+          type: boolean
+        problems:
+          type: array
+          items:
+            type: string
+    StartPage:
+      type: object
+      properties:
+        user:
+          type: string
+        repositories:
+          type: array
+          items:
+            $ref: "#/components/schemas/Repository"
   securitySchemes:
     basicAuth:
       type: http

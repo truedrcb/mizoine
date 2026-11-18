@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+	<meta charset="UTF-8">
+	<title>Mizoine</title>
+</head>
+<body>
+	<h1 th:text="|Hello, ${page.user}|">Hello, user</h1>
+	<ul th:unless="${page.repositories.isEmpty()}">
+		<li th:each="repository : ${page.repositories}">
+			<a th:href="|${repository.name}/|" th:text="${repository.name}">name</a>
+			<th:block th:unless="${repository.available}">— not available
+				<ul th:if="${repository.problems}">
+					<li th:each="problem : ${repository.problems}" th:text="${problem}">problem</li>
+				</ul>
+			</th:block>
+		</li>
+	</ul>
+	<p th:if="${page.repositories.isEmpty()}">No accessible repositories configured for you.</p>
+</body>
+</html>
