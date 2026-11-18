@@ -13,6 +13,8 @@ import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWrite
 
 import com.gratchev.mizoine.MizoineProperties;
 
+import jakarta.servlet.DispatcherType;
+
 /**
  * Everything requires login, except the login page. Browsers get a login form,
  * other clients HTTP Basic. Users come from {@link com.gratchev.mizoine.users.UsersConfig}.
@@ -30,7 +32,11 @@ public class SecurityConfig {
 	SecurityFilterChain securityFilterChain(final HttpSecurity http, final LoginAttemptLimiter limiter) {
 		return http
 				.addFilterBefore(new LoginLimitFilter(limiter), UsernamePasswordAuthenticationFilter.class)
-				.authorizeHttpRequests(requests -> requests.anyRequest().authenticated())
+				.authorizeHttpRequests(requests -> requests
+						// rendering an error (e.g. 400 for a rejected URL) needs no login: otherwise the error turns
+						// into a login redirect. Error pages show no internals (step 8). A direct GET /error still needs login.
+						.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+						.anyRequest().authenticated())
 				.formLogin(form -> form.permitAll())
 				.httpBasic(withDefaults())
 				.logout(logout -> logout.permitAll())

@@ -14,6 +14,8 @@ server:
       cookie:
         http-only: true
         same-site: lax
+      # session id only in the cookie, never as ;jsessionid=... in URLs (leaks via logs, history, referrers)
+      tracking-modes: cookie
         # "Secure" is set by Tomcat for HTTPS requests, i.e. when nginx forwards X-Forwarded-Proto: https
   error:
     # Spring Boot defaults, pinned: error responses never show internals

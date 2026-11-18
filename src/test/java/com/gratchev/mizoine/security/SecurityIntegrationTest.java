@@ -52,6 +52,13 @@ class SecurityIntegrationTest {
 	}
 
 	@Test
+	void errorPageRequestedDirectlyStillNeedsLogin() throws Exception {
+		// only the internal rendering of an error (error dispatch) is open, not the URL /error
+		mockMvc.perform(get("/error").accept(MediaType.TEXT_HTML))
+				.andExpect(redirectedUrl("/login"));
+	}
+
+	@Test
 	void loginPageIsPublic() throws Exception {
 		mockMvc.perform(get("/login"))
 				.andExpect(status().isOk());

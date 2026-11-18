@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-18): steps 0–19 done (250 tests green). Next: step 20 (safe paths inside a repository), then 21–22.
+**Status** (updated: 2026-11-18): steps 0–20 done (302 tests green). Next: step 21 (subfolder listing), then 22.
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -425,7 +425,7 @@ Pure unit tests — the core of the security of this feature.
   - springdoc merges the HTML and JSON methods into one operation and takes the texts from one of them: both methods use the same summary, description and response texts.
   - Live-tested with the jar: plain curl → HTML list; JSON for guest without and for artem with problems; 404 as HTML by default, as JSON when asked for.
 
-### 20. Safe paths inside a repository  ☐
+### 20. Safe paths inside a repository  ☑
 Before anything below the root is exposed.
 - **Red** — `RepositoryPathsTest` (unit, `@TempDir`) and a few MockMvc cases:
   1. `a/b` resolves inside the root
@@ -434,6 +434,14 @@ Before anything below the root is exposed.
   4. `.git` and other names starting with `.` → not visible, not reachable (D3)
   5. not existing folder → 404; a file instead of a folder → 404 for now (files come later)
 - **Green:** `RepositoryPaths.resolve(root, relative)` using `normalize()` + `toRealPath()` and a check that the result is still under the root's real path.
+- *Done, with findings:* 21 unit tests (`RepositoryPathsTest`) + 31 HTTP tests (`UnsafeUrlTest`: 14 unsafe URLs in-process and on a real server, plus session tests).
+  - API: `RepositoryPaths.resolveFolder(root, segments)` → real path of an existing folder inside the root, or empty; `childFolders(root, segments)` → visible subfolder names, sorted (for step 21).
+  - Rejected: `.`, `..`, empty, `/`, `\`, NUL in a segment; hidden names (D3); symbolic links whose real target is outside the root **or hidden** (*added:* a link `git` → `.git` would otherwise make `.git` reachable). Links staying inside the root work; a root that is itself a link works.
+  - **Finding — rejected URLs became login redirects with the session id in the URL.** On a real server, URLs like `/notes/../private/` or `/notes/%2e%2e/` are rejected by Spring Security's firewall with 400; Tomcat then renders the error via `/error`, which required a login, so the client got `302 /login;jsessionid=…`. Fixed:
+    - error dispatch needs no login (`dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()`); a direct `GET /error` still needs login (tested). Error pages show no internals (step 8).
+    - `server.servlet.session.tracking-modes: cookie`: the session id is never put into URLs (tested via the effective tracking modes).
+  - MockMvc did not show the problem (no error dispatch, no URL normalization): only the real-server tests did.
+  - Live-tested with the jar: all unsafe URLs → 400; first anonymous visit → `302 /login` without session id.
 
 ### 21. Subfolder listing: JSON and HTML  ☐
 Replaces the "ok" page of step 18 for folders. Also: replace the temporary test `RepositoryControllerTest.jsonIsNotAvailableYet` and give the 500 problem page (D8) a JSON variant.
