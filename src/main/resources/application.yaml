@@ -6,6 +6,8 @@ server:
   # Runs behind nginx on the same machine (see docs/nginx.conf.example):
   # listen on loopback only, so nginx is the only way in. Override with --server.address=... if needed.
   address: 127.0.0.1
+  # "MIZOINE" in digits: M and N skipped, I=1, Z=2, O=0, I=1, E=3. Override with --server.port=...
+  port: 12013
   # Trust X-Forwarded-Proto/Host/For from nginx. Tomcat accepts them only from internal addresses
   # (server.tomcat.remoteip.internal-proxies, default: loopback and private networks).
   forward-headers-strategy: native

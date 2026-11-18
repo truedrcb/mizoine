@@ -12,6 +12,8 @@ import java.util.stream.Stream;
  * <ul>
  * <li>Segments must be plain names: no {@code .}, {@code ..}, empty names, separators or NUL.</li>
  * <li>Hidden names (starting with {@code .}, such as {@code .git}) are never reachable (D3).</li>
+ * <li>Names with {@code %} are hidden too: Spring Security's firewall rejects an encoded {@code %} in URLs,
+ * so such folders could be listed but never opened.</li>
  * <li>Symbolic links are resolved; a link whose target is outside the root, or hidden, counts as not existing.</li>
  * </ul>
  */
@@ -77,6 +79,7 @@ public final class RepositoryPaths {
 	private static boolean isPlainName(final String name) {
 		return !name.isEmpty()
 				&& !name.startsWith(".")
+				&& name.indexOf('%') < 0
 				&& name.indexOf('/') < 0
 				&& name.indexOf('\\') < 0
 				&& name.indexOf('\0') < 0;

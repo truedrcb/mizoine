@@ -105,6 +105,18 @@ class RepositoryPathsTest {
 		assertThat(RepositoryPaths.resolveFolder(root, segments("a", ".hidden"))).isEmpty();
 	}
 
+	// names with '%': hidden, because Spring Security's firewall rejects an encoded '%' in URLs (decided 2026-11-18)
+
+	@Test
+	void foldersWithPercentInTheNameAreHidden() throws IOException {
+		Files.createDirectories(root.resolve("50%"));
+		Files.createDirectories(root.resolve("a/100%done"));
+
+		assertThat(RepositoryPaths.resolveFolder(root, segments("50%"))).isEmpty();
+		assertThat(RepositoryPaths.childFolders(root, segments())).doesNotContain("50%");
+		assertThat(RepositoryPaths.childFolders(root, segments("a"))).containsExactly("b");
+	}
+
 	// 5. not a folder
 
 	@Test

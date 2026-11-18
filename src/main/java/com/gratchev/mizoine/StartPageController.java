@@ -12,6 +12,7 @@ import com.gratchev.mizoine.repositories.RepositoryAccess;
 import com.gratchev.mizoine.repositories.RepositoryConfig;
 import com.gratchev.mizoine.repositories.RepositoryRegistry;
 
+import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -26,8 +27,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @Tag(name = "Start page")
 class StartPageController {
 
-	// both methods share one operation in the API description (same URL): springdoc merges them,
-	// so they use the same texts
+	// HTML and JSON share one URL, so one operation in the API description: documented on the HTML method
+	// with both media types; the JSON method is @Hidden (springdoc's own merging depends on method order)
 	private static final String SUMMARY = "Start page: the user's repositories";
 	private static final String DESCRIPTION = "Greets the logged-in user and lists the repositories they can access, "
 			+ "sorted by name: an HTML page with links (default), or JSON when asked for. Without repositories "
@@ -43,8 +44,9 @@ class StartPageController {
 
 	@GetMapping(value = "/", produces = MediaType.TEXT_HTML_VALUE)
 	@Operation(summary = SUMMARY, description = DESCRIPTION)
-	@ApiResponse(responseCode = "200", description = OK,
-			content = @Content(mediaType = MediaType.TEXT_HTML_VALUE))
+	@ApiResponse(responseCode = "200", description = OK, content = {
+			@Content(mediaType = MediaType.TEXT_HTML_VALUE),
+			@Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = StartPage.class))})
 	@ApiResponse(responseCode = "302", description = "Browser not logged in: redirect to the login page",
 			content = @Content)
 	@ApiResponse(responseCode = "401", description = NOT_LOGGED_IN, content = @Content)
@@ -57,11 +59,7 @@ class StartPageController {
 
 	@GetMapping(value = "/", produces = MediaType.APPLICATION_JSON_VALUE)
 	@ResponseBody
-	@Operation(summary = SUMMARY, description = DESCRIPTION)
-	@ApiResponse(responseCode = "200", description = OK,
-			content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
-					schema = @Schema(implementation = StartPage.class)))
-	@ApiResponse(responseCode = "401", description = NOT_LOGGED_IN, content = @Content)
+	@Hidden // documented together with the HTML variant on startPage(...)
 	StartPage startPageJson(final Principal principal) {
 		return page(principal);
 	}

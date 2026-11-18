@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-18): steps 0–20 done (302 tests green). Next: step 21 (subfolder listing), then 22.
+**Status** (updated: 2026-11-18): steps 0–22 done (332 tests green). All planned steps are done; see "Open decisions" for follow-ups.
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -22,7 +22,7 @@ Steps are numbered so you can refer to them ("do step 4"). Every step follows TD
 | R4 | Users are configured in a text file (YAML) that a person can edit by hand |
 | R5 | Repositories are configured in YAML files, one file per repository; the file name (without extension) is the repository name |
 | R6 | A repository is a folder on disk plus per-user permissions: which user may access which subfolders |
-| R7 | `/{repository}/` answers with success (a small "ok" page) when the repository exists and the user has access |
+| R7 | `/{repository}/` answers with success (a small "ok" page) when the repository exists and the user has access — *since step 21: the listing of the root folder* |
 | R8 | Folders under `/{repository}/…/` list their subfolders: JSON when the client accepts JSON, HTML with clickable links when it accepts HTML |
 | R9 | The start page `/` lists the repositories the logged-in user can access, as links; if there are none, it says so |
 | R10 | No repositories configured is not an error: the application starts |
@@ -42,7 +42,7 @@ Steps are numbered so you can refer to them ("do step 4"). Every step follows TD
 | Tests | JUnit 5, AssertJ, Spring Boot Test, MockMvc (`spring-boot-starter-webmvc-test`), `spring-security-test` | Standard Spring testing stack |
 | Package | `com.gratchev.mizoine` | Same as the archived version |
 | Code style | `final` on fields, locals and parameters (not lambda parameters); Checkstyle `FinalLocalVariable` + `FinalParameters` run in `validate` and fail the build | Decided 2026-11-16 |
-| HTTPS | **nginx** in front (TLS), the application speaks plain HTTP on `127.0.0.1` (step 12) | Certificates and TLS handled by a standard tool |
+| HTTPS | **nginx** in front (TLS), the application speaks plain HTTP on `127.0.0.1:12013` (step 12) | Certificates and TLS handled by a standard tool |
 | Repositories | One **YAML** file per repository in `mizoine.repositories-dir` (default: current directory), read lazily on request (steps 14–16) | Same hand-editable format as users; no restart needed |
 | API documentation | OpenAPI annotations (`swagger-annotations-jakarta`) on endpoints; springdoc **test-only** generates `docs/openapi.yaml`; not served by the application, no Swagger UI (step 15, D9) | Description lives in the repository, nothing extra exposed |
 
@@ -253,7 +253,7 @@ Lets a person edit `users.yaml` and have it take effect.
 *Decided 2026-11-16:* **nginx** as reverse proxy terminates TLS; the app itself speaks plain HTTP. (Replaces "proxy or Spring Boot SSL bundles".)
 
 ```
-browser ──HTTPS──▶ nginx (TLS, certificates) ──HTTP──▶ 127.0.0.1:8080 mizoine
+browser ──HTTPS──▶ nginx (TLS, certificates) ──HTTP──▶ 127.0.0.1:12013 mizoine
 ```
 
 - **Red** — `ReverseProxyTest` (real server, random port, `java.net.http.HttpClient`, because Tomcat handles the forwarded headers):
@@ -265,7 +265,7 @@ browser ──HTTPS──▶ nginx (TLS, certificates) ──HTTP──▶ 127.0
   - `server.forward-headers-strategy: native` (Tomcat `RemoteIpValve`: trusts `X-Forwarded-*` only from internal addresses such as 127.0.0.1)
   - `server.address: 127.0.0.1` by default, so only nginx on the same machine can reach the app; can be overridden for other setups
   - session cookie: `same-site: lax`, `http-only: true`
-- Add `docs/nginx.conf.example`: TLS, `proxy_pass http://127.0.0.1:8080`, `X-Forwarded-Proto/Host/For` headers, HTTP→HTTPS redirect, and `limit_req` on `/login` against password guessing.
+- Add `docs/nginx.conf.example`: TLS, `proxy_pass http://127.0.0.1:12013`, `X-Forwarded-Proto/Host/For` headers, HTTP→HTTPS redirect, and `limit_req` on `/login` against password guessing.
 - Add a "Behind nginx" section to the README.
 - Open question for this step: test 4 needs a request from a non-local address; if that is not practical in a test, rely on Tomcat's documented default and say so here.
 - *Done, with findings:*
@@ -443,7 +443,7 @@ Before anything below the root is exposed.
   - MockMvc did not show the problem (no error dispatch, no URL normalization): only the real-server tests did.
   - Live-tested with the jar: all unsafe URLs → 400; first anonymous visit → `302 /login` without session id.
 
-### 21. Subfolder listing: JSON and HTML  ☐
+### 21. Subfolder listing: JSON and HTML  ☑
 Replaces the "ok" page of step 18 for folders. Also: replace the temporary test `RepositoryControllerTest.jsonIsNotAvailableYet` and give the 500 problem page (D8) a JSON variant.
 - **Red** — `RepositoryListingTest` (MockMvc):
   1. `GET /notes/` with `Accept: application/json` → 200, `{"repository":"notes","path":"/","folders":["a","b"]}`; sorted by name; only folders, no files
@@ -455,10 +455,25 @@ Replaces the "ok" page of step 18 for folders. Also: replace the temporary test 
   7. `/notes/projects` (no trailing slash) → redirect to `/notes/projects/` so relative links work
 - **Green:** controller method with `GET /{repository}/**`, content negotiation by `produces` (`application/json` and `text/html` handler methods; HTML default already set by `WebConfig`, step 19), `record FolderListing(repository, path, folders)`, template `folder.html`.
 - **OpenAPI** (step 15): both media types, the path parameter, 302/404/406/500.
+- *Done, with findings:* 14 tests (`RepositoryListingTest`, tree with special names created in a temporary folder) + step 18 tests updated (JSON listing, JSON problem page, problems below the root) + 4 double-encoded attack URLs in `UnsafeUrlTest`.
+  - One pattern `/{repository}/{*path}` for all folders (HTML and JSON method); `/{repository}` (no slash) keeps its own redirect from step 18. `{*path}` is already URL-decoded.
+  - Below the root, the trailing-slash redirect is given **only for folders the user may open** — otherwise 404 (a redirect would tell that the folder exists; also keeps e.g. `/v3/api-docs` at 404).
+  - Links: `UriUtils.encodePathSegment` per name (`with%20space/`, `hash%23/`, `%C3%9Cn%C3%AFcode/`, `a%20%3Cb%3E/`), text HTML-escaped by Thymeleaf. The redirect URL is fully encoded, so names with `{` are not taken for URI template variables. Root: link to the start page; below: link `../`.
+  - JSON problem page (D8): `{"repository","error":"repository not available","file","problems"}`, `file`/`problems` only for grant `/`.
+  - **Finding — Spring Security's firewall rejects an encoded `%` (`%25`):** folders with `%` in their name were listed but not reachable (400). *Decided 2026-11-18:* keep the firewall unchanged (a first fix allowed `%25`; reverted) and **hide folders with `%` in the name**, like hidden folders (`RepositoryPaths`): not listed, not reachable. Very rare in practice. Double-encoded attacks (`%252e%252e`, `%252egit`, …) stay in `UnsafeUrlTest` (rejected with 400).
+  - **Finding — springdoc's merging of an HTML and a JSON method for one URL depends on method order:** here it dropped the HTML variant (on the start page it happened to work). Now each such URL is documented on the HTML method with both media types, and the JSON method is `@Hidden` (also changed on the start page). springdoc writes `{*path}` as `{path}`.
+  - Folder names with `;`, `\` or NUL stay unreachable (firewall) — on Linux only `;` is realistic.
+  - Live-tested with the jar: links and JSON for special names, guest sees only `public`, `.git` → 404, redirect without slash.
 
-### 22. Documentation  ☐
+### 22. Documentation  ☑
 - `repositories.example/notes.yaml` (committed, checked by a test like step 10); real repository folder git-ignored if kept in the project.
-- README: already describes `mizoine.repositories-dir` and the file format (2026-11-18); add URLs and a JSON example (`curl -H 'Accept: application/json' -u artem …/notes/`) once they work.
+- README: already describes `mizoine.repositories-dir`, the file format and browsing (2026-11-18, after step 21); check that it is complete, add an example repository folder.
+- *Done:*
+  - `repositories.example/`: `notes.yaml` (grant `/` for `alice`, the example user) and an example tree `notes/public`, `notes/projects/shared` (each folder with a README: Git keeps no empty folders).
+  - `RepositoriesExampleTest`: the example is valid together with `users.example.yaml` — no problems, no warnings (so `alice` exists), expected folders listed.
+  - `.gitignore`: `/repositories/` (real repositories folder in the project). Checked with `git check-ignore`.
+  - README checked against the application and completed: run steps with `repositories` (not the default `.`, which would read `users.example.yaml` as a repository); all reserved names; JSON example matching the example repository; 404 for no access; new section "Development" (TDD, `mvn verify` with Checkstyle and `docs/openapi.yaml`, dependency check).
+  - Followed the README literally with the jar: own user sees `notes`; the curl example returns exactly the documented JSON; no warnings in the log.
 
 ---
 
@@ -469,13 +484,14 @@ Replaces the "ok" page of step 18 for folders. Also: replace the temporary test 
 - Roles: everyone is `USER` for now. AI-agent role from BACKLOG §7 comes later as a new field `role` in `users.yaml`.
 - Sessions of users removed from `users.yaml` stay valid until they expire (step 9): add invalidation if needed.
 - Run the dependency check once an NVD API key is available (step 8).
+- ~~Default port~~ **Decided 2026-11-18:** `12013` instead of Spring Boot's 8080 — "MIZOINE" in digits (M and N skipped, I=1, Z=2, O=0, I=1, E=3). Test: `MizoineApplicationTests.defaultPortIsMizoineInDigits`. Older step notes mentioning 8080 describe the state at that time.
 - ~~Rate-limit HTTP Basic login attempts~~ **Done:** step 13.
 
 ### Repositories and API documentation (steps 14–22) — decided 2026-11-18
 - ~~Load all repository files at startup?~~ **Decided 2026-11-18:** no — lazy lookup per request (step 16).
 - **D1 — file format:** `access` as a map `username → [folders]` (shown above). **Decided:** yes — short to write, duplicates impossible. Alternative: a list of `{user, folders}` entries.
 - **D2 — no access vs. unknown:** **Decided:** both **404**, so a user cannot find out which repositories or folders exist. Alternative: 403 for "exists, but not for you".
-- **D3 — hidden folders:** **Decided:** all names starting with `.` (`.git`, `.mizoine`, …) are never listed nor reachable. Alternative: hide only `.git`.
+- **D3 — hidden folders:** **Decided:** all names starting with `.` (`.git`, `.mizoine`, …) are never listed nor reachable. Alternative: hide only `.git`. *Added 2026-11-18:* names containing `%` are hidden the same way (the firewall rejects them in URLs, step 21).
 - **D4 — folders above a granted folder:** with only `projects/shared` granted, **Decided:** the user may open `/notes/` and `/notes/projects/`, but sees only `projects` and `shared` on the way. Alternative: the user must open `/notes/projects/shared/` directly.
 - **D5 — trailing slash:** **Decided:** folder URLs end with `/`; without it → redirect. Needed for relative links in the HTML.
 - **D6 — default format:** **Decided:** HTML when `Accept` is missing or `*/*` (browsers, plain curl); JSON only when asked for. Anything else → 406.

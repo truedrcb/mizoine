@@ -52,7 +52,9 @@ class UnsafeUrlTest {
 			"/notes/../private/", "/notes/public/../../private/", "/notes/../../", "/notes/%2e%2e/private/",
 			"/notes/%2E%2E/%2E%2E/", "/notes/..%2fprivate/", "/notes/public%2f..%2f..%2fprivate/",
 			"/notes/..%5cprivate/", "/notes/public%5c..%5c..%5c/", "/notes/%00/", "/notes/public%00/",
-			"/notes/.git/", "/notes/%2egit/", "/notes/;x=1/../private/"})
+			"/notes/.git/", "/notes/%2egit/", "/notes/;x=1/../private/",
+			// double-encoded attacks: an encoded '%' is rejected by the firewall
+			"/notes/%252e%252e/private/", "/notes/public/%252e%252e/%252e%252e/", "/notes/%252e%252e%252fprivate/", "/notes/%252egit/"})
 	void rejectedInProcess(final String path) throws Exception {
 		final int status = mockMvc.perform(get(URI.create(path)).with(httpBasic("guest", "guest-pass")))
 				.andReturn().getResponse().getStatus();
@@ -65,7 +67,9 @@ class UnsafeUrlTest {
 			"/notes/../private/", "/notes/public/../../private/", "/notes/../../", "/notes/%2e%2e/private/",
 			"/notes/%2E%2E/%2E%2E/", "/notes/..%2fprivate/", "/notes/public%2f..%2f..%2fprivate/",
 			"/notes/..%5cprivate/", "/notes/public%5c..%5c..%5c/", "/notes/%00/", "/notes/public%00/",
-			"/notes/.git/", "/notes/%2egit/", "/notes/;x=1/../private/"})
+			"/notes/.git/", "/notes/%2egit/", "/notes/;x=1/../private/",
+			// double-encoded attacks: an encoded '%' is rejected by the firewall
+			"/notes/%252e%252e/private/", "/notes/public/%252e%252e/%252e%252e/", "/notes/%252e%252e%252fprivate/", "/notes/%252egit/"})
 	void rejectedOnARealServer(final String path) throws Exception {
 		final String credentials = Base64.getEncoder().encodeToString("guest:guest-pass".getBytes(StandardCharsets.UTF_8));
 		final HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))

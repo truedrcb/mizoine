@@ -101,22 +101,31 @@ class OpenApiDocumentationTest {
 				.andExpect(jsonPath("$.paths['/'].get.summary").isNotEmpty())
 				.andExpect(jsonPath("$.paths['/'].get.tags").isNotEmpty())
 				.andExpect(jsonPath("$.paths['/'].get.responses['200'].content", hasKey("text/html")))
+				.andExpect(jsonPath("$.paths['/'].get.operationId").value("startPage"))
 				.andExpect(jsonPath("$.paths['/'].get.responses['200'].content", hasKey("application/json")))
 				.andExpect(jsonPath("$.paths['/'].get.responses['406'].description").isNotEmpty())
 				.andExpect(jsonPath("$.paths['/'].get.responses['401'].description").isNotEmpty());
 	}
 
 	@Test
-	void repositoryPageIsDocumented() throws Exception {
-		final String operation = "$.paths['/{repository}/'].get";
+	void folderListingIsDocumented() throws Exception {
+		// springdoc writes the catch-all {*path} as {path}
+		final String operation = "$.paths['/{repository}/{path}'].get";
 		mockMvc.perform(apiDocs(API_DOCS_PATH))
 				.andExpect(jsonPath(operation + ".summary").isNotEmpty())
+				.andExpect(jsonPath(operation + ".operationId").value("folder"))
 				.andExpect(jsonPath(operation + ".parameters[0].name").value("repository"))
-				.andExpect(jsonPath(operation + ".parameters[0].in").value("path"))
+				.andExpect(jsonPath(operation + ".parameters[1].name").value("path"))
 				.andExpect(jsonPath(operation + ".responses['200'].content", hasKey("text/html")))
+				.andExpect(jsonPath(operation + ".responses['200'].content['application/json'].schema['$ref']")
+						.value("#/components/schemas/FolderListing"))
+				.andExpect(jsonPath(operation + ".responses['302'].description").isNotEmpty())
 				.andExpect(jsonPath(operation + ".responses['401'].description").isNotEmpty())
 				.andExpect(jsonPath(operation + ".responses['404'].description").isNotEmpty())
-				.andExpect(jsonPath(operation + ".responses['500'].content", hasKey("text/html")));
+				.andExpect(jsonPath(operation + ".responses['406'].description").isNotEmpty())
+				.andExpect(jsonPath(operation + ".responses['500'].content", hasKey("text/html")))
+				.andExpect(jsonPath(operation + ".responses['500'].content['application/json'].schema['$ref']")
+						.value("#/components/schemas/RepositoryProblem"));
 	}
 
 	@Test

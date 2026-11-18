@@ -1,6 +1,6 @@
 # nginx in front of Mizoine: HTTPS here, plain HTTP to the application on the same machine.
 #
-#   browser ──HTTPS──▶ nginx ──HTTP──▶ 127.0.0.1:8080 (java -jar mizoine.jar)
+#   browser ──HTTPS──▶ nginx ──HTTP──▶ 127.0.0.1:12013 (java -jar mizoine.jar)
 #
 # Install as /etc/nginx/conf.d/mizoine.conf (it is included in the "http" block),
 # replace mizoine.example.org and the certificate paths, then: nginx -t && systemctl reload nginx
@@ -50,10 +50,10 @@ server {
     location = /login {
         limit_req zone=mizoine_login burst=5 nodelay;
         limit_req_status 429;
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://127.0.0.1:12013;
     }
 
     location / {
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://127.0.0.1:12013;
     }
 }

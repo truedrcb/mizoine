@@ -1,0 +1,6 @@
+# Example repository "notes" → http://127.0.0.1:12013/notes/
+# Copy this folder to "repositories" (git-ignored), adjust, and start with --mizoine.repositories-dir=repositories
+path: notes                    # root folder; relative to this file's folder (absolute paths work too)
+access:                        # username → folders (with everything below them); usernames as in users.yaml
+  alice: ["/"]                 # the whole repository
+  # bob: [public, projects/shared]

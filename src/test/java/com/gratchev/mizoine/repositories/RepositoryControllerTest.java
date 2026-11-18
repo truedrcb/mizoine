@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.not;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -49,11 +50,11 @@ class RepositoryControllerTest {
 	// 1.
 
 	@Test
-	void userWithAccessGetsOkPage() throws Exception {
+	void userWithAccessGetsTheRepositoryPage() throws Exception {
+		// since step 21 the page lists the root folder (step 18: "ok")
 		mockMvc.perform(page("/notes/", "artem"))
 				.andExpect(status().isOk())
 				.andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
-				.andExpect(content().string(containsString("ok")))
 				.andExpect(content().string(containsString("notes")));
 	}
 
@@ -157,11 +158,36 @@ class RepositoryControllerTest {
 				.andExpect(content().string(not(containsString(Path.of(REPOSITORIES).toAbsolutePath().toString()))));
 	}
 
-	// for now HTML only: JSON comes with the listing (step 21)
+	// JSON (since step 21)
 
 	@Test
-	void jsonIsNotAvailableYet() throws Exception {
+	void repositoryAsJson() throws Exception {
 		mockMvc.perform(page("/notes/", "artem").accept(MediaType.APPLICATION_JSON))
-				.andExpect(status().isNotAcceptable());
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.repository").value("notes"))
+				.andExpect(jsonPath("$.path").value("/"));
+	}
+
+	@Test
+	void problemDetailsAsJsonForUserWithWholeRepository() throws Exception {
+		mockMvc.perform(page("/moved/", "artem").accept(MediaType.APPLICATION_JSON))
+				.andExpect(status().isInternalServerError())
+				.andExpect(jsonPath("$.repository").value("moved"))
+				.andExpect(jsonPath("$.file").value("moved.yaml"))
+				.andExpect(jsonPath("$.problems[0]").value(containsString("missing-root-folder")));
+	}
+
+	@Test
+	void noProblemDetailsAsJsonForUserWithPartialAccess() throws Exception {
+		mockMvc.perform(page("/moved/", "guest").accept(MediaType.APPLICATION_JSON))
+				.andExpect(status().isInternalServerError())
+				.andExpect(jsonPath("$.repository").value("moved"))
+				.andExpect(jsonPath("$.file").doesNotExist())
+				.andExpect(jsonPath("$.problems").doesNotExist());
+	}
+
+	@Test
+	void problemPageAlsoForFoldersBelowTheRoot() throws Exception {
+		mockMvc.perform(page("/moved/public/", "guest")).andExpect(status().isInternalServerError());
 	}
 }

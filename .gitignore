@@ -12,3 +12,5 @@ mizoine.iml
 /archive/mizoine0/
 # real users file: contains password hashes (see users.example.yaml)
 /users.yaml
+# real repositories folder, if kept in the project (see repositories.example)
+/repositories/

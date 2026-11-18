@@ -33,14 +33,16 @@ paths:
           description: Not logged in
         "404":
           description: Not a valid repository name
-  /{repository}/:
+  /{repository}/{path}:
     get:
       tags:
       - Repositories
-      summary: Repository
-      description: Answers 'ok' when the repository exists and the user has access
-        to it.
-      operationId: repository
+      summary: Folder of a repository
+      description: "Lists the subfolders of a folder that the user may see, sorted\
+        \ by name: an HTML page with links (default), or JSON when asked for. Folder\
+        \ URLs end with '/'; without it the server redirects. Files and hidden folders\
+        \ (starting with '.') are not listed."
+      operationId: folder
       parameters:
       - name: repository
         in: path
@@ -48,25 +50,39 @@ paths:
         required: true
         schema:
           type: string
+      - name: path
+        in: path
+        description: "Folder below the repository root, ending with '/'"
+        required: true
+        schema:
+          type: string
       responses:
         "200":
-          description: The repository page
+          description: The folder page (HTML) or its subfolders (JSON)
           content:
             text/html: {}
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FolderListing"
         "302":
-          description: "Browser not logged in: redirect to the login page"
+          description: "Folder URL without trailing slash: redirect to the same URL\
+            \ with '/' (only for folders the user may see); or browser not logged\
+            \ in: redirect to the login page"
         "401":
           description: "Not logged in (non-browser clients): HTTP Basic challenge"
         "404":
-          description: "Unknown repository, or no access to it — deliberately the\
-            \ same answer"
+          description: "Unknown repository or folder, or no access to it — deliberately\
+            \ the same answer"
         "406":
-          description: Only text/html is available
+          description: Neither text/html nor application/json accepted
         "500":
-          description: Repository configured wrongly (e.g. missing root folder); details
-            only for users with access to the whole repository
+          description: Repository configured wrongly (e.g. missing root folder); the
+            file to fix and the problems only for users with access to the whole repository
           content:
             text/html: {}
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepositoryProblem"
   /:
     get:
       tags:
@@ -93,6 +109,30 @@ paths:
           description: Neither text/html nor application/json accepted
 components:
   schemas:
+    FolderListing:
+      type: object
+      properties:
+        repository:
+          type: string
+        path:
+          type: string
+        folders:
+          type: array
+          items:
+            type: string
+    RepositoryProblem:
+      type: object
+      properties:
+        repository:
+          type: string
+        error:
+          type: string
+        file:
+          type: string
+        problems:
+          type: array
+          items:
+            type: string
     Repository:
       type: object
       properties:

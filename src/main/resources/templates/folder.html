@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+	<meta charset="UTF-8">
+	<title th:text="|Mizoine – ${listing.repository} ${listing.path}|">Mizoine – repository /</title>
+</head>
+<body>
+	<h1><span th:text="${listing.repository}">repository</span> <span th:text="${listing.path}">/</span></h1>
+	<p th:if="${root}"><a href="/">All repositories</a></p>
+	<p th:unless="${root}"><a href="../">Up</a></p>
+	<ul th:unless="${links.isEmpty()}">
+		<li th:each="link : ${links}"><a th:href="${link.href}" th:text="${link.name}">folder</a></li>
+	</ul>
+	<p th:if="${links.isEmpty()}">No subfolders.</p>
+</body>
+</html>
