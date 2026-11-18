@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-16): steps 0–13 done (109 tests green). All planned steps are done; see "Open decisions" for follow-ups.
+**Status** (updated: 2026-11-18): steps 0–13 done (109 tests green). Planned next: steps 14–21 (repositories). Decisions D1–D8 confirmed; next: step 14.
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -20,6 +20,12 @@ Steps are numbered so you can refer to them ("do step 4"). Every step follows TD
 | R2 | Web server serving a "Hello World" page |
 | R3 | Only a few configured users can get in; everyone else is rejected |
 | R4 | Users are configured in a text file (YAML) that a person can edit by hand |
+| R5 | Repositories are configured in YAML files, one file per repository; the file name (without extension) is the repository name |
+| R6 | A repository is a folder on disk plus per-user permissions: which user may access which subfolders |
+| R7 | `/{repository}/` answers with success (a small "ok" page) when the repository exists and the user has access |
+| R8 | Folders under `/{repository}/…/` list their subfolders: JSON when the client accepts JSON, HTML with clickable links when it accepts HTML |
+| R9 | The start page `/` lists the repositories the logged-in user can access, as links; if there are none, it says so |
+| R10 | No repositories configured is not an error: the application starts |
 
 ## Technology decisions
 
@@ -52,6 +58,25 @@ Rules:
 - `username` must be non-empty and unique.
 - `password` must be a BCrypt hash with the `{bcrypt}` prefix (step 5). Plain-text values and `{noop}` are rejected at load time.
 - The real `users.yaml` is **not committed** (git-ignored). A `users.example.yaml` is committed.
+
+### Repository file format (steps 14–21)
+
+One file per repository in the folder set by `mizoine.repositories-dir`. The file name is the repository name: `notes.yaml` → `/notes/`.
+
+```yaml
+# repositories/notes.yaml
+path: /home/artem/notes        # root folder of the repository; relative paths are resolved against this file's folder
+access:                        # username → folders the user may access (including everything below them)
+  artem: ["/"]                 # "/" = the whole repository
+  guest: [public, projects/shared]
+```
+
+Rules (proposed, see decisions D1–D6):
+- Repository name: from the file name; letters, digits, `.`, `_`, `-`; not starting with `.`; case-sensitive. Names used by the application itself (`login`, `logout`, `error`, `default-ui.css`, …) are rejected.
+- `path` must exist and be a folder.
+- `access` keys are usernames (case-sensitive, like `users.yaml`). A user not in `users.yaml` gives a warning, not an error: users can be added later.
+- Folders in `access` are relative to the repository root, written with `/`; `..` and absolute paths outside the root are rejected.
+- Unknown fields are ignored with a warning (same as `users.yaml`).
 
 ### Error behaviour
 
@@ -260,6 +285,106 @@ browser ──HTTPS──▶ nginx (TLS, certificates) ──HTTP──▶ 127.0
   - Live-tested with the jar and `X-Forwarded-For` as nginx sends it: 5 wrong → 429 with `Retry-After: 300` even with the right password; another address → 200; login page → 200; one warning in the log.
 - State is in memory: a restart forgets it. Fine for one instance.
 
+### Repositories: overview of steps 14–21
+*Planned 2026-11-18.* Covers request 1 ("ok" page per repository: steps 14–17), the start page with the user's repositories (step 18), request 2 (subfolder listing: steps 19–20), plus docs (step 21). Repository files are read lazily on request, which also gives reload without restart (step 15).
+Read-only for now: nothing is written to the repository. Writing and the AI-agent role (BACKLOG §7) come later.
+
+### 14. Repository file model and parser  ☐
+Pure unit tests, `@TempDir`, like step 3.
+- **Red** — `RepositoryFileParserTest`:
+  1. valid file → `RepositoryConfig(name, root, grants)`; name taken from the file name without `.yaml`
+  2. relative `path` is resolved against the folder of the file; absolute path kept
+  3. `path` missing, not existing, or a file instead of a folder → the file is still **readable**: the config is returned with a *problem* ("root folder /x does not exist"), not an exception (D8)
+  4. invalid repository names (`.hidden.yaml`, `my repo.yaml`, reserved `login.yaml`) → exception
+  5. folder grants: `"/"` = root; `public`, `public/`, `/public` all mean the same; `..`, `a/../../b` and absolute paths are rejected
+  6. empty `access` → valid, nobody has access (warning logged)
+  7. malformed YAML → exception with line/column, not the content (same as step 3)
+  8. unknown fields → ignored, warning names each field (same as step 3.8)
+  9. **two levels of failure (D8):** *unreadable* — malformed YAML, invalid repository name, invalid `access` section (e.g. a grant with `..`) → `RepositoryFileException`, permissions unknown; *readable with problems* — everything else (root folder) → config with a list of problems
+- **Green:** `record RepositoryConfig(name, root, grants, problems)`, `record FolderGrant`, `RepositoryFileParser` (Jackson YAML tree, as in `UsersFileParser`). `access` is parsed and checked first, so permissions are known even when the rest is wrong.
+
+### 15. Lazy repository lookup  ☐
+*Decided 2026-11-18:* repository files are **not** loaded at startup. On each request to `/{repository}/…` the matching file `<repositories-dir>/<repository>.yaml` is looked up and read when needed.
+- **Red** — `RepositoryRegistryTest` (unit, `@TempDir`, counting parser as in step 9):
+  1. first request for `notes` reads `notes.yaml` and returns its config; other files in the folder are not read
+  2. unchanged file → not read again (modification time + size, as in step 9)
+  3. changed file → read again on the next request; new grants apply
+  4. removed file → repository unknown (404)
+  5. file added while running → found on the next request
+  6. unreadable file → repository treated as unknown (404, D2); error logged **once** per file version, naming the file; a previously loaded valid version is **not** kept (D7)
+  7a. readable file with problems (e.g. root folder missing) → returned with its problems, error logged once; the controller decides what the user sees (D8, step 17)
+  7. **name check before any file access:** names that are not valid repository names (`..`, `.git`, `a/b`, `a%2fb`, reserved `login`) → unknown without touching the file system
+  8. lookups of names without a file do not grow the cache (random URLs cannot fill memory)
+  9. a username in `access` that is not in `users.yaml` → warning when the file is read, naming user and repository
+- **Red** — `RepositoriesStartupTest` (`ApplicationContextRunner`):
+  1. `mizoine.repositories-dir` not set → **starts** (no repositories), warning naming the property *(decided 2026-11-18: no repositories is not an error)*
+  2. folder missing → starts, warning; requests answer 404 until the folder exists
+  3. empty folder → starts (no warning needed; the start page tells the user)
+- **Red** — also in `RepositoryRegistryTest`: `all()` lists the repositories of all `*.yaml` files in the folder, reading only new or changed files (same cache as `find`); non-`.yaml` files and invalid names are skipped; unreadable files are left out (permissions unknown).
+- **Green:** `RepositoryRegistry.find(name)` → `Optional<RepositoryConfig>` and `all()`; cache `name → (file version, config)`; `RepositoryFileParser` from step 14.
+
+### 16. Access rules  ☐
+Pure unit tests — the core of the security of this feature.
+- **Red** — `RepositoryAccessTest`:
+  1. grant `/` → user may enter every folder
+  2. grant `public` → may enter `public` and `public/a/b`; not `publicity`, not `private`
+  3. a folder *above* a granted one (e.g. root when only `projects/shared` is granted) may be entered, but shows only the way to the granted folders (D4)
+  4. user without any grant → no access to the repository at all
+  5. usernames are case-sensitive
+- **Green:** `RepositoryAccess` with `canEnter(user, folder)` and `visibleChildren(user, folder, children)`.
+
+### 17. `/{repository}/` — "ok" page  ☐
+- **Red** — `RepositoryControllerTest` (`@SpringBootTest` + MockMvc, test repositories in `src/test/resources/repositories/`):
+  1. user with access → 200, small page with `ok`
+  2. unknown repository → 404
+  3. existing repository, user without any grant → 404, same response as unknown (D2)
+  4. anonymous → login redirect / 401, as for every page (step 5)
+  5. `/notes` without trailing slash → redirect to `/notes/` (D5)
+  6. `/`, `/login`, `/logout`, `/default-ui.css` still work (no clash with `/{repository}/`)
+  7. readable file with problems, user with grant `/` → **500 with details**: what is wrong (e.g. "root folder /x does not exist") and which file to fix (`notes.yaml`); as JSON or HTML like step 20 (D8)
+  8. same, user with a partial grant → 500 without details ("repository not available"); no paths in the response
+  9. same, user without grant → 404 (D2)
+  10. unreadable file → 404 for everyone, details only in the log
+- **Green:** `RepositoryController` with `GET /{repository}/`, Thymeleaf template `repository.html`.
+
+### 18. Start page: the user's repositories  ☐
+*Requested 2026-11-18.* Replaces the greeting of step 7 (the greeting stays as heading).
+- **Red** — `StartPageTest` (`@SpringBootTest` + MockMvc, test repositories folder):
+  1. user with grants in two of three repositories → page lists exactly those two, as links `<a href="notes/">notes</a>`, sorted by name
+  2. user without any grant → page says "No accessible repositories configured for you." (HTML-escaped username in heading as before)
+  3. no repositories configured at all (property not set, folder missing or empty) → same message; status 200
+  4. repository whose file is readable with problems (D8): listed with a "not available" note; the note shows the problem only to users with grant `/`
+  5. unreadable repository files are not listed (permissions unknown, D7)
+  6. `Accept: application/json` → `{"repositories":[{"name":"notes","available":true}, …]}` (same content negotiation as step 20, D6)
+  7. anonymous → login (unchanged)
+- **Green:** `HelloController` → `StartPageController`, using `RepositoryRegistry.all()` and `RepositoryAccess`; template `hello.html` → `start.html`. Update `HelloControllerTest` and the greeting tests from step 7.
+
+### 19. Safe paths inside a repository  ☐
+Before anything below the root is exposed.
+- **Red** — `RepositoryPathsTest` (unit, `@TempDir`) and a few MockMvc cases:
+  1. `a/b` resolves inside the root
+  2. `..`, `a/../../x`, URL-encoded `%2e%2e`, `%2f`, backslashes, NUL → rejected (404 over HTTP)
+  3. a symbolic link pointing outside the root → not followed, treated as not existing
+  4. `.git` and other names starting with `.` → not visible, not reachable (D3)
+  5. not existing folder → 404; a file instead of a folder → 404 for now (files come later)
+- **Green:** `RepositoryPaths.resolve(root, relative)` using `normalize()` + `toRealPath()` and a check that the result is still under the root's real path.
+
+### 20. Subfolder listing: JSON and HTML  ☐
+Replaces the "ok" page of step 17 for folders.
+- **Red** — `RepositoryListingTest` (MockMvc):
+  1. `GET /notes/` with `Accept: application/json` → 200, `{"repository":"notes","path":"/","folders":["a","b"]}`; sorted by name; only folders, no files
+  2. same with `Accept: text/html` → HTML page with a link per subfolder (`<a href="a/">a</a>`) and a link to the parent folder below the root
+  3. deeper folder `GET /notes/projects/shared/` → its subfolders; `path` is `/projects/shared/`
+  4. only folders the user may see (D4); hidden folders never listed (D3)
+  5. no `Accept` header or `*/*` → HTML (D6); `Accept: application/xml` only → 406
+  6. folder names with spaces, `#`, `%`, non-ASCII → correctly encoded in links and JSON, HTML-escaped in the page
+  7. `/notes/projects` (no trailing slash) → redirect to `/notes/projects/` so relative links work
+- **Green:** controller method with `GET /{repository}/**`, content negotiation by `produces` (`application/json` and `text/html` handler methods), `record FolderListing(repository, path, folders)`, template `folder.html`.
+
+### 21. Documentation  ☐
+- `repositories.example/notes.yaml` (committed, checked by a test like step 10); real repository folder git-ignored if kept in the project.
+- README: `--mizoine.repositories-dir=...`, file format, URLs, JSON example (`curl -H 'Accept: application/json' -u artem …/notes/`).
+
 ---
 
 ## Open decisions
@@ -270,3 +395,17 @@ browser ──HTTPS──▶ nginx (TLS, certificates) ──HTTP──▶ 127.0
 - Sessions of users removed from `users.yaml` stay valid until they expire (step 9): add invalidation if needed.
 - Run the dependency check once an NVD API key is available (step 8).
 - ~~Rate-limit HTTP Basic login attempts~~ **Done:** step 13.
+
+### Repositories (steps 14–21) — decided 2026-11-18
+- ~~Load all repository files at startup?~~ **Decided 2026-11-18:** no — lazy lookup per request (step 15).
+- **D1 — file format:** `access` as a map `username → [folders]` (shown above). **Decided:** yes — short to write, duplicates impossible. Alternative: a list of `{user, folders}` entries.
+- **D2 — no access vs. unknown:** **Decided:** both **404**, so a user cannot find out which repositories or folders exist. Alternative: 403 for "exists, but not for you".
+- **D3 — hidden folders:** **Decided:** all names starting with `.` (`.git`, `.mizoine`, …) are never listed nor reachable. Alternative: hide only `.git`.
+- **D4 — folders above a granted folder:** with only `projects/shared` granted, **Decided:** the user may open `/notes/` and `/notes/projects/`, but sees only `projects` and `shared` on the way. Alternative: the user must open `/notes/projects/shared/` directly.
+- **D5 — trailing slash:** **Decided:** folder URLs end with `/`; without it → redirect. Needed for relative links in the HTML.
+- **D6 — default format:** **Decided:** HTML when `Accept` is missing or `*/*` (browsers, plain curl); JSON only when asked for. Anything else → 406.
+- **D7 — invalid repository file while running:** **Decided:** the repository becomes unknown (404) until the file is fixed, error logged once. Different from `users.yaml` (step 9 keeps the last valid users): keeping old permissions after the file was changed could keep access the editor wanted to remove. Alternative: keep the last valid version, like users.
+- **D8 — error details for entitled users** *(added 2026-11-18 by request):* if the repository file can be read far enough to know the permissions, a user with a grant for the **whole repository** (`/`) gets the details of what is wrong (e.g. a wrong root path), with HTTP 500. Users with partial grants get 500 without details; users without a grant get 404 (D2). If the permissions cannot be read (malformed YAML, broken `access` section), everyone gets 404 and the details go only to the log (D7).
+- Repository names share the URL space with the application (`/login`, `/logout`, …): reserved names are rejected (step 14). Alternative: a prefix like `/r/{repository}/` — not chosen, since you asked for `/{repository}/`.
+- ~~The start page `/` could list the user's repositories~~ **Decided 2026-11-18:** yes, step 18.
+- ~~Fail to start without repositories?~~ **Decided 2026-11-18:** no; property not set, folder missing or empty → start, warning in the log, message on the start page.
