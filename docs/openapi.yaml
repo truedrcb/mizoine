@@ -1,0 +1,33 @@
+openapi: 3.1.0
+info:
+  title: Mizoine
+  description: "Personal knowledge base and file storage on plain files and Git. Every\
+    \ page needs a login: browsers use the login form, other clients HTTP Basic."
+  version: "1.0"
+servers:
+- url: /
+  description: This Mizoine server
+security:
+- basicAuth: []
+paths:
+  /:
+    get:
+      tags:
+      - Start page
+      summary: Start page
+      description: Greets the logged-in user.
+      operationId: hello
+      responses:
+        "200":
+          description: The start page
+          content:
+            text/html: {}
+        "302":
+          description: "Browser not logged in: redirect to the login page"
+        "401":
+          description: "Not logged in (non-browser clients): HTTP Basic challenge"
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic

@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-18): steps 0–13 done (109 tests green). Planned next: steps 14–21 (repositories). Decisions D1–D8 confirmed; next: step 14.
+**Status** (updated: 2026-11-18): steps 0–15 done (174 tests green). Next: step 16 (lazy repository lookup), then 17–22.
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -41,6 +41,9 @@ Steps are numbered so you can refer to them ("do step 4"). Every step follows TD
 | Tests | JUnit 5, AssertJ, Spring Boot Test, MockMvc (`spring-boot-starter-webmvc-test`), `spring-security-test` | Standard Spring testing stack |
 | Package | `com.gratchev.mizoine` | Same as the archived version |
 | Code style | `final` on fields, locals and parameters (not lambda parameters); Checkstyle `FinalLocalVariable` + `FinalParameters` run in `validate` and fail the build | Decided 2026-11-16 |
+| HTTPS | **nginx** in front (TLS), the application speaks plain HTTP on `127.0.0.1` (step 12) | Certificates and TLS handled by a standard tool |
+| Repositories | One **YAML** file per repository in `mizoine.repositories-dir`, read lazily on request (steps 14–16) | Same hand-editable format as users; no restart needed |
+| API documentation | OpenAPI annotations (`swagger-annotations-jakarta`) on endpoints; springdoc **test-only** generates `docs/openapi.yaml`; not served by the application, no Swagger UI (step 15, D9) | Description lives in the repository, nothing extra exposed |
 
 ### Users file format
 
@@ -55,11 +58,11 @@ users:
 ```
 
 Rules:
-- `username` must be non-empty and unique.
+- `username` must be non-empty and unique. Duplicate keys (e.g. `users:` twice) are rejected too (step 14).
 - `password` must be a BCrypt hash with the `{bcrypt}` prefix (step 5). Plain-text values and `{noop}` are rejected at load time.
 - The real `users.yaml` is **not committed** (git-ignored). A `users.example.yaml` is committed.
 
-### Repository file format (steps 14–21)
+### Repository file format (steps 14–22)
 
 One file per repository in the folder set by `mizoine.repositories-dir`. The file name is the repository name: `notes.yaml` → `/notes/`.
 
@@ -71,18 +74,24 @@ access:                        # username → folders the user may access (inclu
   guest: [public, projects/shared]
 ```
 
-Rules (proposed, see decisions D1–D6):
-- Repository name: from the file name; letters, digits, `.`, `_`, `-`; not starting with `.`; case-sensitive. Names used by the application itself (`login`, `logout`, `error`, `default-ui.css`, …) are rejected.
-- `path` must exist and be a folder.
-- `access` keys are usernames (case-sensitive, like `users.yaml`). A user not in `users.yaml` gives a warning, not an error: users can be added later.
-- Folders in `access` are relative to the repository root, written with `/`; `..` and absolute paths outside the root are rejected.
-- Unknown fields are ignored with a warning (same as `users.yaml`).
+Rules (implemented in step 14; decisions D1–D8 below):
+- Repository name: from the file name `<name>.yaml`; letters, digits, `.`, `_`, `-`; not starting with `.`; case-sensitive. Names used by the application itself (`login`, `logout`, `error`, `default-ui.css`, `favicon.ico`) are rejected.
+- `path` should be an existing folder. If it is missing or wrong, the file is still readable and the repository has a *problem* (D8).
+- `access` keys are usernames (case-sensitive, like `users.yaml`); each a list of folders. Missing or empty `access` → nobody has access (warning). A user not in `users.yaml` gives a warning, not an error: users can be added later (step 16).
+- Folders in `access` are relative to the repository root, written with `/`; a leading `/` also means the root (`/public` = `public`). `.`, `..`, hidden names (D3), backslashes and NUL are rejected.
+- Duplicate keys (e.g. a username twice) are rejected; unknown fields are ignored with a warning (same as `users.yaml`).
 
 ### Error behaviour
 
+Users file:
 - File missing or invalid **at startup** → application fails to start with a clear message.
 - File becomes invalid **while running** (step 9) → keep the last valid users, log an error.
 - Zero users in a valid file → allowed, but nobody can log in (logged as a warning).
+
+Repository files (read on request, never at startup — step 16):
+- No repositories configured (property not set, folder missing or empty) → application starts, warning; the start page says so.
+- File unreadable (permissions unknown) → repository unknown, 404 for everyone, error logged once; an older valid version is not kept (D7).
+- File readable with problems (e.g. wrong root folder) → 500 with details for users with grant `/`, 500 without details for partial grants, 404 without grant (D8).
 
 ---
 
@@ -196,7 +205,7 @@ Pure unit tests, no Spring context. Use `@TempDir` for files.
   - The default login page loads `/default-ui.css` from the same server and has no inline styles or scripts, so the strict CSP does not break it (tested that the stylesheet is public).
   - 8.2 and 8.3 passed straight away (Boot and Spring Security defaults); the tests now guard them. 8.2 needs a real server (`ErrorResponseTest`, random port, `java.net.http.HttpClient`): MockMvc does not render error responses. A test-only endpoint throws an exception with a secret message; neither the message nor a stack trace appears in JSON or HTML errors.
   - The error defaults are pinned in `application.yaml` (`server.error.include-*`).
-  - Timing: for an unknown user Spring Security still checks a dummy BCrypt hash, so timing is similar. It uses the encoder's default cost (10); with cost-12 user hashes a small difference remains. Not tested (timing tests are flaky).
+  - Timing: for an unknown user Spring Security still checks a dummy BCrypt hash, so timing is similar. It uses the encoder's default cost (10); with cost-12 user hashes a small difference remains. Not tested (timing tests are flaky). *Closed in step 11 (encoder hashes with cost 12).*
   - Profile `security-check` uses `dependency-check-maven` 13.0.0, failing on CVSS ≥ 7. **It needs an NVD API key** (`NVD_API_KEY`); without one, version 13 fails at once ("Invalid API Key"). Not run yet.
   - Spring Framework 7 removed `ResultMatcher.matchAll`; use `andExpectAll`. `@LocalServerPort` is in `org.springframework.boot.test.web.server`.
 
@@ -267,7 +276,7 @@ browser ──HTTPS──▶ nginx (TLS, certificates) ──HTTP──▶ 127.0
   - `docs/nginx.conf.example` tested live: nginx 1.28 unpacked without root (`apt-get download`), self-signed certificate, the example with only ports, paths and name replaced. `nginx -t` ok; HTTP→HTTPS 301; anonymous → `https://…/login`; HSTS; cookie `Secure; HttpOnly; SameSite=Lax`; form login with CSRF and HTTP Basic work; app not reachable on the LAN address.
   - Live test found the first rate limit too strict (it also counted loading the login page). Now only `POST /login` counts: 10/min per address, burst 5. Retested: 15 page loads pass; 6 quick wrong logins pass, then 429.
   - `X-Forwarded-For` is overwritten with `$remote_addr`, not appended: otherwise a client could put a fake private address in it, which Tomcat would skip as a "proxy".
-  - Not limited by nginx: password guessing over HTTP Basic (any path). Possible follow-up.
+  - Not limited by nginx: password guessing over HTTP Basic (any path). *Done in step 13 (in the application).*
 
 ### 13. Limit failed logins (HTTP Basic and form)  ☑
 *Requested 2026-11-16, follow-up of step 12.* nginx cannot do it for HTTP Basic: a valid client sends credentials with every request, and nginx does not know which attempts failed.
@@ -285,25 +294,51 @@ browser ──HTTPS──▶ nginx (TLS, certificates) ──HTTP──▶ 127.0
   - Live-tested with the jar and `X-Forwarded-For` as nginx sends it: 5 wrong → 429 with `Retry-After: 300` even with the right password; another address → 200; login page → 200; one warning in the log.
 - State is in memory: a restart forgets it. Fine for one instance.
 
-### Repositories: overview of steps 14–21
-*Planned 2026-11-18.* Covers request 1 ("ok" page per repository: steps 14–17), the start page with the user's repositories (step 18), request 2 (subfolder listing: steps 19–20), plus docs (step 21). Repository files are read lazily on request, which also gives reload without restart (step 15).
+### Repositories: overview of steps 14–22
+*Planned 2026-11-18.* Covers request 1 ("ok" page per repository: steps 14, 16–18), the start page with the user's repositories (step 19), request 2 (subfolder listing: steps 20–21), plus docs (step 22). Step 15 (OpenAPI) was inserted on request and applies to all endpoints from then on. Repository files are read lazily on request, which also gives reload without restart (step 16).
 Read-only for now: nothing is written to the repository. Writing and the AI-agent role (BACKLOG §7) come later.
 
-### 14. Repository file model and parser  ☐
+### 14. Repository file model and parser  ☑
 Pure unit tests, `@TempDir`, like step 3.
 - **Red** — `RepositoryFileParserTest`:
   1. valid file → `RepositoryConfig(name, root, grants)`; name taken from the file name without `.yaml`
   2. relative `path` is resolved against the folder of the file; absolute path kept
   3. `path` missing, not existing, or a file instead of a folder → the file is still **readable**: the config is returned with a *problem* ("root folder /x does not exist"), not an exception (D8)
   4. invalid repository names (`.hidden.yaml`, `my repo.yaml`, reserved `login.yaml`) → exception
-  5. folder grants: `"/"` = root; `public`, `public/`, `/public` all mean the same; `..`, `a/../../b` and absolute paths are rejected
+  5. folder grants: `"/"` = root; `public`, `public/`, `/public` all mean the same (a leading `/` is the repository root, not the disk root); `..`, `a/../../b` and hidden names are rejected
   6. empty `access` → valid, nobody has access (warning logged)
   7. malformed YAML → exception with line/column, not the content (same as step 3)
   8. unknown fields → ignored, warning names each field (same as step 3.8)
   9. **two levels of failure (D8):** *unreadable* — malformed YAML, invalid repository name, invalid `access` section (e.g. a grant with `..`) → `RepositoryFileException`, permissions unknown; *readable with problems* — everything else (root folder) → config with a list of problems
 - **Green:** `record RepositoryConfig(name, root, grants, problems)`, `record FolderGrant`, `RepositoryFileParser` (Jackson YAML tree, as in `UsersFileParser`). `access` is parsed and checked first, so permissions are known even when the rest is wrong.
+- *Done, with additions:* 57 test cases (`RepositoryFileParserTest`, many parameterized).
+  - `RepositoryNames.isValid` is separate, for the lookup by URL in step 16. Reserved: `login`, `logout`, `error`, `default-ui.css`, `favicon.ico`.
+  - `FolderGrant` = path segments; `/` = whole repository. Rejected (file unreadable): empty, `.`/`..`, hidden names (D3), backslash, NUL; folders not given as a list; `access` not a mapping; blank username.
+  - **Duplicate keys** (e.g. a username twice under `access`) make the file unreadable instead of silently using the last one (Jackson `STRICT_DUPLICATE_DETECTION`).
+  - Missing `access` = empty: nobody has access, warning. Missing or non-text `path`, missing folder, file instead of folder → *problems* (D8).
+  - Refactoring: YAML reading with position-only error messages moved to `config/YamlFiles`, shared by users and repository files. Duplicate keys are now rejected in `users.yaml` too (new test first).
 
-### 15. Lazy repository lookup  ☐
+### 15. OpenAPI documentation  ☑
+*Requested 2026-11-18:* all API methods are annotated so OpenAPI documentation can be generated; the build generates it. *Decided 2026-11-18 (D9):* no Swagger UI, and the **application does not serve the description** — it exists only as a file in the repository.
+- **Dependencies:** `io.swagger.core.v3:swagger-annotations-jakarta` 2.2.55 (compile: annotations only); `org.springdoc:springdoc-openapi-starter-webmvc-api` 3.2.0 (**test** scope: builds the description in tests, not part of the jar).
+- **Output:** `docs/openapi.yaml`, committed. Written by `OpenApiDocumentationTest` during `mvn verify`; changes show up in `git diff`.
+- **Red** — `OpenApiDocumentationTest` (`@SpringBootTest` + MockMvc, test user):
+  1. description has title "Mizoine" and an API version
+  2. `GET /` is documented: summary, `200` as `text/html`, `401`
+  3. security scheme HTTP Basic declared and required for all operations
+  4. `docs/openapi.yaml` is written and equals the description served in the test
+- **Green:** `@Tag`, `@Operation`, `@ApiResponse` on `HelloController`. The API-wide part (`@OpenAPIDefinition`: title, version, server; `@SecurityScheme` HTTP Basic) is in **test code**, `OpenApiDocumentationTest.ApiDescription` — a configuration class in the application would suggest that it serves API docs (refactored 2026-11-18, output unchanged).
+- **Check:** the built jar contains no springdoc classes; `/v3/api-docs` on the running jar → 404 for a logged-in user.
+- **From now on (CLAUDE.md):** every endpoint step adds annotations, and its tests check the endpoint in the description (summary, parameters, response codes and media types — JSON and HTML).
+- *Done, with findings:*
+  - The springdoc Maven plugin (planned first) was dropped: it starts the application and fetches `/v3/api-docs`, which the jar no longer has (D9). The test generates the file instead.
+  - *(added)* `servers` is the relative `/`: springdoc puts the test instance's `http://localhost` there by default, which is wrong for every real installation.
+  - `GET /` documents `200 text/html`, `302` (browser not logged in) and `401` (HTTP Basic challenge).
+  - API version in the description is `1.0` (an annotation constant): the swagger model classes are test-only, so the pom version cannot be set from main code. API version ≠ artifact version anyway.
+  - The description endpoint `/v3/api-docs` (constant `OpenApiDocumentationTest.API_DOCS_PATH`) exists only in `OpenApiDocumentationTest`: springdoc is switched off for all other tests in `src/test/resources/config/application.yaml`; `ApiDocsNotServedTest` checks 404 there (added 2026-11-18).
+  - Checked: the jar contains `swagger-annotations-jakarta` only, no springdoc; on the running jar `/v3/api-docs`, `/v3/api-docs.yaml` and `/swagger-ui.html` → 404 for a logged-in user.
+
+### 16. Lazy repository lookup  ☐
 *Decided 2026-11-18:* repository files are **not** loaded at startup. On each request to `/{repository}/…` the matching file `<repositories-dir>/<repository>.yaml` is looked up and read when needed.
 - **Red** — `RepositoryRegistryTest` (unit, `@TempDir`, counting parser as in step 9):
   1. first request for `notes` reads `notes.yaml` and returns its config; other files in the folder are not read
@@ -312,10 +347,10 @@ Pure unit tests, `@TempDir`, like step 3.
   4. removed file → repository unknown (404)
   5. file added while running → found on the next request
   6. unreadable file → repository treated as unknown (404, D2); error logged **once** per file version, naming the file; a previously loaded valid version is **not** kept (D7)
-  7a. readable file with problems (e.g. root folder missing) → returned with its problems, error logged once; the controller decides what the user sees (D8, step 17)
-  7. **name check before any file access:** names that are not valid repository names (`..`, `.git`, `a/b`, `a%2fb`, reserved `login`) → unknown without touching the file system
-  8. lookups of names without a file do not grow the cache (random URLs cannot fill memory)
-  9. a username in `access` that is not in `users.yaml` → warning when the file is read, naming user and repository
+  7. readable file with problems (e.g. root folder missing) → returned with its problems, error logged once; the controller decides what the user sees (D8, step 18)
+  8. **name check before any file access:** names that are not valid repository names (`..`, `.git`, `a/b`, `a%2fb`, reserved `login`) → unknown without touching the file system
+  9. lookups of names without a file do not grow the cache (random URLs cannot fill memory)
+  10. a username in `access` that is not in `users.yaml` → warning when the file is read, naming user and repository
 - **Red** — `RepositoriesStartupTest` (`ApplicationContextRunner`):
   1. `mizoine.repositories-dir` not set → **starts** (no repositories), warning naming the property *(decided 2026-11-18: no repositories is not an error)*
   2. folder missing → starts, warning; requests answer 404 until the folder exists
@@ -323,7 +358,7 @@ Pure unit tests, `@TempDir`, like step 3.
 - **Red** — also in `RepositoryRegistryTest`: `all()` lists the repositories of all `*.yaml` files in the folder, reading only new or changed files (same cache as `find`); non-`.yaml` files and invalid names are skipped; unreadable files are left out (permissions unknown).
 - **Green:** `RepositoryRegistry.find(name)` → `Optional<RepositoryConfig>` and `all()`; cache `name → (file version, config)`; `RepositoryFileParser` from step 14.
 
-### 16. Access rules  ☐
+### 17. Access rules  ☐
 Pure unit tests — the core of the security of this feature.
 - **Red** — `RepositoryAccessTest`:
   1. grant `/` → user may enter every folder
@@ -333,7 +368,7 @@ Pure unit tests — the core of the security of this feature.
   5. usernames are case-sensitive
 - **Green:** `RepositoryAccess` with `canEnter(user, folder)` and `visibleChildren(user, folder, children)`.
 
-### 17. `/{repository}/` — "ok" page  ☐
+### 18. `/{repository}/` — "ok" page  ☐
 - **Red** — `RepositoryControllerTest` (`@SpringBootTest` + MockMvc, test repositories in `src/test/resources/repositories/`):
   1. user with access → 200, small page with `ok`
   2. unknown repository → 404
@@ -341,36 +376,38 @@ Pure unit tests — the core of the security of this feature.
   4. anonymous → login redirect / 401, as for every page (step 5)
   5. `/notes` without trailing slash → redirect to `/notes/` (D5)
   6. `/`, `/login`, `/logout`, `/default-ui.css` still work (no clash with `/{repository}/`)
-  7. readable file with problems, user with grant `/` → **500 with details**: what is wrong (e.g. "root folder /x does not exist") and which file to fix (`notes.yaml`); as JSON or HTML like step 20 (D8)
+  7. readable file with problems, user with grant `/` → **500 with details**: what is wrong (e.g. "root folder /x does not exist") and which file to fix (`notes.yaml`); as JSON or HTML like step 21 (D8)
   8. same, user with a partial grant → 500 without details ("repository not available"); no paths in the response
   9. same, user without grant → 404 (D2)
   10. unreadable file → 404 for everyone, details only in the log
 - **Green:** `RepositoryController` with `GET /{repository}/`, Thymeleaf template `repository.html`.
+- **OpenAPI** (step 15): annotations; `OpenApiDocumentationTest` checks the path, parameter `repository` and responses 200/302/401/404/500.
 
-### 18. Start page: the user's repositories  ☐
-*Requested 2026-11-18.* Replaces the greeting of step 7 (the greeting stays as heading).
+### 19. Start page: the user's repositories  ☐
+*Requested 2026-11-18.* Extends the start page of step 7: the greeting stays as heading, the list of repositories comes below it.
 - **Red** — `StartPageTest` (`@SpringBootTest` + MockMvc, test repositories folder):
   1. user with grants in two of three repositories → page lists exactly those two, as links `<a href="notes/">notes</a>`, sorted by name
   2. user without any grant → page says "No accessible repositories configured for you." (HTML-escaped username in heading as before)
   3. no repositories configured at all (property not set, folder missing or empty) → same message; status 200
   4. repository whose file is readable with problems (D8): listed with a "not available" note; the note shows the problem only to users with grant `/`
   5. unreadable repository files are not listed (permissions unknown, D7)
-  6. `Accept: application/json` → `{"repositories":[{"name":"notes","available":true}, …]}` (same content negotiation as step 20, D6)
+  6. `Accept: application/json` → `{"repositories":[{"name":"notes","available":true}, …]}` (same content negotiation as step 21, D6)
   7. anonymous → login (unchanged)
 - **Green:** `HelloController` → `StartPageController`, using `RepositoryRegistry.all()` and `RepositoryAccess`; template `hello.html` → `start.html`. Update `HelloControllerTest` and the greeting tests from step 7.
+- **OpenAPI** (step 15): `GET /` gets the JSON response (`application/json`) next to `text/html`; `docs/openapi.yaml` changes accordingly.
 
-### 19. Safe paths inside a repository  ☐
+### 20. Safe paths inside a repository  ☐
 Before anything below the root is exposed.
 - **Red** — `RepositoryPathsTest` (unit, `@TempDir`) and a few MockMvc cases:
   1. `a/b` resolves inside the root
-  2. `..`, `a/../../x`, URL-encoded `%2e%2e`, `%2f`, backslashes, NUL → rejected (404 over HTTP)
+  2. `..`, `a/../../x`, URL-encoded `%2e%2e`, `%2f`, backslashes, NUL → rejected (404 over HTTP; Tomcat or Spring Security's firewall may already answer 400 for some — the test accepts 400 or 404, never 200)
   3. a symbolic link pointing outside the root → not followed, treated as not existing
   4. `.git` and other names starting with `.` → not visible, not reachable (D3)
   5. not existing folder → 404; a file instead of a folder → 404 for now (files come later)
 - **Green:** `RepositoryPaths.resolve(root, relative)` using `normalize()` + `toRealPath()` and a check that the result is still under the root's real path.
 
-### 20. Subfolder listing: JSON and HTML  ☐
-Replaces the "ok" page of step 17 for folders.
+### 21. Subfolder listing: JSON and HTML  ☐
+Replaces the "ok" page of step 18 for folders.
 - **Red** — `RepositoryListingTest` (MockMvc):
   1. `GET /notes/` with `Accept: application/json` → 200, `{"repository":"notes","path":"/","folders":["a","b"]}`; sorted by name; only folders, no files
   2. same with `Accept: text/html` → HTML page with a link per subfolder (`<a href="a/">a</a>`) and a link to the parent folder below the root
@@ -380,8 +417,9 @@ Replaces the "ok" page of step 17 for folders.
   6. folder names with spaces, `#`, `%`, non-ASCII → correctly encoded in links and JSON, HTML-escaped in the page
   7. `/notes/projects` (no trailing slash) → redirect to `/notes/projects/` so relative links work
 - **Green:** controller method with `GET /{repository}/**`, content negotiation by `produces` (`application/json` and `text/html` handler methods), `record FolderListing(repository, path, folders)`, template `folder.html`.
+- **OpenAPI** (step 15): both media types, the path parameter, 302/404/406/500.
 
-### 21. Documentation  ☐
+### 22. Documentation  ☐
 - `repositories.example/notes.yaml` (committed, checked by a test like step 10); real repository folder git-ignored if kept in the project.
 - README: `--mizoine.repositories-dir=...`, file format, URLs, JSON example (`curl -H 'Accept: application/json' -u artem …/notes/`).
 
@@ -396,8 +434,8 @@ Replaces the "ok" page of step 17 for folders.
 - Run the dependency check once an NVD API key is available (step 8).
 - ~~Rate-limit HTTP Basic login attempts~~ **Done:** step 13.
 
-### Repositories (steps 14–21) — decided 2026-11-18
-- ~~Load all repository files at startup?~~ **Decided 2026-11-18:** no — lazy lookup per request (step 15).
+### Repositories and API documentation (steps 14–22) — decided 2026-11-18
+- ~~Load all repository files at startup?~~ **Decided 2026-11-18:** no — lazy lookup per request (step 16).
 - **D1 — file format:** `access` as a map `username → [folders]` (shown above). **Decided:** yes — short to write, duplicates impossible. Alternative: a list of `{user, folders}` entries.
 - **D2 — no access vs. unknown:** **Decided:** both **404**, so a user cannot find out which repositories or folders exist. Alternative: 403 for "exists, but not for you".
 - **D3 — hidden folders:** **Decided:** all names starting with `.` (`.git`, `.mizoine`, …) are never listed nor reachable. Alternative: hide only `.git`.
@@ -406,6 +444,7 @@ Replaces the "ok" page of step 17 for folders.
 - **D6 — default format:** **Decided:** HTML when `Accept` is missing or `*/*` (browsers, plain curl); JSON only when asked for. Anything else → 406.
 - **D7 — invalid repository file while running:** **Decided:** the repository becomes unknown (404) until the file is fixed, error logged once. Different from `users.yaml` (step 9 keeps the last valid users): keeping old permissions after the file was changed could keep access the editor wanted to remove. Alternative: keep the last valid version, like users.
 - **D8 — error details for entitled users** *(added 2026-11-18 by request):* if the repository file can be read far enough to know the permissions, a user with a grant for the **whole repository** (`/`) gets the details of what is wrong (e.g. a wrong root path), with HTTP 500. Users with partial grants get 500 without details; users without a grant get 404 (D2). If the permissions cannot be read (malformed YAML, broken `access` section), everyone gets 404 and the details go only to the log (D7).
-- Repository names share the URL space with the application (`/login`, `/logout`, …): reserved names are rejected (step 14). Alternative: a prefix like `/r/{repository}/` — not chosen, since you asked for `/{repository}/`.
-- ~~The start page `/` could list the user's repositories~~ **Decided 2026-11-18:** yes, step 18.
+- **D9 — Swagger UI:** **Decided 2026-11-18:** no Swagger UI, and the application does not serve the API description at all; it is generated during the build into `docs/openapi.yaml` in the repository (step 15).
+- Repository names share the URL space with the application (`/login`, `/logout`, …): reserved names are rejected (step 14). Alternative: a prefix like `/r/{repository}/` — not chosen: `/{repository}/` was requested.
+- ~~The start page `/` could list the user's repositories~~ **Decided 2026-11-18:** yes, step 19.
 - ~~Fail to start without repositories?~~ **Decided 2026-11-18:** no; property not set, folder missing or empty → start, warning in the log, message on the start page.

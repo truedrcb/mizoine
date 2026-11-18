@@ -17,6 +17,11 @@ Act as an expert Java developer. Build with Java 25, Maven 3.9+ (`mvn`, no Maven
 - Prefer constructor injection so fields can be final, in tests too (`MyTest(@Autowired final MockMvc mockMvc)`, `MyTest(@TempDir final Path dir)`).
 - Checkstyle ([checkstyle.xml](checkstyle.xml)) enforces locals and parameters in `mvn verify`. Final fields are not checked by the tool; take care of them in code.
 
+## API documentation (OpenAPI)
+- Every HTTP endpoint (HTML pages and JSON alike) is annotated for OpenAPI (springdoc): `@Tag` on the controller; `@Operation` with summary; `@Parameter` for path/query parameters; `@ApiResponse` for every status it can return (incl. 401, 404, 500) with media types.
+- Write the test first: the endpoint's test checks its entry in `/v3/api-docs` (summary, parameters, response codes, media types).
+- `mvn verify` writes the description to `docs/openapi.yaml` (committed). The application itself does not serve it; springdoc is a test dependency only, no Swagger UI (DEV.md step 15, D9).
+
 ## Plan and status
 - [DEV.md](DEV.md) holds the numbered development steps. The user refers to them by number ("do step 4").
 - Work one step at a time. After a step: tick its checkbox (☐ → ☑) and update the status date in DEV.md.

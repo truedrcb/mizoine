@@ -91,6 +91,22 @@ class UsersFileParserTest {
 	}
 
 	@Test
+	void duplicateKeysAreRejectedInsteadOfSilentlyUsingTheLastOne() throws IOException {
+		final Path file = write("""
+				users:
+				  - username: artem
+				    password: "%s"
+				users:
+				  - username: guest
+				    password: "%s"
+				""".formatted(HASH_1, HASH_2));
+
+		assertThatThrownBy(() -> parser.parse(file))
+				.isInstanceOf(UsersFileException.class)
+				.hasMessageContaining(file.toString());
+	}
+
+	@Test
 	void emptyFileIsRejected() throws IOException {
 		assertThatThrownBy(() -> parser.parse(write("")))
 				.isInstanceOf(UsersFileException.class)

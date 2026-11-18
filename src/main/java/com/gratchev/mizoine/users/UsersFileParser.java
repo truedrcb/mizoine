@@ -1,8 +1,5 @@
 package com.gratchev.mizoine.users;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -14,9 +11,9 @@ import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import tools.jackson.core.JacksonException;
+import com.gratchev.mizoine.config.YamlFiles;
+
 import tools.jackson.databind.JsonNode;
-import tools.jackson.dataformat.yaml.YAMLMapper;
 
 /**
  * Reads the hand-editable users file (YAML).
@@ -36,8 +33,6 @@ public class UsersFileParser {
 
 	private static final Pattern HASH_WITH_ID = Pattern.compile("^\\{([^}]+)}(.+)$");
 	private static final String PLAIN_TEXT_ID = "noop";
-
-	private final YAMLMapper mapper = YAMLMapper.builder().build();
 
 	public List<UserEntry> parse(final Path file) {
 		final JsonNode root = readTree(file);
@@ -71,20 +66,8 @@ public class UsersFileParser {
 		return List.copyOf(users);
 	}
 
-	private JsonNode readTree(final Path file) {
-		try {
-			return mapper.readTree(Files.readString(file));
-		} catch (final NoSuchFileException e) {
-			throw new UsersFileException("Users file not found: " + file, e);
-		} catch (final IOException e) {
-			throw new UsersFileException("Cannot read users file " + file, e);
-		} catch (final JacksonException e) {
-			// Jackson's message quotes the offending line, which may hold a password: report the position only.
-			// The cause is not attached for the same reason.
-			final var location = e.getLocation();
-			final String where = location == null ? "" : " at line " + location.getLineNr() + ", column " + location.getColumnNr();
-			throw new UsersFileException("Users file " + file + " is not valid YAML" + where);
-		}
+	private static JsonNode readTree(final Path file) {
+		return YamlFiles.readTree(file, "Users file", UsersFileException::new);
 	}
 
 	private UserEntry toUser(final JsonNode node, final int index, final Path file) {

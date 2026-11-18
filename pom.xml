@@ -20,6 +20,9 @@
 	<properties>
 		<java.version>25</java.version>
 		<checkstyle.version>14.4.0</checkstyle.version>
+		<!-- OpenAPI: keep in line (springdoc 3.2.0 is built on Spring Boot 4.1.2 and swagger 2.2.55) -->
+		<springdoc.version>3.2.0</springdoc.version>
+		<swagger-annotations.version>2.2.55</swagger-annotations.version>
 	</properties>
 
 	<dependencies>
@@ -39,6 +42,12 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
 		</dependency>
+		<!-- OpenAPI annotations only; the description is generated in tests (see springdoc below) -->
+		<dependency>
+			<groupId>io.swagger.core.v3</groupId>
+			<artifactId>swagger-annotations-jakarta</artifactId>
+			<version>${swagger-annotations.version}</version>
+		</dependency>
 		<dependency>
 			<groupId>tools.jackson.dataformat</groupId>
 			<artifactId>jackson-dataformat-yaml</artifactId>
@@ -52,6 +61,16 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!--
+			Test scope on purpose: the application does not serve the API description.
+			OpenApiDocumentationTest writes it to docs/openapi.yaml during the build.
+		-->
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-api</artifactId>
+			<version>${springdoc.version}</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

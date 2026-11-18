@@ -4,3 +4,9 @@ mizoine:
     # Many tests log in wrongly from the same address within one shared Spring context.
     # LoginRateLimitTest sets its own low limit.
     max-failures: 1000
+
+springdoc:
+  api-docs:
+    # springdoc is on the test classpath only to generate docs/openapi.yaml.
+    # Off for all tests; OpenApiDocumentationTest switches it on for itself.
+    enabled: false
