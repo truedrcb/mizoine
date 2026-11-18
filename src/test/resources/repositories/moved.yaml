@@ -1,0 +1,5 @@
+# Test repository whose root folder does not exist: readable, with a problem (D8).
+path: missing-root-folder
+access:
+  artem: ["/"]
+  guest: [public]

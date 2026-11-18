@@ -1,0 +1,3 @@
+# Test repository file that cannot be read (malformed YAML): permissions unknown (D7).
+path: .
+access: [artem

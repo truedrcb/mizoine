@@ -10,6 +10,63 @@ servers:
 security:
 - basicAuth: []
 paths:
+  /{repository}:
+    get:
+      tags:
+      - Repositories
+      summary: Repository without trailing slash
+      description: "Redirects to the same URL with a trailing slash (folder URLs end\
+        \ with '/'). Done for every valid name, so it reveals nothing about which\
+        \ repositories exist."
+      operationId: withoutTrailingSlash
+      parameters:
+      - name: repository
+        in: path
+        description: Repository name
+        required: true
+        schema:
+          type: string
+      responses:
+        "302":
+          description: "Redirect to /{repository}/"
+        "401":
+          description: Not logged in
+        "404":
+          description: Not a valid repository name
+  /{repository}/:
+    get:
+      tags:
+      - Repositories
+      summary: Repository
+      description: Answers 'ok' when the repository exists and the user has access
+        to it.
+      operationId: repository
+      parameters:
+      - name: repository
+        in: path
+        description: Repository name
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: The repository page
+          content:
+            text/html: {}
+        "302":
+          description: "Browser not logged in: redirect to the login page"
+        "401":
+          description: "Not logged in (non-browser clients): HTTP Basic challenge"
+        "404":
+          description: "Unknown repository, or no access to it — deliberately the\
+            \ same answer"
+        "406":
+          description: Only text/html is available
+        "500":
+          description: Repository configured wrongly (e.g. missing root folder); details
+            only for users with access to the whole repository
+          content:
+            text/html: {}
   /:
     get:
       tags:

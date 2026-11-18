@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+	<meta charset="UTF-8">
+	<title th:text="|Mizoine – ${repository}|">Mizoine – repository</title>
+</head>
+<body>
+	<h1 th:text="${repository}">repository</h1>
+	<p>This repository is not available.</p>
+	<!--/* details only for users with access to the whole repository (D8) */-->
+	<th:block th:if="${problems}">
+		<p>Fix the repository file <code th:text="${file}">name.yaml</code>:</p>
+		<ul>
+			<li th:each="problem : ${problems}" th:text="${problem}">problem</li>
+		</ul>
+	</th:block>
+</body>
+</html>

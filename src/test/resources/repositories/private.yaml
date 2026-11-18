@@ -1,0 +1,4 @@
+# Test repository: only artem has access.
+path: .
+access:
+  artem: ["/"]

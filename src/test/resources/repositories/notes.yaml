@@ -1,0 +1,5 @@
+# Test repository: whole repository for artem, one folder for guest.
+path: .
+access:
+  artem: ["/"]
+  guest: [public]

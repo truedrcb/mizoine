@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-18): steps 0–17 done (218 tests green). Next: step 18 (`/{repository}/` "ok" page), then 19–22.
+**Status** (updated: 2026-11-18): steps 0–18 done (235 tests green). Next: step 19 (start page with the user's repositories), then 20–22.
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -384,7 +384,7 @@ Pure unit tests — the core of the security of this feature.
   - *(added)* hidden names (D3) are filtered here too — never visible nor enterable, even with grant `/` — so no caller can forget it. Step 20 still blocks them at the path level.
   - `visibleChildren` keeps the given order; sorting is the listing's job (step 21).
 
-### 18. `/{repository}/` — "ok" page  ☐
+### 18. `/{repository}/` — "ok" page  ☑
 - **Red** — `RepositoryControllerTest` (`@SpringBootTest` + MockMvc, test repositories in `src/test/resources/repositories/`):
   1. user with access → 200, small page with `ok`
   2. unknown repository → 404
@@ -398,6 +398,13 @@ Pure unit tests — the core of the security of this feature.
   10. unreadable file → 404 for everyone, details only in the log
 - **Green:** `RepositoryController` with `GET /{repository}/`, Thymeleaf template `repository.html`.
 - **OpenAPI** (step 15): annotations; `OpenApiDocumentationTest` checks the path, parameter `repository` and responses 200/302/401/404/500.
+- *Done, with findings:* 15 tests (`RepositoryControllerTest`) + 2 OpenAPI tests.
+  - Test repositories in `src/test/resources/repositories/` (`notes`, `private`, `moved`, `broken`) use `path: .` (their own folder), so no empty folders are needed in Git.
+  - **HTML only for now:** the page and the 500 details are `text/html`; `Accept: application/json` → 406 (test `jsonIsNotAvailableYet`). JSON comes with step 21.
+  - 404 for unknown, unreadable and "no grant" is one `ResponseStatusException(NOT_FOUND)`: identical status, headers and body (tested).
+  - `/{repository}` redirects to `/{repository}/` for every valid name (reveals nothing); invalid names (e.g. `/favicon.ico`) → 404 without redirect.
+  - **springdoc leaves out methods that return `ModelAndView`.** First taken for "springdoc drops trailing slashes" — wrong; with a view name (`String`) and the 500 status set on the response, both `/{repository}` and `/{repository}/` are documented under their real paths.
+  - Live-tested with the jar: all cases as in the tests; the problem file and the unreadable file are logged once each.
 
 ### 19. Start page: the user's repositories  ☐
 *Requested 2026-11-18.* Extends the start page of step 7: the greeting stays as heading, the list of repositories comes below it.
@@ -423,7 +430,7 @@ Before anything below the root is exposed.
 - **Green:** `RepositoryPaths.resolve(root, relative)` using `normalize()` + `toRealPath()` and a check that the result is still under the root's real path.
 
 ### 21. Subfolder listing: JSON and HTML  ☐
-Replaces the "ok" page of step 18 for folders.
+Replaces the "ok" page of step 18 for folders. Also: replace the temporary test `RepositoryControllerTest.jsonIsNotAvailableYet` and give the 500 problem page (D8) a JSON variant.
 - **Red** — `RepositoryListingTest` (MockMvc):
   1. `GET /notes/` with `Accept: application/json` → 200, `{"repository":"notes","path":"/","folders":["a","b"]}`; sorted by name; only folders, no files
   2. same with `Accept: text/html` → HTML page with a link per subfolder (`<a href="a/">a</a>`) and a link to the parent folder below the root

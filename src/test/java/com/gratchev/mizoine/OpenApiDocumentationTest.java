@@ -103,6 +103,28 @@ class OpenApiDocumentationTest {
 	}
 
 	@Test
+	void repositoryPageIsDocumented() throws Exception {
+		final String operation = "$.paths['/{repository}/'].get";
+		mockMvc.perform(apiDocs(API_DOCS_PATH))
+				.andExpect(jsonPath(operation + ".summary").isNotEmpty())
+				.andExpect(jsonPath(operation + ".parameters[0].name").value("repository"))
+				.andExpect(jsonPath(operation + ".parameters[0].in").value("path"))
+				.andExpect(jsonPath(operation + ".responses['200'].content", hasKey("text/html")))
+				.andExpect(jsonPath(operation + ".responses['401'].description").isNotEmpty())
+				.andExpect(jsonPath(operation + ".responses['404'].description").isNotEmpty())
+				.andExpect(jsonPath(operation + ".responses['500'].content", hasKey("text/html")));
+	}
+
+	@Test
+	void repositoryWithoutTrailingSlashIsDocumented() throws Exception {
+		final String operation = "$.paths['/{repository}'].get";
+		mockMvc.perform(apiDocs(API_DOCS_PATH))
+				.andExpect(jsonPath(operation + ".summary").isNotEmpty())
+				.andExpect(jsonPath(operation + ".responses['302'].description").isNotEmpty())
+				.andExpect(jsonPath(operation + ".responses['404'].description").isNotEmpty());
+	}
+
+	@Test
 	void httpBasicIsRequiredForAllOperations() throws Exception {
 		mockMvc.perform(apiDocs(API_DOCS_PATH))
 				.andExpect(jsonPath("$.components.securitySchemes.basicAuth.type").value("http"))
