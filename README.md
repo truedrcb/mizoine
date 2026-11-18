@@ -12,10 +12,17 @@ It shows the folders of configured repositories, each user only what they are al
 
 ## Run
 
-Needs Java 25 and, to build, Maven 3.9+.
+Needs Java 25. Download the jar from [GitHub releases](https://github.com/truedrcb/mizoine/releases)
+(no Maven needed then), or build it with Maven 3.9+:
 
 ```sh
 mvn verify                                    # build and test → target/mizoine-1.0.0-SNAPSHOT.jar
+```
+
+With a downloaded jar, use its path instead of `target/mizoine-*.jar` below, and take `users.example.yaml`
+and `repositories.example/` from the repository.
+
+```sh
 cp users.example.yaml users.yaml
 java -jar target/mizoine-*.jar hash-password  # asks for a password, prints its hash
 # put your username and the hash into users.yaml
@@ -51,6 +58,29 @@ Set them in any of these ways (standard Spring Boot):
   ```
 
 Relative paths are relative to the directory the jar is started from.
+
+## Users
+
+Only users listed in the users file (`mizoine.users-file`) can log in.
+
+```yaml
+# users.yaml
+users:
+  - username: artem
+    password: "{bcrypt}$2a$12$...."   # output of: java -jar mizoine.jar hash-password
+  - username: guest
+    password: "{bcrypt}$2a$12$...."
+```
+
+- `password` is a BCrypt hash with the `{bcrypt}` prefix, never the password itself: plain text is rejected.
+  `hash-password` asks for the password twice without showing it and prints only the hash; it does not
+  start the server.
+- Usernames are case-sensitive (`alice` and `Alice` are different users) and must be unique.
+- Unknown fields are ignored with a warning in the log.
+- Edits take effect without a restart. If the file becomes invalid while running, the previous users stay
+  and the error is logged; at startup an invalid or missing file stops the application with a clear message.
+- An empty list is allowed, but then nobody can log in (warning in the log).
+- To give a user access to repositories, add the username to the repository files (see below).
 
 ## Repositories
 
