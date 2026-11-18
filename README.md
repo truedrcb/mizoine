@@ -1,8 +1,10 @@
-# Mizoine
+# Mizoine v. 0.1 **DEPRECATED**
+
+**Mizoine 1 coming soon.**
+
 Personal Lightweight Issue Tracker
 
 http://mizoine.info
-
 
 # Installation
 
