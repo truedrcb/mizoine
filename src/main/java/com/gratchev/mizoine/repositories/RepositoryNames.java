@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
 public final class RepositoryNames {
 
 	private static final Pattern VALID = Pattern.compile("^[A-Za-z0-9_-][A-Za-z0-9._-]*$");
-	private static final Set<String> RESERVED = Set.of("login", "logout", "error", "default-ui.css", "favicon.ico");
+	private static final Set<String> RESERVED = Set.of("login", "logout", "error", "default-ui.css", "favicon.ico", "ui");
 
 	private RepositoryNames() {
 	}

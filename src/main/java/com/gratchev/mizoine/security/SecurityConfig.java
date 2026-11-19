@@ -6,6 +6,7 @@ import java.time.Clock;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
@@ -13,7 +14,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 
+import com.gratchev.mizoine.FaviconController;
 import com.gratchev.mizoine.MizoineProperties;
+import com.gratchev.mizoine.WebConfig;
 
 import jakarta.servlet.DispatcherType;
 
@@ -38,6 +41,10 @@ public class SecurityConfig {
 						// rendering an error (e.g. 400 for a rejected URL) needs no login: otherwise the error turns
 						// into a login redirect. Error pages show no internals (step 8). A direct GET /error still needs login.
 						.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+						// browsers ask for the icon on every page, also on the login page
+						.requestMatchers(HttpMethod.GET, FaviconController.PATH).permitAll()
+						// public files of the user interface (logos, later scripts and styles)
+						.requestMatchers(HttpMethod.GET, WebConfig.UI_PATTERN).permitAll()
 						.anyRequest().authenticated())
 				.requestCache(cache -> cache.requestCache(requestCache()))
 				.formLogin(form -> form.permitAll().successHandler(loginSuccessHandler()))

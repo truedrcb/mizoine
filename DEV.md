@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-19): steps 0–22 done (344 tests green). All planned steps are done; see "Open decisions" for follow-ups.
+**Status** (updated: 2026-11-19): steps 0–24 done (372 tests green). All planned steps are done; see "Open decisions" for follow-ups.
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -76,7 +76,7 @@ access:                        # username → folders the user may access (inclu
 ```
 
 Rules (implemented in step 14; decisions D1–D8 below):
-- Repository name: from the file name `<name>.yaml`; letters, digits, `.`, `_`, `-`; not starting with `.`; case-sensitive. Names used by the application itself (`login`, `logout`, `error`, `default-ui.css`, `favicon.ico`) are rejected.
+- Repository name: from the file name `<name>.yaml`; letters, digits, `.`, `_`, `-`; not starting with `.`; case-sensitive. Names used by the application itself (`login`, `logout`, `error`, `default-ui.css`, `favicon.ico`, `ui`) are rejected.
 - `path` should be an existing folder. If it is missing or wrong, the file is still readable and the repository has a *problem* (D8).
 - `access` keys are usernames (case-sensitive, like `users.yaml`); each a list of folders. Missing or empty `access` → nobody has access (warning). A user not in `users.yaml` gives a warning, not an error: users can be added later (step 16).
 - Folders in `access` are relative to the repository root, written with `/`; a leading `/` also means the root (`/public` = `public`). `.`, `..`, hidden names (D3), backslashes and NUL are rejected.
@@ -480,6 +480,32 @@ Replaces the "ok" page of step 18 for folders. Also: replace the temporary test 
   - `.gitignore`: `/repositories/` (real repositories folder in the project). Checked with `git check-ignore`.
   - README checked against the application and completed: run steps with `repositories` (not the default `.`, which would read `users.example.yaml` as a repository); all reserved names; JSON example matching the example repository; 404 for no access; new section "Development" (TDD, `mvn verify` with Checkstyle and `docs/openapi.yaml`, dependency check).
   - Followed the README literally with the jar: own user sees `notes`; the curl example returns exactly the documented JSON; no warnings in the log.
+
+### 23. Favicon  ☑
+*Requested 2026-11-19:* the favicon of the old version, also without login.
+- **Red** — `FaviconTest`: anonymous and logged-in `GET /favicon.ico` → 200, `image/x-icon`, the archived file (ICO header checked); `Cache-Control: max-age=604800, public`; `POST` stays forbidden; `/favicon.png` still needs login. `OpenApiDocumentationTest`: entry with `image/x-icon` and `security: []`.
+- **Green:** `src/main/resources/favicon.ico` (copied unchanged from the old version, 48×48 and 32×32), `FaviconController`, and `GET /favicon.ico` → `permitAll` in `SecurityConfig`.
+- *Done, with findings:*
+  - A static file would not work: `/{repository}` matches `/favicon.ico` before the static resources and answers 404 (reserved name). Hence a controller; `favicon.ico` stays a reserved repository name.
+  - No `produces` on the mapping: without an `Accept` header D6 assumes `text/html`, then `/{repository}` would win again. The content type is set on the response.
+  - Spring Security keeps the controller's `Cache-Control` (it adds its no-cache headers only when none are set).
+  - `RepositoryControllerTest` used `/favicon.ico` as an example of an invalid name; now `/.hidden`.
+  - Checked on the real server with a browser's `Accept` header: 200, the same bytes as the old version.
+
+### 24. Public files under `/ui/`  ☑
+*Requested 2026-11-19:* `/ui/**` without login, for the user interface later; logos and other public files go there.
+- **Red** — `UiResourcesTest` (real server): anonymous and logged-in `GET /ui/…` → 200 with the file's content type, also in subfolders (`ui/test/hello.txt` exists only in the test resources); missing files and folders (`/ui/`, `/ui/test/`, `/ui`) → 404; `POST` → 403; ten traversal variants (`..`, `%2e%2e`, `%2f`, `%5c`, `%252e`, `//`, `;x=1`) serve nothing from outside `ui/`; `/notes/` still works. `RepositoryFileParserTest`: `ui` is no repository name.
+- **Green:**
+  - `WebConfig`: resource handler `/ui/**` → `classpath:/ui/`, ordered before the controllers.
+  - `spring.web.resources.add-mappings: false`.
+  - `SecurityConfig`: `GET /ui/**` → `permitAll`.
+  - `ui` reserved in `RepositoryNames`.
+  - `favicon.ico` moved to `src/main/resources/ui/`, so it is also at `/ui/favicon.ico`.
+- *Done, with findings:*
+  - Same clash as in step 23: `/{repository}/{*path}` matches `/ui/…` and wins over static resources. Ordering the resource handlers first works only without Spring Boot's own `/**` mapping, which would then answer every URL. Checked: with it on, the start page and repositories give 404 (tests fail).
+  - The traversal tests passed before the fix too (firewall, Tomcat and the resource handler reject them already). They stay as a guard.
+  - Not an operation in the OpenAPI description: springdoc lists controllers, not resource handlers. Mentioned in the common description (`info.description`) instead, together with `/favicon.ico` (requested).
+  - Caching: Spring Security's default `no-cache` applies to `/ui/**` for now; set caching when the user interface has real files.
 
 ---
 

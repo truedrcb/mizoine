@@ -124,7 +124,7 @@ class RepositoryControllerTest {
 
 	@Test
 	void invalidNameWithoutTrailingSlashIsNotFoundWithoutRedirect() throws Exception {
-		mockMvc.perform(page("/favicon.ico", "artem")).andExpect(status().isNotFound());
+		mockMvc.perform(page("/.hidden", "artem")).andExpect(status().isNotFound());
 	}
 
 	// 6.

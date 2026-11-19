@@ -1,6 +1,10 @@
 spring:
   application:
     name: mizoine
+  web:
+    resources:
+      # no static files under /** (it would take every URL); public files are under /ui/** (WebConfig)
+      add-mappings: false
 
 server:
   # Runs behind nginx on the same machine (see docs/nginx.conf.example):

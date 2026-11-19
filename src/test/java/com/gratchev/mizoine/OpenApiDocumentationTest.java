@@ -59,7 +59,10 @@ class OpenApiDocumentationTest {
 	@OpenAPIDefinition(
 			info = @Info(title = "Mizoine", version = "1.0",
 					description = "Personal knowledge base and file storage on plain files and Git. "
-							+ "Every page needs a login: browsers use the login form, other clients HTTP Basic."),
+							+ "Every page needs a login: browsers use the login form, other clients HTTP Basic. "
+							+ "Public without login: /favicon.ico and GET /ui/**, the static files of the user "
+							+ "interface (logos etc.). Those under /ui/ are not listed as operations: "
+							+ "they are plain files, not API methods."),
 			// relative: the same description fits every installation (e.g. behind nginx)
 			servers = @Server(url = "/", description = "This Mizoine server"),
 			security = @SecurityRequirement(name = BASIC_AUTH))
@@ -85,7 +88,9 @@ class OpenApiDocumentationTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.openapi").value(org.hamcrest.Matchers.startsWith("3.")))
 				.andExpect(jsonPath("$.info.title").value("Mizoine"))
-				.andExpect(jsonPath("$.info.version").isNotEmpty());
+				.andExpect(jsonPath("$.info.version").isNotEmpty())
+				// served by a resource handler, which springdoc does not list as an operation
+				.andExpect(jsonPath("$.info.description").value(org.hamcrest.Matchers.containsString("/ui/")));
 	}
 
 	@Test
@@ -135,6 +140,17 @@ class OpenApiDocumentationTest {
 				.andExpect(jsonPath(operation + ".summary").isNotEmpty())
 				.andExpect(jsonPath(operation + ".responses['302'].description").isNotEmpty())
 				.andExpect(jsonPath(operation + ".responses['404'].description").isNotEmpty());
+	}
+
+	@Test
+	void faviconIsDocumentedWithoutLogin() throws Exception {
+		final String operation = "$.paths['/favicon.ico'].get";
+		mockMvc.perform(apiDocs(API_DOCS_PATH))
+				.andExpect(jsonPath(operation + ".summary").isNotEmpty())
+				.andExpect(jsonPath(operation + ".tags").isNotEmpty())
+				.andExpect(jsonPath(operation + ".responses['200'].content", hasKey("image/x-icon")))
+				// overrides the global basicAuth requirement
+				.andExpect(jsonPath(operation + ".security").isEmpty());
 	}
 
 	@Test

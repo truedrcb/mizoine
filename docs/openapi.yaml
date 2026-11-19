@@ -2,7 +2,10 @@ openapi: 3.1.0
 info:
   title: Mizoine
   description: "Personal knowledge base and file storage on plain files and Git. Every\
-    \ page needs a login: browsers use the login form, other clients HTTP Basic."
+    \ page needs a login: browsers use the login form, other clients HTTP Basic. Public\
+    \ without login: /favicon.ico and GET /ui/**, the static files of the user interface\
+    \ (logos etc.). Those under /ui/ are not listed as operations: they are plain\
+    \ files, not API methods."
   version: "1.0"
 servers:
 - url: /
@@ -83,6 +86,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RepositoryProblem"
+  /favicon.ico:
+    get:
+      tags:
+      - Resources
+      summary: Favicon
+      description: The icon shown by browsers. Needs no login.
+      operationId: favicon
+      responses:
+        "200":
+          description: The icon
+          content:
+            image/x-icon: {}
+      security: []
   /:
     get:
       tags:

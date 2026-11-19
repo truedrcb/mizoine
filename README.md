@@ -99,7 +99,7 @@ access:                        # username → folders the user may access, with 
 - Every `*.yaml` in the repositories folder counts, except the users file. With the default (the current
   directory), other YAML files there are read too: a folder of their own keeps them apart.
 - Names: letters, digits, `.`, `_`, `-`; not starting with `.`; not a name the application uses itself
-  (`login`, `logout`, `error`, `default-ui.css`, `favicon.ico`).
+  (`login`, `logout`, `error`, `default-ui.css`, `favicon.ico`, `ui`).
 - Folders starting with `.` (such as `.git`) or containing `%` are never shown.
 
 The start page `/` lists the repositories you can access; `/<name>/` and its folders (`/<name>/projects/shared/`)
@@ -112,6 +112,9 @@ curl -u alice -H 'Accept: application/json' http://127.0.0.1:12013/notes/project
 ```
 
 Without access to a repository or folder the answer is 404, the same as for one that does not exist.
+
+Public without login: `/favicon.ico` and `/ui/…`, the files in `src/main/resources/ui/` (logos and other
+files of the user interface).
 
 Files are not shown yet.
 

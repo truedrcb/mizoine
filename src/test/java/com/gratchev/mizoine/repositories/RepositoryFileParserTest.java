@@ -262,7 +262,7 @@ class RepositoryFileParserTest {
 
 	@ParameterizedTest
 	@ValueSource(strings = {"", ".", "..", ".git", "a/b", "a\\\\b", "a b", "a%2fb", "login", "logout", "error",
-			"default-ui.css", "favicon.ico"})
+			"default-ui.css", "favicon.ico", "ui"})
 	void invalidNames(final String name) {
 		assertThat(RepositoryNames.isValid(name)).isFalse();
 	}
