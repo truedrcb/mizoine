@@ -105,7 +105,7 @@ class SecurityIntegrationTest {
 
 	/**
 	 * After login the browser goes back to the page it first asked for, relative to the host it used
-	 * (bug: https://localhost/?continue behind Cloudflare → nginx, which did not pass the public host on).
+	 * (bug: https://localhost/ behind Cloudflare → nginx, which did not pass the public host on).
 	 */
 	@Test
 	void formLoginReturnsToSavedPageWithRelativeUrl() throws Exception {
@@ -117,7 +117,7 @@ class SecurityIntegrationTest {
 		mockMvc.perform(post("/login").param("username", "artem").param("password", "artem-pass")
 						.with(csrf()).session(session))
 				.andExpect(authenticated())
-				.andExpect(redirectedUrl("/notes/projects/?q=a%20b&continue"));
+				.andExpect(redirectedUrl("/notes/projects/?q=a%20b"));
 	}
 
 	@Test

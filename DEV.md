@@ -282,7 +282,8 @@ browser ──HTTPS──▶ nginx (TLS, certificates) ──HTTP──▶ 127.0
   - First attempt `server.tomcat.use-relative-redirects: true` did not help: Tomcat ignores it for HTTP/1.0, and nginx talks HTTP/1.0 to the application by default. Found by running the user's nginx config locally; removed again.
   - Fix: Spring's `RelativeRedirectFilter` (first filter, status 302) sets `Location` itself, so Tomcat cannot rewrite it. After login Spring Security returns to the saved page with its full URL; `RelativeRedirectStrategy` keeps only path and query (also no redirect to another host).
   - Tests: `ReverseProxyTest` over HTTP/1.0 with a raw socket (`HttpClient` cannot do HTTP/1.0) and without `X-Forwarded-Host`; `SecurityIntegrationTest.formLoginReturnsToSavedPageWithRelativeUrl`; `RelativeRedirectStrategyTest`. 12.1 now requires exactly `/login`.
-  - Live with the user's nginx config: `/login`, `/?continue`, `/login?logout`, `/login?error` — all relative.
+  - Live with the user's nginx config: `/login`, `/?continue` (since then `/`, see below), `/login?logout`, `/login?error` — all relative.
+  - Clean URL after login (requested): Spring Security appended `?continue` to the saved page, so that it looks into the session only for such requests. Turned off (`HttpSessionRequestCache.setMatchingRequestParameterName(null)`): every page needs a login, so the session is loaded anyway.
 
 ### 13. Limit failed logins (HTTP Basic and form)  ☑
 *Requested 2026-11-16, follow-up of step 12.* nginx cannot do it for HTTP Basic: a valid client sends credentials with every request, and nginx does not know which attempts failed.

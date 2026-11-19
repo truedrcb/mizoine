@@ -15,7 +15,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * <p>
  * After login, Spring Security returns to the saved page with its full URL, built from the {@code Host}
  * header. Behind a proxy that does not pass the public host on, that is the wrong host
- * (bug: https://localhost/?continue). The saved page is always on this server, so dropping the host is
+ * (bug: https://localhost/notes/). The saved page is always on this server, so dropping the host is
  * correct, and no redirect can lead to another host.
  */
 final class RelativeRedirectStrategy implements RedirectStrategy {

@@ -8,7 +8,7 @@ class RelativeRedirectStrategyTest {
 
 	@Test
 	void absoluteUrlKeepsOnlyPathAndQuery() {
-		assertThat(RelativeRedirectStrategy.relative("https://localhost/notes/?continue")).isEqualTo("/notes/?continue");
+		assertThat(RelativeRedirectStrategy.relative("https://localhost/notes/?q=1")).isEqualTo("/notes/?q=1");
 	}
 
 	@Test

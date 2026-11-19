@@ -10,6 +10,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 
 import com.gratchev.mizoine.MizoineProperties;
@@ -38,6 +39,7 @@ public class SecurityConfig {
 						// into a login redirect. Error pages show no internals (step 8). A direct GET /error still needs login.
 						.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
 						.anyRequest().authenticated())
+				.requestCache(cache -> cache.requestCache(requestCache()))
 				.formLogin(form -> form.permitAll().successHandler(loginSuccessHandler()))
 				.httpBasic(withDefaults())
 				.logout(logout -> logout.permitAll())
@@ -45,6 +47,17 @@ public class SecurityConfig {
 						.contentSecurityPolicy(csp -> csp.policyDirectives(CONTENT_SECURITY_POLICY))
 						.referrerPolicy(referrer -> referrer.policy(ReferrerPolicy.SAME_ORIGIN)))
 				.build();
+	}
+
+	/**
+	 * Remembers the page asked for before login. Without the {@code continue} parameter that Spring Security
+	 * adds by default (to look into the session only then): clean URLs after login. Every page needs a login,
+	 * so the session is loaded anyway.
+	 */
+	private static HttpSessionRequestCache requestCache() {
+		final HttpSessionRequestCache requestCache = new HttpSessionRequestCache();
+		requestCache.setMatchingRequestParameterName(null);
+		return requestCache;
 	}
 
 	/** Back to the page first asked for, as before, but with a relative URL (see {@link RelativeRedirectStrategy}). */
