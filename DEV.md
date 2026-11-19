@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-19): steps 0–27 done (393 tests green). All planned steps are done; see "Open decisions" for follow-ups.
+**Status** (updated: 2026-11-19): steps 0–27 done (393 tests green). Steps 28–39 planned (files: read and write; MCP access for agents; browser UI, text editor; Markdown page, step 38 right after 28). Decided: T1 REST, T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 later (textarea first), D14, D15. Open: T3.2, D10–D13, D16–D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -539,6 +539,164 @@ Replaces the "ok" page of step 18 for folders. Also: replace the temporary test 
 - **Checked live:** with `LANG=POSIX` the names are broken; with `LANG=C.UTF-8` both NFD and NFC names are correct. `docs/mizoine.sh` from an empty environment with `LC_ALL=POSIX`: names correct; without a jar it stops with a message; of several jars it takes the newest (`sort -V`: 1.0.10 after 1.0.9).
 - *Not changed:* names are not normalized (NFD stays NFD): plain files are the source of truth, and browsers show both forms the same.
 
+
+## Files: read and write (planned 2026-11-19)
+
+Requested 2026-11-19:
+- read, create, replace and delete files with standard HTTP;
+- logged-in users only, with the existing folder grants (a grant allows reading and writing);
+- usable by AI agents and by a future JavaScript UI.
+
+Options and recommendations: [docs/technology-decisions.md](docs/technology-decisions.md) (T1 file API, T2 AI connection, T3 UI). Steps 28–32 follow T1 (decided: REST on the file URLs) and need D10–D15 below. Steps 33–35 implement T2 (decided: remote MCP with OAuth, for agents on the smartphone). Steps 36–37 build the browser UI and a plain text editor (T3, T3.1 decided); step 39 adds CodeMirror 6 later.
+
+Rules for all of them:
+- same 404 as today for unknown, hidden or not granted paths (D2, D3);
+- folders above a grant (D4) stay read-only;
+- every endpoint annotated for OpenAPI (smoke test in `OpenApiDocumentationTest`);
+- writes never touch `.git` or any hidden name.
+
+### 28. Download a file  ☐
+`GET /{repository}/{path}` without trailing slash: a file → its content, a folder → redirect to `…/` (as now).
+- **Red:**
+  1. `GET` of a granted file → 200, the exact bytes, `Content-Type` from the file name (unknown → `application/octet-stream`).
+  2. File responses are safe in the browser: `Content-Security-Policy: sandbox`, `X-Content-Type-Options: nosniff`; HTML, SVG, XML, JavaScript and unknown types with `Content-Disposition: attachment` (D10).
+  3. `ETag` and `Last-Modified`; `If-None-Match` → 304; `Range` → 206; `HEAD` without body.
+  4. Hidden files, files above a grant, files outside the grants, missing files, links leading outside the root → 404, the same for all; file URL with trailing slash → 404.
+  5. Non-ASCII and special names (`a <b>.md`, `Rücksendeportal.pdf` in NFD) download by their encoded URL.
+- **Green:** in `RepositoryController`: return a `Resource` (Spring gives `Range` and `HEAD`); `RepositoryPaths.resolveFile` with the same checks as folders.
+- The HTML listing links file names (removes the "names only" decision of step 26).
+
+### 29. Writing prerequisites: CSRF for API clients, upload size  ☐
+- **Red:**
+  1. `PUT` / `DELETE` with HTTP Basic and without CSRF token are not rejected by CSRF (today: 403).
+  2. With a session cookie and without token → 403; with the token in the `X-CSRF-TOKEN` header → passes (D11).
+  3. A body over `mizoine.max-file-size` → 413 before the file is written (D12).
+- **Green:** `SecurityConfig` CSRF rule; size limit while streaming (the `Content-Length` alone cannot be trusted); setting in README.
+
+### 30. Create or replace a file  ☐
+`PUT /{repository}/{path}`; the body is the new content.
+- **Red:**
+  1. New file → 201 with `Location` and `ETag`; existing file → 204 with the new `ETag`; content exactly the body bytes.
+  2. `If-Match` with the current `ETag` → written; with an old one → 412, file unchanged. `If-None-Match: *` on an existing file → 412 (D13).
+  3. Atomic: a reader during the write sees the old or the new content, never a part; the temporary file is hidden and removed after errors.
+  4. Missing parent folder → 409 (D14).
+  5. Not writable: hidden names, folders above a grant, outside the grants, `.git/…`, names with `%`, links leading outside the root → 404; a folder at that path → 409.
+  6. Works with HTTP Basic (AI agents, curl); HTML page unchanged.
+
+### 31. Create a folder  ☐
+`PUT /{repository}/{path}/` (trailing slash = folder, as in the Solid Protocol; empty body). Folders are created only explicitly (D14).
+- **Red:**
+  1. → 201 with `Location`.
+  2. Existing folder → 204, nothing changes (PUT is idempotent). With `If-None-Match: *` → 412, as for files.
+  3. Missing parent → 409 (D14, as WebDAV `MKCOL`). A file at that path → 409.
+  4. A body → 415 (as WebDAV `MKCOL`: a folder has no content).
+  5. Same "not writable" cases as step 30.
+
+### 32. Delete a file or an empty folder  ☐
+`DELETE /{repository}/{path}`, or `…/` for a folder. Folders are removed only explicitly and only when empty (D15).
+- **Red:**
+  1. File → 204; `If-Match` → 412 if it changed.
+  2. Empty folder → 204. Folder with content → 409 with a short reason (D15, as the Solid Protocol), nothing deleted.
+  3. A folder whose only content is hidden (`.git`, `.gitkeep`, …) counts as not empty → 409: the user cannot see what would be lost.
+  4. The repository root and the top of a grant (the user's own granted folder) → 409.
+  5. `DELETE` of a file URL with trailing slash, or of a folder URL without → 404 (the type must match the URL, D5).
+  6. Same "not writable" cases as step 30; missing → 404.
+
+### 33. MCP endpoint for agents  ☐
+T2 decided 2026-11-19: remote MCP in Mizoine, so that Claude (also on the smartphone) and other agents store and retrieve knowledge.
+- `/mcp` over Streamable HTTP, with tools built on the same file service as steps 28–32 and the same grants: `list_repositories`, `list_folder`, `read_file`, `write_file`, `create_folder`, `delete`.
+- Tool descriptions tell the agent that writes are plain files that a human reviews with `git diff` and commits.
+- Login in this step: HTTP Basic, for Claude Code (`--header`), the MCP Inspector and tests. OAuth follows in step 34.
+- The agent is a normal user in `users.yaml` with grants only to its folders (e.g. `agent: [knowledge, inbox]`), so hiding and limits come from the existing rules.
+- **Red** — an MCP client in the test (Java MCP SDK) against the real server:
+  1. `tools/list` shows the tools with descriptions.
+  2. The agent user lists, reads and writes in its folders; content round-trips byte for byte (Markdown, non-ASCII).
+  3. Paths outside its grants, hidden names, `.git`, `..`, links leading outside: an error without details, the same for "missing" and "not allowed" (D2).
+  4. Without login → 401.
+- Library (D16): Spring AI's MCP server, or the Java MCP SDK directly; decided by what supports Spring Boot 4 at the time.
+
+### 34. OAuth for chat apps  ☐
+What Claude's "custom connector" (and other chat apps) need to log in.
+- Mizoine becomes an OAuth 2.1 authorization server (Spring Security's authorization server) and protects `/mcp` with its tokens (resource server).
+- Discovery:
+  - `/.well-known/oauth-protected-resource` (RFC 9728);
+  - authorization server metadata (RFC 8414);
+  - `401` on `/mcp` with `WWW-Authenticate: Bearer resource_metadata=…`.
+- One client from the configuration (D17): client ID, secret (only a hash stored), allowed redirect URIs (Claude's callback). It is entered in Claude as "your own OAuth client". Dynamic client registration later, if other agents need it.
+- Authorization code with PKCE. The login page is the existing form login; the agent user logs in (D19).
+- The token stands for that user: the same grants as the user. Tokens kept in memory (D18).
+- **Red:**
+  1. Metadata endpoints and the 401 challenge.
+  2. The full code + PKCE flow in a test gives a token; with it, `/mcp` works as the agent user, with only its grants.
+  3. A wrong secret, a wrong redirect URI, a missing PKCE verifier, an expired or foreign token → rejected.
+  4. User removed from `users.yaml` → its tokens stop working.
+
+### 35. Connect Claude from the smartphone  ☐
+- README section "Connect an AI agent":
+  - create the agent user and its grants;
+  - configure the OAuth client;
+  - on claude.ai: Connectors → add a custom connector with `https://<host>/mcp` and the client ID/secret → Connect → log in as the agent user;
+  - it then works in the Claude mobile app.
+- nginx: `/mcp` without response buffering (streaming); `/.well-known/` passed through.
+- Check live with the real server behind Cloudflare: from the Claude app on the phone, store a note, read it back, and see it as a new file in `git status` on the server.
+
+### 36. Browser UI for files  ☐
+T3 decided: a small library without build, Preact + htm or Lit (D26), copied into `src/main/resources/ui/vendor/` with a note of its version and source; the application's code as plain JavaScript modules in `src/main/resources/ui/`.
+- upload (with progress), delete and create folder in the listing;
+- the CSRF token from the page;
+- JavaScript tests with Node's built-in test runner (needs Node.js for development only).
+
+### 37. Text editor in the browser (plain textarea)  ☐
+*Requested 2026-11-19:* edit text files in the browser; usable on the smartphone. T3.1 decided: CodeMirror 6 later (step 39). For now a plain `<textarea>`, so that everything except highlighting is built and tested here.
+- **The editor only uses the public file API** (requested 2026-11-19): it reads with `GET`, creates and saves with `PUT` on the file's URL (steps 28 and 30), the same requests as curl and the MCP tools use. There is no editor-specific endpoint, and the server knows nothing about the editor: the editor is a static file under `/ui/`.
+- Open from the listing: text files up to a size limit (D21) open in the editor, others download.
+- Save = `PUT` with `If-Match` (D20). On 412 the editor offers to reload or to keep its text; nothing is overwritten silently.
+- New file: name + empty editor, saved with `If-None-Match: *`.
+- Content stays exactly UTF-8, line endings unchanged.
+- **Red:**
+  1. JavaScript tests (Node test runner, with a fake `fetch`): loading is a `GET` of the file URL; saving is a `PUT` of the same URL with `If-Match` and the text as body; a new file is a `PUT` with `If-None-Match: *`; 412 leads to the conflict choice; text round-trips without changes to line endings or non-ASCII.
+  2. Java: the editor page loads under the strict CSP.
+- The editing part (get and set the text) sits behind a small interface, so that step 39 only replaces the textarea.
+
+### 38. Markdown as a readable page  ☐
+*Requested 2026-11-19.* Needs only step 28 (reading files), so it can be done right after it.
+- `GET /{repository}/…/document.md` from a browser shows the rendered document on the same URL, chosen by `Accept` (D22).
+- Pictures and links are relative Markdown links, resolved by the browser against the document's folder: `![](images/a.png)`, `[x](other.md#part)`, `[y](sub/)`.
+- Bookmarks: every heading has an `id`, GitHub style (D23), so `document.md#topic` works.
+- Options and reasons: [docs/technology-decisions.md](docs/technology-decisions.md), T3.2.
+- **Red:**
+  1. Which version is returned:
+     - `Accept: text/html` (as browsers send it) → 200 `text/html`, rendered;
+     - `Accept: text/markdown`, `*/*` or none → the exact bytes as `text/markdown; charset=UTF-8`;
+     - `?raw` → raw;
+     - all answers have `Vary: Accept`.
+  2. Relative references stay as written in the HTML (`<img src="images/a.png">`, `<a href="other.md#part">`), and the picture itself downloads at that URL. A test fetches both.
+  3. Heading IDs:
+     - `## Costs and Risks` → `id="costs-and-risks"`;
+     - a repeated heading → `-1`;
+     - `## Über uns` → `id="über-uns"`;
+     - a link to `#costs-and-risks` in the same page matches.
+  4. GitHub's Markdown features: tables, strikethrough, task lists, autolinks, fenced code blocks (with a `language-…` class for highlighting later).
+  5. Safety:
+     - HTML inside the Markdown (`<script>`, `<img onerror=…>`) appears as text;
+     - `[x](javascript:…)` gives no such link;
+     - the strict CSP header is unchanged.
+  6. The page:
+     - its title is the first heading, else the file name;
+     - links to the folder (`./`) and to the raw file (`?raw`).
+  7. The same 404 cases as step 28. A file over the size limit (D21), or not UTF-8, is returned raw, not rendered.
+  8. OpenAPI: the file `GET` lists both media types (smoke test only).
+- **Green:** commonmark-java with its GFM extensions and heading anchors (D23); a Thymeleaf page around the rendered HTML; the `Accept` choice in `RepositoryController`.
+- The folder listing links `.md` files to this page; other files download (step 28).
+
+### 39. Syntax highlighting with CodeMirror 6  ☐
+*When highlighting is wanted* (T3.1). Replaces the textarea of step 37; loading, saving and conflicts stay as they are.
+- The language comes from the file name: `.md`, `.json`, `.yaml`/`.yml`, `.html`, `.css`, `.js`, `.xml`, `.java`, `.properties`, `.sh`, …; plain text otherwise.
+- **Red:**
+  1. JavaScript: choice of language by file name; the step 37 tests pass unchanged with CodeMirror in place of the textarea.
+  2. Java: the editor page and `ui/vendor/` load under the strict CSP. If CodeMirror needs a style nonce, a nonce per response in the CSP header.
+- The vendor bundle is made by a small script in the repository (`ui/vendor/README` says how and which versions). It runs only when the editor is updated, not in `mvn verify`.
+
 ---
 
 ## Open decisions
@@ -566,3 +724,30 @@ Replaces the "ok" page of step 18 for folders. Also: replace the temporary test 
 - ~~The start page `/` could list the user's repositories~~ **Decided 2026-11-18:** yes, step 19.
 - ~~Fail to start without repositories?~~ **Decided 2026-11-18:** no; folder missing or empty → start (warning in the log if missing), message on the start page.
 - ~~Repositories folder when not set?~~ **Decided 2026-11-18:** the current directory (`.`); the users file in it is never a repository.
+
+### Files: read and write (steps 28–36) — to decide
+Proposals; details in [docs/technology-decisions.md](docs/technology-decisions.md).
+- **T1 — file API style:** **Decided 2026-11-19:** REST on the file URLs (GET / PUT / DELETE), a subset of WebDAV, so that WebDAV (`MOVE`, `PROPFIND`, …) can be added later on the same URLs. Not chosen: WebDAV now; own JSON operations.
+- **T2 — AI connection:** **Decided 2026-11-19:** remote MCP server in Mizoine (`/mcp`) with OAuth (steps 33–35). Requirement: Claude or another agent on the smartphone stores and retrieves knowledge as a technical agent user limited to a few folders, connected in the most standard and easy way. Only a remote MCP connector reaches smartphone chat apps, and the same connection serves Claude Code. Not chosen: REST + Skill, local MCP program, WebDAV mount.
+- **T3 — UI technology:** **Decided 2026-11-19:** a small library without build step, Preact + htm or Lit, copied into `ui/vendor/` (D26). Not chosen: plain JavaScript modules only; server pages only; htmx; SPA with a Node build.
+- **D26 — Preact + htm or Lit:** *To decide in step 36.* Preact + htm: React-style components and state, ~5 kB. Lit: web components, a browser standard, ~6 kB. Both run without build and under the strict CSP.
+- **D10 — showing files in the browser:** *Proposed:* inline only for types a browser does not execute (images, PDF, plain text, …), always with `CSP: sandbox` and `nosniff`; `attachment` for HTML, SVG, XML, JavaScript and unknown types. Alternative: a separate domain for downloads.
+- **D11 — CSRF for writes:** *Proposed:* token required for session-cookie requests (the UI), not for requests with an `Authorization` header (agents, curl). Cross-site forms cannot send PUT or DELETE, and there is no CORS. Alternative: a token endpoint that API clients must call first.
+- **D12 — maximum file size:** *Proposed:* `mizoine.max-file-size`, default 100 MB (nginx at the server has `client_max_body_size 100M`).
+- **D13 — concurrent changes:** *Proposed:* `ETag` from size and modification time; `If-Match` / `If-None-Match: *` honoured, not required. Alternative: require `If-Match` for every replace (safer, but more work for every client).
+- **D14 — missing parent folders:** **Decided 2026-11-19:** 409; folders are created only explicitly (`PUT …/`, step 31). The same rule as WebDAV (`PUT` and `MKCOL` answer 409 when the parent is missing). Not chosen: create parents automatically, as the Solid Protocol does (handier for agents, but a typo creates a new folder tree).
+- **D15 — deleting folders:** **Decided 2026-11-19:** only empty folders; with content → 409, as the Solid Protocol. Not chosen: recursive delete, as WebDAV `DELETE` (one request removes a whole tree; Git keeps the history only of what was committed). If WebDAV is added later, its recursive `DELETE` needs a decision of its own.
+- References for the folder API: WebDAV ([RFC 4918](https://www.rfc-editor.org/rfc/rfc4918)) and the [Solid Protocol](https://solidproject.org/TR/protocol). Mizoine takes from each the part that matches D14 and D15. `PUT …/` instead of WebDAV's own `MKCOL` method: Spring MVC and Spring Security's firewall accept only the standard HTTP methods, and OpenAPI 3.1 cannot describe others. `MKCOL` can be added as an alias when WebDAV comes.
+- **D16 — MCP library:** Spring AI's MCP server (with the Spring AI community `mcp-security` module) or the Java MCP SDK directly. *To decide in step 33* by Spring Boot 4 support at that time.
+- **D17 — OAuth clients:** *Proposed:* one client configured in Mizoine ("Use your own OAuth client" in Claude): least code, no open registration endpoint. Alternatives: dynamic client registration (any agent can register itself); "Claude's published identity" (client ID metadata documents).
+- **D18 — token storage:** *Proposed:* in memory, so no database (BACKLOG principle 1); after a restart the connector logs in again. Alternative: a token file.
+- **D19 — who logs in during "Connect":** *Proposed:* the agent user itself (its password is entered once in the phone's browser). Alternative: the human logs in and picks which agent user the connector acts as (more code: a consent page with a choice).
+- **T3.1 — text editor:** **Decided 2026-11-19:** CodeMirror 6, bundled once into `ui/vendor/` (best on the phone; Markdown, JSON, YAML packages). For the moment it is more than needed: the editor starts as a plain `<textarea>` (step 37), and CodeMirror 6 replaces it when highlighting is wanted (step 39). Not chosen: Ace; Monaco (not supported on mobile browsers).
+- **D20 — saving from the editor:** *Proposed:* always with `If-Match`; on 412 offer reload or keep. (D13 makes `If-Match` optional for API clients; the UI always uses it.)
+- **D21 — what opens in the editor:** *Proposed:* text files (valid UTF-8, no NUL bytes) up to 2 MB; others are downloaded.
+- **T3.2 — Markdown page:** *Proposed:* rendered on the server with commonmark-java, on the file's own URL (step 38). Alternatives: flexmark-java (more dialects, heavy); rendering in the browser (needs JavaScript; agents and curl get no page).
+- **D22 — rendered or raw:** *Proposed:* rendered when the request asks for `text/html` (browser navigation); raw for `text/markdown`, `*/*` or no `Accept` (curl, downloads, agents); `?raw` forces raw; `Vary: Accept`. This is the opposite default of folders (D6), because a file has bytes to give. Alternatives: a separate URL prefix for rendered pages (e.g. `/view/…`); rendered also for `*/*`.
+- **D23 — heading IDs:** *Proposed:* GitHub's rules (lower case, spaces → `-`, punctuation removed, non-ASCII letters kept, repeats `-1`, `-2`), so that links written for GitHub or VS Code keep working. To check in step 38: whether commonmark-java's heading-anchor extension follows these rules exactly, else a small own ID generator.
+- **D24 — HTML inside Markdown:** *Proposed:* shown as text, not rendered; unsafe link schemes dropped. Alternative: allow a safe subset with an HTML sanitizer (e.g. OWASP Java HTML Sanitizer).
+- **D25 — external pictures:** *Proposed:* not shown (CSP allows only Mizoine's own files): no tracking, no mixed content. Alternative: allow `https:` pictures (`img-src 'self' https:`).
+- **Later, not planned yet:** rename and move (`MOVE`), copy, live Markdown preview in the editor, Obsidian `[[wiki links]]`, links relative to the repository root (`/…`), syntax highlighting of code blocks in the page, per-grant read-only permissions.
