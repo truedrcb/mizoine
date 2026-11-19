@@ -6,18 +6,18 @@ import java.net.http.HttpResponse;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.core.env.Environment;
+
+import com.gratchev.mizoine.TestUsers;
 
 /**
  * Step 12: running behind nginx, which terminates HTTPS and forwards plain HTTP with
  * {@code X-Forwarded-*} headers. Needs a real server: Tomcat evaluates these headers.
  */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT,
-		properties = {"mizoine.users-file=src/test/resources/users-test.yaml",
-		"mizoine.repositories-dir=src/test/resources/repositories"})
+@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 class ReverseProxyTest {
 
 	private final ProxyHttp http;
@@ -50,7 +50,7 @@ class ReverseProxyTest {
 
 	@Test
 	void folderRedirectIsRelativeWithoutForwardedHost() throws Exception {
-		final HttpResponse<String> response = http.getViaHttpsProxyWithoutHost("/notes", "artem:artem-pass");
+		final HttpResponse<String> response = http.getViaHttpsProxyWithoutHost("/notes", TestUsers.ARTEM);
 
 		assertThat(response.statusCode()).isEqualTo(302);
 		assertThat(response.headers().firstValue("Location")).hasValue("/notes/");
@@ -68,7 +68,7 @@ class ReverseProxyTest {
 
 	@Test
 	void folderRedirectIsRelativeForHttp10Proxy() throws Exception {
-		assertThat(http.locationViaHttp10Proxy("/notes", "artem:artem-pass")).hasValue("/notes/");
+		assertThat(http.locationViaHttp10Proxy("/notes", TestUsers.ARTEM)).hasValue("/notes/");
 	}
 
 	@Test

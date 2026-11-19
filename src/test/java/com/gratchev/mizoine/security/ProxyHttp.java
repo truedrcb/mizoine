@@ -3,27 +3,26 @@ package com.gratchev.mizoine.security;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
-import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.Optional;
 
-/** Plain HTTP requests to the test server, as nginx would send them. */
+import com.gratchev.mizoine.TestHttp;
+import com.gratchev.mizoine.TestUsers;
+
+/** Requests to the test server as a reverse proxy (nginx, behind it maybe Cloudflare) would send them. */
 final class ProxyHttp {
 
-	private final HttpClient client = HttpClient.newHttpClient(); // follows no redirects, keeps no cookies
-	private final int port;
+	private final TestHttp http;
 
 	ProxyHttp(final int port) {
-		this.port = port;
+		this.http = new TestHttp(port);
 	}
 
 	/** GET as a browser behind nginx serving {@code https://example.org}. */
 	HttpResponse<String> getViaHttpsProxy(final String path) throws IOException, InterruptedException {
-		return client.send(viaHttpsProxy(path).header("X-Forwarded-Host", "example.org").build(),
+		return http.send(viaHttpsProxy(path, null).header("X-Forwarded-Host", "example.org"),
 				HttpResponse.BodyHandlers.ofString());
 	}
 
@@ -32,28 +31,23 @@ final class ProxyHttp {
 	 * {@code Host} is the application's own address), such as {@code proxy_pass http://localhost:12013}
 	 * without {@code proxy_set_header Host}, or a tunnel to localhost.
 	 *
-	 * @param basicAuth {@code user:password}, or {@code null} for no login
+	 * @param user a {@link TestUsers} name, or {@code null} for no login
 	 */
-	HttpResponse<String> getViaHttpsProxyWithoutHost(final String path, final String basicAuth)
+	HttpResponse<String> getViaHttpsProxyWithoutHost(final String path, final String user)
 			throws IOException, InterruptedException {
-		final HttpRequest.Builder request = viaHttpsProxy(path);
-		if (basicAuth != null) {
-			request.header("Authorization",
-					"Basic " + Base64.getEncoder().encodeToString(basicAuth.getBytes(StandardCharsets.UTF_8)));
-		}
-		return client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+		return http.send(viaHttpsProxy(path, user), HttpResponse.BodyHandlers.ofString());
 	}
 
 	/**
 	 * GET as nginx sends it with a minimal config ({@code proxy_pass http://localhost:12013;}): HTTP/1.0,
 	 * {@code Host} from {@code proxy_pass}, and the {@code X-Forwarded-Proto} that Cloudflare added passed through.
-	 * {@link HttpClient} cannot speak HTTP/1.0, hence a plain socket.
+	 * {@link java.net.http.HttpClient} cannot speak HTTP/1.0, hence a plain socket.
 	 *
-	 * @param basicAuth {@code user:password}, or {@code null} for no login
+	 * @param user a {@link TestUsers} name, or {@code null} for no login
 	 * @return the {@code Location} header, if any
 	 */
-	Optional<String> locationViaHttp10Proxy(final String path, final String basicAuth) throws IOException {
-		try (Socket socket = new Socket(InetAddress.getLoopbackAddress(), port)) {
+	Optional<String> locationViaHttp10Proxy(final String path, final String user) throws IOException {
+		try (Socket socket = new Socket(InetAddress.getLoopbackAddress(), http.port())) {
 			final StringBuilder request = new StringBuilder()
 					.append("GET ").append(path).append(" HTTP/1.0\r\n")
 					.append("Host: localhost:12013\r\n")
@@ -61,10 +55,8 @@ final class ProxyHttp {
 					.append("Accept: text/html\r\n")
 					.append("X-Forwarded-Proto: https\r\n")
 					.append("X-Forwarded-For: 203.0.113.7\r\n");
-			if (basicAuth != null) {
-				request.append("Authorization: Basic ")
-						.append(Base64.getEncoder().encodeToString(basicAuth.getBytes(StandardCharsets.UTF_8)))
-						.append("\r\n");
+			if (user != null) {
+				request.append("Authorization: ").append(TestUsers.basicAuthHeader(user)).append("\r\n");
 			}
 			request.append("\r\n");
 			socket.getOutputStream().write(request.toString().getBytes(StandardCharsets.US_ASCII));
@@ -77,8 +69,8 @@ final class ProxyHttp {
 		}
 	}
 
-	private HttpRequest.Builder viaHttpsProxy(final String path) {
-		return HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))
+	private HttpRequest.Builder viaHttpsProxy(final String path, final String user) {
+		return http.request(path, user)
 				.header("Accept", "text/html")
 				.header("X-Forwarded-Proto", "https")
 				.header("X-Forwarded-For", "203.0.113.7");

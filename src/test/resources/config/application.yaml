@@ -1,5 +1,9 @@
 # Test-only additions to the main application.yaml (Spring Boot reads classpath:/config/ after classpath:/).
 mizoine:
+  # Defaults for all Spring Boot tests; a test sets its own value where it needs another one.
+  # Users: artem / artem-pass, guest / guest-pass (TestUsers).
+  users-file: src/test/resources/users-test.yaml
+  repositories-dir: src/test/resources/repositories
   login-limit:
     # Many tests log in wrongly from the same address within one shared Spring context.
     # LoginRateLimitTest sets its own low limit.

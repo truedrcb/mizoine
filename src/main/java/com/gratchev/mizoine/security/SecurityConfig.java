@@ -14,7 +14,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 
-import com.gratchev.mizoine.FaviconController;
 import com.gratchev.mizoine.MizoineProperties;
 import com.gratchev.mizoine.WebConfig;
 
@@ -42,7 +41,7 @@ public class SecurityConfig {
 						// into a login redirect. Error pages show no internals (step 8). A direct GET /error still needs login.
 						.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
 						// browsers ask for the icon on every page, also on the login page
-						.requestMatchers(HttpMethod.GET, FaviconController.PATH).permitAll()
+						.requestMatchers(HttpMethod.GET, WebConfig.FAVICON_PATH).permitAll()
 						// public files of the user interface (logos, later scripts and styles)
 						.requestMatchers(HttpMethod.GET, WebConfig.UI_PATTERN).permitAll()
 						.anyRequest().authenticated())

@@ -1,11 +1,15 @@
 package com.gratchev.mizoine.security;
 
+import static com.gratchev.mizoine.TestUsers.ARTEM;
+import static com.gratchev.mizoine.TestUsers.GUEST;
+import static com.gratchev.mizoine.TestUsers.loggedInAs;
+import static com.gratchev.mizoine.TestUsers.password;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.startsWith;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestBuilders.formLogin;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestBuilders.formLogin;
 import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.authenticated;
 import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.unauthenticated;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -27,7 +31,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * Users come from {@code src/test/resources/users-test.yaml}:
  * artem / artem-pass, guest / guest-pass.
  */
-@SpringBootTest(properties = "mizoine.users-file=src/test/resources/users-test.yaml")
+@SpringBootTest
 @AutoConfigureMockMvc
 class SecurityIntegrationTest {
 
@@ -66,14 +70,14 @@ class SecurityIntegrationTest {
 
 	@Test
 	void basicAuthWithValidUserShowsHello() throws Exception {
-		mockMvc.perform(get("/").with(httpBasic("artem", "artem-pass")))
+		mockMvc.perform(get("/").with(loggedInAs(ARTEM)))
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Hello")));
 	}
 
 	@Test
 	void basicAuthWithSecondUserIsGreetedByName() throws Exception {
-		mockMvc.perform(get("/").with(httpBasic("guest", "guest-pass")))
+		mockMvc.perform(get("/").with(loggedInAs(GUEST)))
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Hello, guest")));
 	}
@@ -98,7 +102,7 @@ class SecurityIntegrationTest {
 
 	@Test
 	void formLoginWithValidUserRedirectsToRoot() throws Exception {
-		mockMvc.perform(formLogin().user("artem").password("artem-pass"))
+		mockMvc.perform(formLogin().user(ARTEM).password(password(ARTEM)))
 				.andExpect(redirectedUrl("/"))
 				.andExpect(authenticated().withUsername("artem").withRoles("USER"));
 	}
@@ -114,7 +118,7 @@ class SecurityIntegrationTest {
 				.andExpect(redirectedUrl("/login"))
 				.andReturn().getRequest().getSession();
 
-		mockMvc.perform(post("/login").param("username", "artem").param("password", "artem-pass")
+		mockMvc.perform(post("/login").param("username", ARTEM).param("password", password(ARTEM))
 						.with(csrf()).session(session))
 				.andExpect(authenticated())
 				.andExpect(redirectedUrl("/notes/projects/?q=a%20b"));
@@ -130,14 +134,14 @@ class SecurityIntegrationTest {
 	@Test
 	void sameUserCanLogInTwice() throws Exception {
 		// guards against cached UserDetails whose password was erased after the first login
-		mockMvc.perform(formLogin().user("artem").password("artem-pass")).andExpect(authenticated());
-		mockMvc.perform(formLogin().user("artem").password("artem-pass")).andExpect(authenticated());
+		mockMvc.perform(formLogin().user(ARTEM).password(password(ARTEM))).andExpect(authenticated());
+		mockMvc.perform(formLogin().user(ARTEM).password(password(ARTEM))).andExpect(authenticated());
 	}
 
 	@Test
 	void browserLogoutInvalidatesSessionAndRedirects() throws Exception {
 		final MockHttpSession session = (MockHttpSession) mockMvc
-				.perform(formLogin().user("artem").password("artem-pass"))
+				.perform(formLogin().user(ARTEM).password(password(ARTEM)))
 				.andExpect(authenticated())
 				.andReturn().getRequest().getSession();
 
@@ -150,19 +154,19 @@ class SecurityIntegrationTest {
 
 	@Test
 	void nonBrowserLogoutGets204WithoutRedirect() throws Exception {
-		mockMvc.perform(post("/logout").with(csrf()).with(httpBasic("artem", "artem-pass")).accept(MediaType.APPLICATION_JSON))
+		mockMvc.perform(post("/logout").with(csrf()).with(loggedInAs(ARTEM)).accept(MediaType.APPLICATION_JSON))
 				.andExpect(status().isNoContent());
 	}
 
 	@Test
 	void formPostWithoutCsrfTokenIsForbidden() throws Exception {
-		mockMvc.perform(post("/login").param("username", "artem").param("password", "artem-pass"))
+		mockMvc.perform(post("/login").param("username", ARTEM).param("password", password(ARTEM)))
 				.andExpect(status().isForbidden());
 	}
 
 	@Test
 	void formPostWithCsrfTokenIsAccepted() throws Exception {
-		mockMvc.perform(post("/login").param("username", "artem").param("password", "artem-pass").with(csrf()))
+		mockMvc.perform(post("/login").param("username", ARTEM).param("password", password(ARTEM)).with(csrf()))
 				.andExpect(redirectedUrl("/"));
 	}
 }

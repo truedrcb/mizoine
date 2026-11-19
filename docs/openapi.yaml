@@ -31,9 +31,10 @@ paths:
           type: string
       responses:
         "302":
-          description: "Redirect to /{repository}/"
+          description: "Redirect to /{repository}/; or Browser not logged in: redirect\
+            \ to the login page"
         "401":
-          description: Not logged in
+          description: "Not logged in (non-browser clients): HTTP Basic challenge"
         "404":
           description: Not a valid repository name
   /{repository}/{path}:
@@ -44,7 +45,7 @@ paths:
       description: "Lists the subfolders of a folder that the user may see, sorted\
         \ by name: an HTML page with links (default), or JSON when asked for. Folder\
         \ URLs end with '/'; without it the server redirects. Files and hidden folders\
-        \ (starting with '.') are not listed."
+        \ (starting with '.' or containing '%') are not listed."
       operationId: folder
       parameters:
       - name: repository
@@ -69,7 +70,7 @@ paths:
                 $ref: "#/components/schemas/FolderListing"
         "302":
           description: "Folder URL without trailing slash: redirect to the same URL\
-            \ with '/' (only for folders the user may see); or browser not logged\
+            \ with '/' (only for folders the user may see); or Browser not logged\
             \ in: redirect to the login page"
         "401":
           description: "Not logged in (non-browser clients): HTTP Basic challenge"
@@ -86,19 +87,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RepositoryProblem"
-  /favicon.ico:
-    get:
-      tags:
-      - Resources
-      summary: Favicon
-      description: The icon shown by browsers. Needs no login.
-      operationId: favicon
-      responses:
-        "200":
-          description: The icon
-          content:
-            image/x-icon: {}
-      security: []
   /:
     get:
       tags:

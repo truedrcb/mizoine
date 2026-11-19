@@ -14,7 +14,6 @@ import org.springframework.boot.test.web.server.LocalServerPort;
  * Here only 192.0.2.1 (a documentation address) is trusted, so the test client on 127.0.0.1 is not.
  */
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT, properties = {
-		"mizoine.users-file=src/test/resources/users-test.yaml",
 		"server.tomcat.remoteip.internal-proxies=192.0.2.1/32"})
 class UntrustedProxyTest {
 

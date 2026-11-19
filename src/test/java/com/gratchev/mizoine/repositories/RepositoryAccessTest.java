@@ -149,4 +149,14 @@ class RepositoryAccessTest {
 		assertThat(access.canEnter(folder(".git"))).isFalse();
 		assertThat(access.canEnter(folder("notes/.hidden/x"))).isFalse();
 	}
+
+	@Test
+	void foldersWithPercentAreHiddenToo() {
+		// same rule as RepositoryPaths: the firewall rejects an encoded '%', so such folders could not be opened
+		final RepositoryAccess access = access(repository("artem", "/"), "artem");
+
+		assertThat(access.visibleChildren(ROOT, List.of("100%", "notes", "a%20b"))).containsExactly("notes");
+		assertThat(access.canEnter(folder("100%"))).isFalse();
+		assertThat(access.canEnter(folder("notes/a%b/x"))).isFalse();
+	}
 }

@@ -97,7 +97,7 @@ class RepositoryFileParserTest {
 	}
 
 	@ParameterizedTest
-	@ValueSource(strings = {"..", "a/../../b", "a/..", "./a", ".git", "a/.hidden", "a\\\\b", ""})
+	@ValueSource(strings = {"..", "a/../../b", "a/..", "./a", ".git", "a/.hidden", "a\\\\b", "", "100%", "a/x%y"})
 	void unsafeOrHiddenFoldersMakeTheFileUnreadable(final String folder) throws IOException {
 		final Path file = notes("path: data\naccess:\n  guest: [\"" + folder + "\"]\n");
 

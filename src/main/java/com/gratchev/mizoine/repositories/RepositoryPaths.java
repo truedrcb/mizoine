@@ -10,10 +10,8 @@ import java.util.stream.Stream;
 /**
  * Turns folder segments (from a URL) into real paths below a repository root — never outside it.
  * <ul>
- * <li>Segments must be plain names: no {@code .}, {@code ..}, empty names, separators or NUL.</li>
- * <li>Hidden names (starting with {@code .}, such as {@code .git}) are never reachable (D3).</li>
- * <li>Names with {@code %} are hidden too: Spring Security's firewall rejects an encoded {@code %} in URLs,
- * so such folders could be listed but never opened.</li>
+ * <li>Segments must be plain names ({@link FolderNames}): no hidden names (D3), {@code .}, {@code ..},
+ * empty names, separators or NUL.</li>
  * <li>Symbolic links are resolved; a link whose target is outside the root, or hidden, counts as not existing.</li>
  * </ul>
  */
@@ -24,7 +22,7 @@ public final class RepositoryPaths {
 
 	/** @return the real path of an existing folder inside the root, or empty */
 	public static Optional<Path> resolveFolder(final Path root, final List<String> segments) {
-		if (!segments.stream().allMatch(RepositoryPaths::isPlainName)) {
+		if (!segments.stream().allMatch(FolderNames::isPlain)) {
 			return Optional.empty();
 		}
 		try {
@@ -48,7 +46,7 @@ public final class RepositoryPaths {
 		try (Stream<Path> entries = Files.list(folder.get())) {
 			final Path realRoot = root.toRealPath();
 			return entries
-					.filter(entry -> isPlainName(entry.getFileName().toString()))
+					.filter(entry -> FolderNames.isPlain(entry.getFileName().toString()))
 					.filter(entry -> safeFolder(realRoot, entry).isPresent())
 					.map(entry -> entry.getFileName().toString())
 					.sorted()
@@ -66,7 +64,7 @@ public final class RepositoryPaths {
 			}
 			// the real target must not be hidden either (e.g. a link "git" -> ".git")
 			for (final Path name : realRoot.relativize(real)) {
-				if (!name.toString().isEmpty() && !isPlainName(name.toString())) {
+				if (!name.toString().isEmpty() && !FolderNames.isPlain(name.toString())) {
 					return Optional.empty();
 				}
 			}
@@ -76,12 +74,4 @@ public final class RepositoryPaths {
 		}
 	}
 
-	private static boolean isPlainName(final String name) {
-		return !name.isEmpty()
-				&& !name.startsWith(".")
-				&& name.indexOf('%') < 0
-				&& name.indexOf('/') < 0
-				&& name.indexOf('\\') < 0
-				&& name.indexOf('\0') < 0;
-	}
 }

@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-19): steps 0–24 done (372 tests green). All planned steps are done; see "Open decisions" for follow-ups.
+**Status** (updated: 2026-11-19): steps 0–25 done (384 tests green). All planned steps are done; see "Open decisions" for follow-ups.
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -231,7 +231,7 @@ Lets a person edit `users.yaml` and have it take effect.
 - Add `users.example.yaml`, add `users.yaml` to `.gitignore`.
 - Update `README.md`: how to install JDK, generate a password hash, create `users.yaml`, run
   `java -jar target/mizoine-*.jar --mizoine.users-file=./users.yaml`.
-- Manual smoke test: start the jar, open `http://localhost:8080`, log in with a configured user, get rejected with a wrong one.
+- Manual smoke test: start the jar, open `http://127.0.0.1:12013` (port 8080 at the time), log in with a configured user, get rejected with a wrong one.
 - *Done, with additions:*
   - Done after step 11, so the README uses `hash-password` instead of the `htpasswd` pipeline.
   - *(added)* `UsersExampleFileTest`: `users.example.yaml` is loaded by the real `FileUserDetailsService` without warnings, so the example cannot drift from the format.
@@ -319,7 +319,7 @@ Pure unit tests, `@TempDir`, like step 3.
   9. **two levels of failure (D8):** *unreadable* — malformed YAML, invalid repository name, invalid `access` section (e.g. a grant with `..`) → `RepositoryFileException`, permissions unknown; *readable with problems* — everything else (root folder) → config with a list of problems
 - **Green:** `record RepositoryConfig(name, root, grants, problems)`, `record FolderGrant`, `RepositoryFileParser` (Jackson YAML tree, as in `UsersFileParser`). `access` is parsed and checked first, so permissions are known even when the rest is wrong.
 - *Done, with additions:* 57 test cases (`RepositoryFileParserTest`, many parameterized).
-  - `RepositoryNames.isValid` is separate, for the lookup by URL in step 16. Reserved: `login`, `logout`, `error`, `default-ui.css`, `favicon.ico`.
+  - `RepositoryNames.isValid` is separate, for the lookup by URL in step 16. Reserved: `login`, `logout`, `error`, `default-ui.css`, `favicon.ico` (and `ui` since step 24).
   - `FolderGrant` = path segments; `/` = whole repository. Rejected (file unreadable): empty, `.`/`..`, hidden names (D3), backslash, NUL; folders not given as a list; `access` not a mapping; blank username.
   - **Duplicate keys** (e.g. a username twice under `access`) make the file unreadable instead of silently using the last one (Jackson `STRICT_DUPLICATE_DETECTION`).
   - Missing `access` = empty: nobody has access, warning. Missing or non-text `path`, missing folder, file instead of folder → *problems* (D8).
@@ -408,7 +408,7 @@ Pure unit tests — the core of the security of this feature.
   - Test repositories in `src/test/resources/repositories/` (`notes`, `private`, `moved`, `broken`) use `path: .` (their own folder), so no empty folders are needed in Git.
   - **HTML only for now:** the page and the 500 details are `text/html`; `Accept: application/json` → 406 (test `jsonIsNotAvailableYet`). JSON comes with step 21.
   - 404 for unknown, unreadable and "no grant" is one `ResponseStatusException(NOT_FOUND)`: identical status, headers and body (tested).
-  - `/{repository}` redirects to `/{repository}/` for every valid name (reveals nothing); invalid names (e.g. `/favicon.ico`) → 404 without redirect.
+  - `/{repository}` redirects to `/{repository}/` for every valid name (reveals nothing); invalid names (e.g. `/.hidden`) → 404 without redirect.
   - **springdoc leaves out methods that return `ModelAndView`.** First taken for "springdoc drops trailing slashes" — wrong; with a view name (`String`) and the 500 status set on the response, both `/{repository}` and `/{repository}/` are documented under their real paths.
   - Live-tested with the jar: all cases as in the tests; the problem file and the unreadable file are logged once each.
 
@@ -484,7 +484,7 @@ Replaces the "ok" page of step 18 for folders. Also: replace the temporary test 
 ### 23. Favicon  ☑
 *Requested 2026-11-19:* the favicon of the old version, also without login.
 - **Red** — `FaviconTest`: anonymous and logged-in `GET /favicon.ico` → 200, `image/x-icon`, the archived file (ICO header checked); `Cache-Control: max-age=604800, public`; `POST` stays forbidden; `/favicon.png` still needs login. `OpenApiDocumentationTest`: entry with `image/x-icon` and `security: []`.
-- **Green:** `src/main/resources/favicon.ico` (copied unchanged from the old version, 48×48 and 32×32), `FaviconController`, and `GET /favicon.ico` → `permitAll` in `SecurityConfig`.
+- **Green:** `src/main/resources/favicon.ico` (copied unchanged from the old version, 48×48 and 32×32), `FaviconController` (replaced by a resource handler in step 25), and `GET /favicon.ico` → `permitAll` in `SecurityConfig`.
 - *Done, with findings:*
   - A static file would not work: `/{repository}` matches `/favicon.ico` before the static resources and answers 404 (reserved name). Hence a controller; `favicon.ico` stays a reserved repository name.
   - No `produces` on the mapping: without an `Accept` header D6 assumes `text/html`, then `/{repository}` would win again. The content type is set on the response.
@@ -506,6 +506,19 @@ Replaces the "ok" page of step 18 for folders. Also: replace the temporary test 
   - The traversal tests passed before the fix too (firewall, Tomcat and the resource handler reject them already). They stay as a guard.
   - Not an operation in the OpenAPI description: springdoc lists controllers, not resource handlers. Mentioned in the common description (`info.description`) instead, together with `/favicon.ico` (requested).
   - Caching: Spring Security's default `no-cache` applies to `/ui/**` for now; set caching when the user interface has real files.
+
+### 25. Consistency and simplification  ☑
+*Requested 2026-11-19:* check the docs against the code; remove duplication in code and tests. Behaviour unchanged, except that grants of `%` folders are now rejected (they were never reachable).
+- **Docs:** DEV.md (old port in the smoke test of step 9, `ui` in the reserved names, `/favicon.ico` no longer an example of an invalid name); OpenAPI (folder listing: `%` names are hidden too; `GET /{repository}`: login redirect and the same 401 text as elsewhere).
+- **Code:**
+  - `ApiTexts`: the texts several endpoints share (login redirect, 401, 406) and the note on HTML + JSON on one URL, instead of copies in both controllers.
+  - `FolderNames`: one rule for hidden (`.` or `%`) and plain names, used by `FolderGrant`, `RepositoryAccess` and `RepositoryPaths` (before: three checks, two of them without `%`). Red: `FolderNamesTest`, `%` in `RepositoryAccessTest` and in the grants of `RepositoryFileParserTest`.
+  - `FaviconController` removed: `/favicon.ico` is a resource handler for `ui/favicon.ico` in `WebConfig` (7 days cache), possible since step 24. `FaviconTest` stayed green throughout.
+- **Tests:**
+  - `src/test/resources/config/application.yaml` sets `mizoine.users-file` and `mizoine.repositories-dir` for all Spring Boot tests (was repeated in 18 classes; tests without `repositories-dir` read the project root before).
+  - `TestUsers` (names, `password(user)`, `loggedInAs(user)` for MockMvc, `basicAuthHeader(user)`) and `TestHttp` (requests to the real test server) instead of credentials and `HttpClient`/Base64 code in many classes; `ProxyHttp` builds on `TestHttp`.
+  - `OpenApiDocumentationTest` reduced to smoke tests (requested): title and common description, every endpoint has a summary, the file is written. Details are reviewed in `docs/openapi.yaml`; CLAUDE.md updated.
+  - `FaviconTest` reduced to `/favicon.ico` itself; the general rules for `/ui/**` are in `UiResourcesTest`.
 
 ---
 

@@ -7,7 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.env.Environment;
 
-@SpringBootTest(classes = MizoineApplication.class, properties = "mizoine.users-file=src/test/resources/users-test.yaml")
+@SpringBootTest(classes = MizoineApplication.class)
 class MizoineApplicationTests {
 
 	private final Environment environment;

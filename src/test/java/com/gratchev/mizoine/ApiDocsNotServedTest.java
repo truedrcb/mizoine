@@ -1,6 +1,7 @@
 package com.gratchev.mizoine;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
+import static com.gratchev.mizoine.TestUsers.ARTEM;
+import static com.gratchev.mizoine.TestUsers.loggedInAs;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -15,7 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * The API description is generated only by {@link OpenApiDocumentationTest}. Other test contexts,
  * though springdoc is on the test classpath, do not serve it — like the application, which has no springdoc.
  */
-@SpringBootTest(properties = "mizoine.users-file=src/test/resources/users-test.yaml")
+@SpringBootTest
 @AutoConfigureMockMvc
 class ApiDocsNotServedTest {
 
@@ -28,7 +29,7 @@ class ApiDocsNotServedTest {
 	@ParameterizedTest
 	@ValueSource(strings = {OpenApiDocumentationTest.API_DOCS_PATH, OpenApiDocumentationTest.API_DOCS_YAML_PATH})
 	void descriptionIsNotServedEvenToLoggedInUsers(final String path) throws Exception {
-		mockMvc.perform(get(path).with(httpBasic("artem", "artem-pass")))
+		mockMvc.perform(get(path).with(loggedInAs(ARTEM)))
 				.andExpect(status().isNotFound());
 	}
 }

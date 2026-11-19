@@ -17,6 +17,8 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
 import org.springframework.web.util.UriUtils;
 
+import com.gratchev.mizoine.ApiTexts;
+
 import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -41,16 +43,15 @@ class RepositoryController {
 	private static final String REPOSITORY = "repository";
 	private static final String PATH = "path";
 
-	// HTML and JSON share one URL, so one operation in the API description: documented on the HTML method
-	// with both media types; the JSON method is @Hidden (springdoc's own merging depends on method order)
+	// HTML and JSON on one URL: documented once, see ApiTexts
 	private static final String SUMMARY = "Folder of a repository";
 	private static final String DESCRIPTION = "Lists the subfolders of a folder that the user may see, sorted by "
 			+ "name: an HTML page with links (default), or JSON when asked for. Folder URLs end with '/'; "
-			+ "without it the server redirects. Files and hidden folders (starting with '.') are not listed.";
+			+ "without it the server redirects. Files and hidden folders (starting with '.' or containing '%') are not "
+			+ "listed.";
 	private static final String OK = "The folder page (HTML) or its subfolders (JSON)";
 	private static final String REDIRECT = "Folder URL without trailing slash: redirect to the same URL with '/' "
-			+ "(only for folders the user may see); or browser not logged in: redirect to the login page";
-	private static final String NOT_LOGGED_IN = "Not logged in (non-browser clients): HTTP Basic challenge";
+			+ "(only for folders the user may see); or " + ApiTexts.LOGIN_REDIRECT;
 	private static final String NOT_FOUND = "Unknown repository or folder, or no access to it — deliberately "
 			+ "the same answer";
 	private static final String PROBLEM = "Repository configured wrongly (e.g. missing root folder); the file to "
@@ -71,8 +72,9 @@ class RepositoryController {
 	@Operation(summary = "Repository without trailing slash",
 			description = "Redirects to the same URL with a trailing slash (folder URLs end with '/'). "
 					+ "Done for every valid name, so it reveals nothing about which repositories exist.")
-	@ApiResponse(responseCode = "302", description = "Redirect to /{repository}/", content = @Content)
-	@ApiResponse(responseCode = "401", description = "Not logged in", content = @Content)
+	@ApiResponse(responseCode = "302", description = "Redirect to /{repository}/; or " + ApiTexts.LOGIN_REDIRECT,
+			content = @Content)
+	@ApiResponse(responseCode = "401", description = ApiTexts.NOT_LOGGED_IN, content = @Content)
 	@ApiResponse(responseCode = "404", description = "Not a valid repository name", content = @Content)
 	String withoutTrailingSlash(@PathVariable(REPOSITORY) @Parameter(description = "Repository name") final String repository) {
 		if (!RepositoryNames.isValid(repository)) {
@@ -88,10 +90,9 @@ class RepositoryController {
 			@Content(mediaType = MediaType.TEXT_HTML_VALUE),
 			@Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = FolderListing.class))})
 	@ApiResponse(responseCode = "302", description = REDIRECT, content = @Content)
-	@ApiResponse(responseCode = "401", description = NOT_LOGGED_IN, content = @Content)
+	@ApiResponse(responseCode = "401", description = ApiTexts.NOT_LOGGED_IN, content = @Content)
 	@ApiResponse(responseCode = "404", description = NOT_FOUND, content = @Content)
-	@ApiResponse(responseCode = "406", description = "Neither text/html nor application/json accepted",
-			content = @Content)
+	@ApiResponse(responseCode = "406", description = ApiTexts.NOT_ACCEPTABLE, content = @Content)
 	@ApiResponse(responseCode = "500", description = PROBLEM, content = {
 			@Content(mediaType = MediaType.TEXT_HTML_VALUE),
 			@Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = RepositoryProblem.class))})

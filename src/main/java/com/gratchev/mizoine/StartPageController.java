@@ -27,14 +27,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @Tag(name = "Start page")
 class StartPageController {
 
-	// HTML and JSON share one URL, so one operation in the API description: documented on the HTML method
-	// with both media types; the JSON method is @Hidden (springdoc's own merging depends on method order)
+	// HTML and JSON on one URL: documented once, see ApiTexts
 	private static final String SUMMARY = "Start page: the user's repositories";
 	private static final String DESCRIPTION = "Greets the logged-in user and lists the repositories they can access, "
 			+ "sorted by name: an HTML page with links (default), or JSON when asked for. Without repositories "
 			+ "the page says \"No accessible repositories configured for you.\" and the JSON list is empty.";
 	private static final String OK = "The start page (HTML) or the user's repositories (JSON)";
-	private static final String NOT_LOGGED_IN = "Not logged in (non-browser clients): HTTP Basic challenge";
 
 	private final RepositoryRegistry registry;
 
@@ -47,11 +45,9 @@ class StartPageController {
 	@ApiResponse(responseCode = "200", description = OK, content = {
 			@Content(mediaType = MediaType.TEXT_HTML_VALUE),
 			@Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = StartPage.class))})
-	@ApiResponse(responseCode = "302", description = "Browser not logged in: redirect to the login page",
-			content = @Content)
-	@ApiResponse(responseCode = "401", description = NOT_LOGGED_IN, content = @Content)
-	@ApiResponse(responseCode = "406", description = "Neither text/html nor application/json accepted",
-			content = @Content)
+	@ApiResponse(responseCode = "302", description = ApiTexts.LOGIN_REDIRECT, content = @Content)
+	@ApiResponse(responseCode = "401", description = ApiTexts.NOT_LOGGED_IN, content = @Content)
+	@ApiResponse(responseCode = "406", description = ApiTexts.NOT_ACCEPTABLE, content = @Content)
 	String startPage(final Principal principal, final Model model) {
 		model.addAttribute("page", page(principal));
 		return "start";

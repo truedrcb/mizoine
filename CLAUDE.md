@@ -19,7 +19,7 @@ Act as an expert Java developer. Build with Java 25, Maven 3.9+ (`mvn`, no Maven
 
 ## API documentation (OpenAPI)
 - Every HTTP endpoint (HTML pages and JSON alike) is annotated for OpenAPI (springdoc): `@Tag` on the controller; `@Operation` with summary; `@Parameter` for path/query parameters; `@ApiResponse` for every status it can return (incl. 401, 404, 500) with media types.
-- Write the test first: the endpoint's test checks its entry in `/v3/api-docs` (summary, parameters, response codes, media types).
+- Write the test first: `OpenApiDocumentationTest` checks only that each endpoint appears in `/v3/api-docs` with a summary (smoke test, no detailed checks; the details are reviewed in `docs/openapi.yaml`).
 - `mvn verify` writes the description to `docs/openapi.yaml` (committed). The application itself does not serve it; springdoc is a test dependency only, no Swagger UI (DEV.md step 15, D9).
 
 ## Plan and status

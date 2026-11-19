@@ -1,11 +1,11 @@
 package com.gratchev.mizoine.repositories;
 
+import static com.gratchev.mizoine.TestUsers.loggedInAs;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.not;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -36,7 +36,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * in a temporary folder (names with '#', '%', '<' or non-ASCII letters do not belong in Git):
  * artem may access everything, guest only {@code public} and {@code projects/shared}.
  */
-@SpringBootTest(properties = "mizoine.users-file=src/test/resources/users-test.yaml")
+@SpringBootTest
 @AutoConfigureMockMvc
 class RepositoryListingTest {
 
@@ -83,7 +83,7 @@ class RepositoryListingTest {
 
 	/** Raw URL, not re-encoded by MockMvc. */
 	private static MockHttpServletRequestBuilder folder(final String url, final String user) {
-		return get(URI.create(url)).with(httpBasic(user, user + "-pass"));
+		return get(URI.create(url)).with(loggedInAs(user));
 	}
 
 	private static MockHttpServletRequestBuilder json(final String url, final String user) {

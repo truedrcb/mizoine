@@ -19,7 +19,7 @@ public record FolderGrant(List<String> segments) {
 	 * @param folder relative to the repository root, separated by {@code /}; leading, trailing and
 	 *            double slashes are ignored; {@code "/"} is the whole repository
 	 * @throws IllegalArgumentException for empty text, backslashes, NUL, {@code .}, {@code ..}
-	 *             or hidden names (starting with {@code .})
+	 *             or hidden names ({@link FolderNames}: starting with {@code .} or containing {@code %})
 	 */
 	public static FolderGrant of(final String folder) {
 		if (folder.isBlank()) {
@@ -30,9 +30,9 @@ public record FolderGrant(List<String> segments) {
 		}
 		final List<String> segments = Arrays.stream(folder.split("/")).filter(segment -> !segment.isEmpty()).toList();
 		for (final String segment : segments) {
-			if (segment.startsWith(".")) {
+			if (FolderNames.isHidden(segment)) {
 				throw new IllegalArgumentException("folder '" + folder
-						+ "' must not contain '.', '..' or hidden names starting with '.'");
+						+ "' must not contain '.', '..' or hidden names (starting with '.' or containing '%')");
 			}
 		}
 		return new FolderGrant(segments);

@@ -1,9 +1,9 @@
 package com.gratchev.mizoine.repositories;
 
+import static com.gratchev.mizoine.TestUsers.loggedInAs;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -25,9 +25,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * Step 18: {@code /{repository}/}. Test repositories in {@code src/test/resources/repositories/}:
  * notes (artem: all, guest: public), private (artem only), moved (root folder missing), broken (unreadable).
  */
-@SpringBootTest(properties = {
-		"mizoine.users-file=src/test/resources/users-test.yaml",
-		"mizoine.repositories-dir=" + RepositoryControllerTest.REPOSITORIES})
+@SpringBootTest
 @AutoConfigureMockMvc
 class RepositoryControllerTest {
 
@@ -40,7 +38,7 @@ class RepositoryControllerTest {
 	}
 
 	private static MockHttpServletRequestBuilder page(final String path, final String user) {
-		return get(path).with(httpBasic(user, user + "-pass"));
+		return get(path).with(loggedInAs(user));
 	}
 
 	private MockHttpServletResponse response(final String path, final String user) throws Exception {

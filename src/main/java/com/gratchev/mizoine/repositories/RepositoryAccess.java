@@ -9,8 +9,8 @@ import java.util.List;
  * <li>A grant includes its folder and everything below it.</li>
  * <li>Folders <em>above</em> a granted folder may be entered too, but show only the way down to the
  * granted folders (D4).</li>
- * <li>Hidden names (starting with {@code .}, such as {@code .git}) are never visible nor enterable (D3),
- * whatever the grants say.</li>
+ * <li>Hidden names ({@link FolderNames}: starting with {@code .} such as {@code .git}, or containing {@code %})
+ * are never visible nor enterable (D3), whatever the grants say.</li>
  * <li>Usernames and folder names are case-sensitive.</li>
  * </ul>
  */
@@ -39,7 +39,7 @@ public final class RepositoryAccess {
 	}
 
 	public boolean canEnter(final List<String> folder) {
-		if (folder.stream().anyMatch(RepositoryAccess::isHidden)) {
+		if (folder.stream().anyMatch(FolderNames::isHidden)) {
 			return false;
 		}
 		return grants.stream().anyMatch(grant -> startsWith(folder, grant.segments()) || startsWith(grant.segments(), folder));
@@ -54,11 +54,11 @@ public final class RepositoryAccess {
 			return List.of();
 		}
 		if (grants.stream().anyMatch(grant -> startsWith(folder, grant.segments()))) {
-			return children.stream().filter(child -> !isHidden(child)).toList();
+			return children.stream().filter(child -> !FolderNames.isHidden(child)).toList();
 		}
 		// above granted folders: only the next step towards one of them
 		return children.stream()
-				.filter(child -> !isHidden(child))
+				.filter(child -> !FolderNames.isHidden(child))
 				.filter(child -> grants.stream().anyMatch(grant -> grant.segments().size() > folder.size()
 						&& startsWith(grant.segments(), folder)
 						&& grant.segments().get(folder.size()).equals(child)))
@@ -67,9 +67,5 @@ public final class RepositoryAccess {
 
 	private static boolean startsWith(final List<String> path, final List<String> prefix) {
 		return path.size() >= prefix.size() && path.subList(0, prefix.size()).equals(prefix);
-	}
-
-	private static boolean isHidden(final String name) {
-		return name.startsWith(".");
 	}
 }

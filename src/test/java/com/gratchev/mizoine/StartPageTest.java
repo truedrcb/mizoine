@@ -1,9 +1,9 @@
 package com.gratchev.mizoine;
 
+import static com.gratchev.mizoine.TestUsers.loggedInAs;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -24,9 +24,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * Test repositories ({@code src/test/resources/repositories/}): notes and moved (artem: all, guest: public),
  * private (artem only), broken (unreadable). moved has a missing root folder.
  */
-@SpringBootTest(properties = {
-		"mizoine.users-file=src/test/resources/users-test.yaml",
-		"mizoine.repositories-dir=src/test/resources/repositories"})
+@SpringBootTest
 @AutoConfigureMockMvc
 class StartPageTest {
 
@@ -37,7 +35,7 @@ class StartPageTest {
 	}
 
 	private static MockHttpServletRequestBuilder startPage(final String user) {
-		return get("/").with(httpBasic(user, user + "-pass"));
+		return get("/").with(loggedInAs(user));
 	}
 
 	// greeting (from steps 2 and 7)

@@ -1,5 +1,7 @@
 package com.gratchev.mizoine.security;
 
+import static com.gratchev.mizoine.TestUsers.ARTEM;
+import static com.gratchev.mizoine.TestUsers.loggedInAs;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestBuilders.formLogin;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
@@ -17,7 +19,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.ResultMatcher;
 
 /** Step 8: security headers, and no hint whether a username exists. */
-@SpringBootTest(properties = "mizoine.users-file=src/test/resources/users-test.yaml")
+@SpringBootTest
 @AutoConfigureMockMvc
 class SecurityHeadersTest {
 
@@ -40,7 +42,7 @@ class SecurityHeadersTest {
 
 	@Test
 	void pageForLoggedInUserHasSecurityHeaders() throws Exception {
-		mockMvc.perform(get("/").with(httpBasic("artem", "artem-pass")))
+		mockMvc.perform(get("/").with(loggedInAs(ARTEM)))
 				.andExpect(status().isOk())
 				.andExpectAll(securityHeaders());
 	}

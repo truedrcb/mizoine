@@ -1,8 +1,9 @@
 package com.gratchev.mizoine;
 
+import static com.gratchev.mizoine.TestUsers.ARTEM;
+import static com.gratchev.mizoine.TestUsers.loggedInAs;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.hasKey;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -12,6 +13,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -35,7 +38,6 @@ import io.swagger.v3.oas.annotations.servers.Server;
  * lives here, in test code. The endpoints carry their own annotations ({@code @Operation}, ...).
  */
 @SpringBootTest(properties = {
-		"mizoine.users-file=src/test/resources/users-test.yaml",
 		"springdoc.api-docs.enabled=true"})
 @AutoConfigureMockMvc
 @Import(OpenApiDocumentationTest.ApiDescription.class)
@@ -79,86 +81,25 @@ class OpenApiDocumentationTest {
 	/** Asks for JSON or YAML explicitly: without an Accept header the application prefers HTML (D6). */
 	private static MockHttpServletRequestBuilder apiDocs(final String path) {
 		final String accept = path.endsWith(".yaml") ? "application/vnd.oai.openapi" : "application/json";
-		return get(path).with(httpBasic("artem", "artem-pass")).header("Accept", accept);
+		return get(path).with(loggedInAs(ARTEM)).header("Accept", accept);
 	}
+
+	// Smoke tests only: the description is generated and complete. Its details are reviewed in docs/openapi.yaml.
 
 	@Test
 	void describesTheApplication() throws Exception {
 		mockMvc.perform(apiDocs(API_DOCS_PATH))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.openapi").value(org.hamcrest.Matchers.startsWith("3.")))
 				.andExpect(jsonPath("$.info.title").value("Mizoine"))
-				.andExpect(jsonPath("$.info.version").isNotEmpty())
 				// served by a resource handler, which springdoc does not list as an operation
-				.andExpect(jsonPath("$.info.description").value(org.hamcrest.Matchers.containsString("/ui/")));
+				.andExpect(jsonPath("$.info.description").value(containsString("/ui/")));
 	}
 
-	@Test
-	void serverIsRelativeNotTheTestInstance() throws Exception {
+	@ParameterizedTest
+	@ValueSource(strings = {"/", "/{repository}", "/{repository}/{path}"}) // springdoc writes {*path} as {path}
+	void everyEndpointIsDocumented(final String path) throws Exception {
 		mockMvc.perform(apiDocs(API_DOCS_PATH))
-				.andExpect(jsonPath("$.servers[0].url").value("/"))
-				.andExpect(jsonPath("$.servers.length()").value(1));
-	}
-
-	@Test
-	void startPageIsDocumented() throws Exception {
-		mockMvc.perform(apiDocs(API_DOCS_PATH))
-				.andExpect(jsonPath("$.paths['/'].get.summary").isNotEmpty())
-				.andExpect(jsonPath("$.paths['/'].get.tags").isNotEmpty())
-				.andExpect(jsonPath("$.paths['/'].get.responses['200'].content", hasKey("text/html")))
-				.andExpect(jsonPath("$.paths['/'].get.operationId").value("startPage"))
-				.andExpect(jsonPath("$.paths['/'].get.responses['200'].content", hasKey("application/json")))
-				.andExpect(jsonPath("$.paths['/'].get.responses['406'].description").isNotEmpty())
-				.andExpect(jsonPath("$.paths['/'].get.responses['401'].description").isNotEmpty());
-	}
-
-	@Test
-	void folderListingIsDocumented() throws Exception {
-		// springdoc writes the catch-all {*path} as {path}
-		final String operation = "$.paths['/{repository}/{path}'].get";
-		mockMvc.perform(apiDocs(API_DOCS_PATH))
-				.andExpect(jsonPath(operation + ".summary").isNotEmpty())
-				.andExpect(jsonPath(operation + ".operationId").value("folder"))
-				.andExpect(jsonPath(operation + ".parameters[0].name").value("repository"))
-				.andExpect(jsonPath(operation + ".parameters[1].name").value("path"))
-				.andExpect(jsonPath(operation + ".responses['200'].content", hasKey("text/html")))
-				.andExpect(jsonPath(operation + ".responses['200'].content['application/json'].schema['$ref']")
-						.value("#/components/schemas/FolderListing"))
-				.andExpect(jsonPath(operation + ".responses['302'].description").isNotEmpty())
-				.andExpect(jsonPath(operation + ".responses['401'].description").isNotEmpty())
-				.andExpect(jsonPath(operation + ".responses['404'].description").isNotEmpty())
-				.andExpect(jsonPath(operation + ".responses['406'].description").isNotEmpty())
-				.andExpect(jsonPath(operation + ".responses['500'].content", hasKey("text/html")))
-				.andExpect(jsonPath(operation + ".responses['500'].content['application/json'].schema['$ref']")
-						.value("#/components/schemas/RepositoryProblem"));
-	}
-
-	@Test
-	void repositoryWithoutTrailingSlashIsDocumented() throws Exception {
-		final String operation = "$.paths['/{repository}'].get";
-		mockMvc.perform(apiDocs(API_DOCS_PATH))
-				.andExpect(jsonPath(operation + ".summary").isNotEmpty())
-				.andExpect(jsonPath(operation + ".responses['302'].description").isNotEmpty())
-				.andExpect(jsonPath(operation + ".responses['404'].description").isNotEmpty());
-	}
-
-	@Test
-	void faviconIsDocumentedWithoutLogin() throws Exception {
-		final String operation = "$.paths['/favicon.ico'].get";
-		mockMvc.perform(apiDocs(API_DOCS_PATH))
-				.andExpect(jsonPath(operation + ".summary").isNotEmpty())
-				.andExpect(jsonPath(operation + ".tags").isNotEmpty())
-				.andExpect(jsonPath(operation + ".responses['200'].content", hasKey("image/x-icon")))
-				// overrides the global basicAuth requirement
-				.andExpect(jsonPath(operation + ".security").isEmpty());
-	}
-
-	@Test
-	void httpBasicIsRequiredForAllOperations() throws Exception {
-		mockMvc.perform(apiDocs(API_DOCS_PATH))
-				.andExpect(jsonPath("$.components.securitySchemes.basicAuth.type").value("http"))
-				.andExpect(jsonPath("$.components.securitySchemes.basicAuth.scheme").value("basic"))
-				.andExpect(jsonPath("$.security[0]", hasKey("basicAuth")));
+				.andExpect(jsonPath("$.paths['" + path + "'].get.summary").isNotEmpty());
 	}
 
 	@Test

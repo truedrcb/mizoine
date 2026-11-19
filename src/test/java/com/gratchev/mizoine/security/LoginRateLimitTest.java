@@ -1,5 +1,8 @@
 package com.gratchev.mizoine.security;
 
+import static com.gratchev.mizoine.TestUsers.ARTEM;
+import static com.gratchev.mizoine.TestUsers.loggedInAs;
+import static com.gratchev.mizoine.TestUsers.password;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -21,7 +24,6 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
  * Each test uses its own address, so the tests do not affect each other.
  */
 @SpringBootTest(properties = {
-		"mizoine.users-file=src/test/resources/users-test.yaml",
 		"mizoine.login-limit.max-failures=3",
 		"mizoine.login-limit.window=5m"})
 @AutoConfigureMockMvc
@@ -55,7 +57,7 @@ class LoginRateLimitTest {
 	void basicAuthIsRejectedAfterTooManyFailuresEvenWithRightPassword() throws Exception {
 		wrongBasicLogins("10.1.0.1", 3);
 
-		mockMvc.perform(get("/").with(httpBasic("artem", "artem-pass")).with(from("10.1.0.1")))
+		mockMvc.perform(get("/").with(loggedInAs(ARTEM)).with(from("10.1.0.1")))
 				.andExpect(status().isTooManyRequests())
 				.andExpect(header().string("Retry-After", "300"));
 	}
@@ -67,7 +69,7 @@ class LoginRateLimitTest {
 					.andExpect(status().isUnauthorized());
 		}
 
-		mockMvc.perform(get("/").with(httpBasic("artem", "artem-pass")).with(from("10.1.0.2")))
+		mockMvc.perform(get("/").with(loggedInAs(ARTEM)).with(from("10.1.0.2")))
 				.andExpect(status().isTooManyRequests());
 	}
 
@@ -75,7 +77,7 @@ class LoginRateLimitTest {
 	void otherAddressesAreNotAffected() throws Exception {
 		wrongBasicLogins("10.1.0.3", 3);
 
-		mockMvc.perform(get("/").with(httpBasic("artem", "artem-pass")).with(from("10.1.0.4")))
+		mockMvc.perform(get("/").with(loggedInAs(ARTEM)).with(from("10.1.0.4")))
 				.andExpect(status().isOk());
 	}
 
@@ -86,7 +88,7 @@ class LoginRateLimitTest {
 					.andExpect(redirectedUrl("/login?error"));
 		}
 
-		mockMvc.perform(formLogin("artem", "artem-pass", "10.1.0.5"))
+		mockMvc.perform(formLogin(ARTEM, password(ARTEM), "10.1.0.5"))
 				.andExpect(status().isTooManyRequests());
 	}
 
@@ -95,7 +97,7 @@ class LoginRateLimitTest {
 		wrongBasicLogins("10.1.0.6", 2);
 		mockMvc.perform(formLogin("artem", "wrong", "10.1.0.6"));
 
-		mockMvc.perform(get("/").with(httpBasic("artem", "artem-pass")).with(from("10.1.0.6")))
+		mockMvc.perform(get("/").with(loggedInAs(ARTEM)).with(from("10.1.0.6")))
 				.andExpect(status().isTooManyRequests());
 	}
 
@@ -110,11 +112,11 @@ class LoginRateLimitTest {
 	@Test
 	void successfulLoginResetsFailures() throws Exception {
 		wrongBasicLogins("10.1.0.8", 2);
-		mockMvc.perform(get("/").with(httpBasic("artem", "artem-pass")).with(from("10.1.0.8")))
+		mockMvc.perform(get("/").with(loggedInAs(ARTEM)).with(from("10.1.0.8")))
 				.andExpect(status().isOk());
 		wrongBasicLogins("10.1.0.8", 2);
 
-		mockMvc.perform(get("/").with(httpBasic("artem", "artem-pass")).with(from("10.1.0.8")))
+		mockMvc.perform(get("/").with(loggedInAs(ARTEM)).with(from("10.1.0.8")))
 				.andExpect(status().isOk());
 	}
 }
