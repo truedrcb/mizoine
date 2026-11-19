@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-19): steps 0–25 done (384 tests green). All planned steps are done; see "Open decisions" for follow-ups.
+**Status** (updated: 2026-11-19): steps 0–27 done (393 tests green). All planned steps are done; see "Open decisions" for follow-ups.
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -519,6 +519,25 @@ Replaces the "ok" page of step 18 for folders. Also: replace the temporary test 
   - `TestUsers` (names, `password(user)`, `loggedInAs(user)` for MockMvc, `basicAuthHeader(user)`) and `TestHttp` (requests to the real test server) instead of credentials and `HttpClient`/Base64 code in many classes; `ProxyHttp` builds on `TestHttp`.
   - `OpenApiDocumentationTest` reduced to smoke tests (requested): title and common description, every endpoint has a summary, the file is written. Details are reviewed in `docs/openapi.yaml`; CLAUDE.md updated.
   - `FaviconTest` reduced to `/favicon.ico` itself; the general rules for `/ui/**` are in `UiResourcesTest`.
+
+### 26. Files in the folder listing  ☑
+*Requested 2026-11-19:* show files too, not only folders.
+- **Red:**
+  - `RepositoryPathsTest`: `childFiles` lists only regular files, sorted, without hidden names (`.` or `%`), without links leading outside the root or to hidden files; links inside work; nothing for missing or unsafe folders.
+  - `RepositoryAccessTest`: `visibleFiles` — all files inside a granted folder, none above one (D4: only the way down), none outside the grants, never hidden ones.
+  - `RepositoryListingTest`: JSON has `files` next to `folders`; for `guest` no files at `/` and `projects/`, the files of `projects/shared/`; HTML shows file names as text without links (escaped); "Empty folder." only when there are neither.
+  - `RepositoriesExampleTest`: the README's curl example (`projects/` has `README.md`).
+- **Green:** `RepositoryPaths.childFiles` (same checks as folders: `children(...)` with the kind of entry), `RepositoryAccess.visibleFiles`, `FolderListing.files`, `folder.html`.
+- *Decided:* files are names only, no links: they cannot be opened yet, and a link would lead to 404. JSON gets a new field `files`; `folders` is unchanged, so existing clients keep working.
+
+### 27. File names with non-ASCII characters  ☑
+*Reported 2026-11-19:* the browser showed `Ru��cksendeportal - Statusverfolgung.pdf` instead of `Rücksendeportal - Statusverfolgung.pdf`.
+- **Cause** (reproduced with the jar): Java decodes file names with the charset of the process locale (`sun.jnu.encoding`), not `file.encoding` (UTF-8 by default since Java 18). Started without a UTF-8 locale (`LANG=POSIX` or none, typical for services), it is `ANSI_X3.4-1968`: every non-ASCII byte becomes `�`. The name was decomposed (NFD, `u` + combining diaeresis, as macOS writes it), hence `Ru` + two `�`. `-Dsun.jnu.encoding=UTF-8` is ignored. HTML and JSON were correct.
+- **Fix:** run with a UTF-8 locale (`LANG=C.UTF-8`; systemd: `Environment=LANG=C.UTF-8`); the application itself cannot change it. Documented in the README; start script `docs/mizoine.sh` sets `LANG=C.UTF-8` and removes `LC_ALL`/`LC_CTYPE`, which would override it.
+- A startup warning (`FileNameEncoding` with its test) was added first and removed again on request: the documentation and the start script are enough.
+- Guard: `RepositoryListingTest.nonAsciiFileNamesStayAsTheyAreOnDisk` (an NFD name comes out unchanged in JSON and HTML).
+- **Checked live:** with `LANG=POSIX` the names are broken; with `LANG=C.UTF-8` both NFD and NFC names are correct. `docs/mizoine.sh` from an empty environment with `LC_ALL=POSIX`: names correct; without a jar it stops with a message; of several jars it takes the newest (`sort -V`: 1.0.10 after 1.0.9).
+- *Not changed:* names are not normalized (NFD stays NFD): plain files are the source of truth, and browsers show both forms the same.
 
 ---
 

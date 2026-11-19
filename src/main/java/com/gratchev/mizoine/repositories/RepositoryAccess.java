@@ -65,6 +65,17 @@ public final class RepositoryAccess {
 				.toList();
 	}
 
+	/**
+	 * @param files names of the files in {@code folder}, in the order to keep
+	 * @return those the user may see: all inside a granted folder, none above one (only the way down, D4)
+	 */
+	public List<String> visibleFiles(final List<String> folder, final List<String> files) {
+		if (!canEnter(folder) || grants.stream().noneMatch(grant -> startsWith(folder, grant.segments()))) {
+			return List.of();
+		}
+		return files.stream().filter(file -> !FolderNames.isHidden(file)).toList();
+	}
+
 	private static boolean startsWith(final List<String> path, final List<String> prefix) {
 		return path.size() >= prefix.size() && path.subList(0, prefix.size()).equals(prefix);
 	}

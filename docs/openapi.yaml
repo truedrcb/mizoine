@@ -42,10 +42,11 @@ paths:
       tags:
       - Repositories
       summary: Folder of a repository
-      description: "Lists the subfolders of a folder that the user may see, sorted\
-        \ by name: an HTML page with links (default), or JSON when asked for. Folder\
-        \ URLs end with '/'; without it the server redirects. Files and hidden folders\
-        \ (starting with '.' or containing '%') are not listed."
+      description: "Lists the subfolders and files of a folder that the user may see,\
+        \ sorted by name: an HTML page (default; folders as links, files as names),\
+        \ or JSON when asked for. Folder URLs end with '/'; without it the server\
+        \ redirects. Hidden folders and files (starting with '.' or containing '%')\
+        \ are not listed; above a granted folder only the way down is shown, no files."
       operationId: folder
       parameters:
       - name: repository
@@ -62,7 +63,7 @@ paths:
           type: string
       responses:
         "200":
-          description: The folder page (HTML) or its subfolders (JSON)
+          description: The folder page (HTML) or its subfolders and files (JSON)
           content:
             text/html: {}
             application/json:
@@ -121,6 +122,10 @@ components:
         path:
           type: string
         folders:
+          type: array
+          items:
+            type: string
+        files:
           type: array
           items:
             type: string

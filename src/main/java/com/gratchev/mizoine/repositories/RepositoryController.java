@@ -1,6 +1,7 @@
 package com.gratchev.mizoine.repositories;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.security.Principal;
 import java.util.Arrays;
 import java.util.List;
@@ -29,7 +30,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 
 /**
- * {@code /{repository}/…/}: the subfolders of a repository folder, as HTML (default) or JSON (D6).
+ * {@code /{repository}/…/}: the subfolders and files of a repository folder, as HTML (default) or JSON (D6).
  * <p>
  * Unknown repository, unreadable repository file, no grant, a folder the user may not see and a folder
  * that does not exist all give the same 404 (D2, D7). A readable file with problems gives 500; the details
@@ -45,11 +46,11 @@ class RepositoryController {
 
 	// HTML and JSON on one URL: documented once, see ApiTexts
 	private static final String SUMMARY = "Folder of a repository";
-	private static final String DESCRIPTION = "Lists the subfolders of a folder that the user may see, sorted by "
-			+ "name: an HTML page with links (default), or JSON when asked for. Folder URLs end with '/'; "
-			+ "without it the server redirects. Files and hidden folders (starting with '.' or containing '%') are not "
-			+ "listed.";
-	private static final String OK = "The folder page (HTML) or its subfolders (JSON)";
+	private static final String DESCRIPTION = "Lists the subfolders and files of a folder that the user may see, "
+			+ "sorted by name: an HTML page (default; folders as links, files as names), or JSON when asked for. "
+			+ "Folder URLs end with '/'; without it the server redirects. Hidden folders and files (starting with '.' "
+			+ "or containing '%') are not listed; above a granted folder only the way down is shown, no files.";
+	private static final String OK = "The folder page (HTML) or its subfolders and files (JSON)";
 	private static final String REDIRECT = "Folder URL without trailing slash: redirect to the same URL with '/' "
 			+ "(only for folders the user may see); or " + ApiTexts.LOGIN_REDIRECT;
 	private static final String NOT_FOUND = "Unknown repository or folder, or no access to it — deliberately "
@@ -173,9 +174,12 @@ class RepositoryController {
 	}
 
 	private static FolderListing listing(final Target target) {
-		final List<String> children = RepositoryPaths.childFolders(target.config().root(), target.segments());
-		final String path = target.segments().isEmpty() ? "/" : "/" + String.join("/", target.segments()) + "/";
-		return new FolderListing(target.config().name(), path, target.access().visibleChildren(target.segments(), children));
+		final Path root = target.config().root();
+		final List<String> segments = target.segments();
+		final String path = segments.isEmpty() ? "/" : "/" + String.join("/", segments) + "/";
+		return new FolderListing(target.config().name(), path,
+				target.access().visibleChildren(segments, RepositoryPaths.childFolders(root, segments)),
+				target.access().visibleFiles(segments, RepositoryPaths.childFiles(root, segments)));
 	}
 
 	private static RepositoryProblem problem(final Target target) {

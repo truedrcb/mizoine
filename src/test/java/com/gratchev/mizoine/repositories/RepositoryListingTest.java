@@ -51,6 +51,12 @@ class RepositoryListingTest {
 				Files.createDirectories(tree.resolve(folder));
 			}
 			Files.writeString(tree.resolve("file.txt"), "not a folder");
+			Files.writeString(tree.resolve(".secret"), "hidden file");
+			Files.writeString(tree.resolve("projects/plan.md"), "above the guest's grant");
+			Files.writeString(tree.resolve("projects/shared/notes.md"), "inside the guest's grant");
+			Files.writeString(tree.resolve("projects/shared/a <b>.md"), "special name");
+			// "ü" decomposed (NFD, as macOS writes names): u + combining diaeresis
+			Files.writeString(tree.resolve("public/Ru\u0308cksendeportal.pdf"), "non-ASCII name");
 			Files.writeString(base.resolve("tree.yaml"), """
 					path: tree
 					access:
@@ -93,7 +99,7 @@ class RepositoryListingTest {
 	// 1. JSON
 
 	@Test
-	void rootAsJsonListsSubfoldersSortedWithoutFilesAndHiddenFolders() throws Exception {
+	void rootAsJsonListsSubfoldersAndFilesSortedWithoutHiddenOnes() throws Exception {
 		mockMvc.perform(json("/tree/", "artem"))
 				.andExpect(status().isOk())
 				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
@@ -101,7 +107,8 @@ class RepositoryListingTest {
 				.andExpect(jsonPath("$.path").value("/"))
 				// "50%" is hidden: an encoded '%' is rejected by Spring Security's firewall
 				.andExpect(jsonPath("$.folders", contains(
-						"a <b>", "hash#", "private", "projects", "public", "with space", "Ünïcode")));
+						"a <b>", "hash#", "private", "projects", "public", "with space", "Ünïcode")))
+				.andExpect(jsonPath("$.files", contains("file.txt")));
 	}
 
 	// 3. deeper
@@ -114,10 +121,13 @@ class RepositoryListingTest {
 	}
 
 	@Test
-	void folderWithoutSubfoldersHasAnEmptyList() throws Exception {
+	void emptyFolderHasEmptyLists() throws Exception {
 		mockMvc.perform(json("/tree/projects/shared/deep/", "artem"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.folders", empty()));
+				.andExpect(jsonPath("$.folders", empty()))
+				.andExpect(jsonPath("$.files", empty()));
+		mockMvc.perform(folder("/tree/projects/shared/deep/", "artem"))
+				.andExpect(content().string(containsString("Empty folder.")));
 	}
 
 	// 2. HTML
@@ -133,6 +143,24 @@ class RepositoryListingTest {
 	}
 
 	@Test
+	void htmlShowsFilesAsTextWithoutLinks() throws Exception {
+		// files cannot be opened yet: no links that would only lead to 404
+		mockMvc.perform(folder("/tree/projects/shared/", "artem"))
+				.andExpect(content().string(containsString("<li>notes.md</li>")))
+				.andExpect(content().string(containsString("<li>a &lt;b&gt;.md</li>")))
+				.andExpect(content().string(not(containsString("href=\"notes.md"))))
+				.andExpect(content().string(not(containsString("Empty folder."))));
+	}
+
+	@Test
+	void nonAsciiFileNamesStayAsTheyAreOnDisk() throws Exception {
+		mockMvc.perform(json("/tree/public/", "artem"))
+				.andExpect(jsonPath("$.files", contains("Ru\u0308cksendeportal.pdf")));
+		mockMvc.perform(folder("/tree/public/", "artem"))
+				.andExpect(content().string(containsString("<li>Ru\u0308cksendeportal.pdf</li>")));
+	}
+
+	@Test
 	void rootHasNoParentLinkButALinkToTheStartPage() throws Exception {
 		mockMvc.perform(folder("/tree/", "artem"))
 				.andExpect(content().string(not(containsString("<a href=\"../\">"))))
@@ -144,11 +172,14 @@ class RepositoryListingTest {
 	@Test
 	void partialUserSeesOnlyTheWayToTheGrantedFolders() throws Exception {
 		mockMvc.perform(json("/tree/", "guest"))
-				.andExpect(jsonPath("$.folders", contains("projects", "public")));
+				.andExpect(jsonPath("$.folders", contains("projects", "public")))
+				.andExpect(jsonPath("$.files", empty()));
 		mockMvc.perform(json("/tree/projects/", "guest"))
-				.andExpect(jsonPath("$.folders", contains("shared")));
+				.andExpect(jsonPath("$.folders", contains("shared")))
+				.andExpect(jsonPath("$.files", empty()));
 		mockMvc.perform(json("/tree/projects/shared/", "guest"))
-				.andExpect(jsonPath("$.folders", contains("deep")));
+				.andExpect(jsonPath("$.folders", contains("deep")))
+				.andExpect(jsonPath("$.files", contains("a <b>.md", "notes.md")));
 	}
 
 	@Test

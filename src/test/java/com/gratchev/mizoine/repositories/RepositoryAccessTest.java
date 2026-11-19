@@ -139,6 +139,39 @@ class RepositoryAccessTest {
 		assertThat(access.canEnter(folder("Public"))).isFalse();
 	}
 
+	// files
+
+	@Test
+	void filesInsideAGrantedFolderAreVisible() {
+		final RepositoryAccess access = access(repository("guest", "projects/shared"), "guest");
+
+		assertThat(access.visibleFiles(folder("projects/shared"), List.of("a.md", "b.md"))).containsExactly("a.md", "b.md");
+		assertThat(access.visibleFiles(folder("projects/shared/deep"), List.of("c.md"))).containsExactly("c.md");
+	}
+
+	@Test
+	void filesAboveAGrantedFolderAreNotVisible() {
+		// only the way down is shown there (D4)
+		final RepositoryAccess access = access(repository("guest", "projects/shared"), "guest");
+
+		assertThat(access.visibleFiles(ROOT, List.of("readme.md"))).isEmpty();
+		assertThat(access.visibleFiles(folder("projects"), List.of("plan.md"))).isEmpty();
+	}
+
+	@Test
+	void filesOutsideTheGrantsAreNotVisible() {
+		final RepositoryAccess access = access(repository("guest", "public"), "guest");
+
+		assertThat(access.visibleFiles(folder("private"), List.of("secret.md"))).isEmpty();
+	}
+
+	@Test
+	void hiddenFilesAreNeverVisible() {
+		final RepositoryAccess access = access(repository("artem", "/"), "artem");
+
+		assertThat(access.visibleFiles(ROOT, List.of(".gitignore", "notes.md", "100%.md"))).containsExactly("notes.md");
+	}
+
 	// hidden folders (D3)
 
 	@Test

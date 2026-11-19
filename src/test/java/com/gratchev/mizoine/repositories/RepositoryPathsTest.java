@@ -159,4 +159,34 @@ class RepositoryPathsTest {
 	void childFoldersOfASubfolder() {
 		assertThat(RepositoryPaths.childFolders(root, segments("a"))).containsExactly("b");
 	}
+
+	// files, with the same rules
+
+	@Test
+	void childFilesAreOnlySafeVisibleRegularFilesSortedByName() throws IOException {
+		Files.writeString(root.resolve("readme.md"), "x");
+		Files.writeString(root.resolve("B.txt"), "x");
+		Files.writeString(root.resolve(".gitignore"), "x");
+		Files.writeString(root.resolve("50%.txt"), "x");
+		Files.writeString(root.resolve(".git/config"), "x");
+		Files.writeString(outside.resolve("passwords.txt"), "x");
+		Files.createSymbolicLink(root.resolve("leak.txt"), outside.resolve("passwords.txt"));
+		Files.createSymbolicLink(root.resolve("config"), root.resolve(".git/config"));
+		Files.createSymbolicLink(root.resolve("alias.txt"), root.resolve("a/file.txt"));
+
+		assertThat(RepositoryPaths.childFiles(root, segments())).containsExactly("B.txt", "alias.txt", "readme.md");
+	}
+
+	@Test
+	void childFilesOfASubfolder() {
+		assertThat(RepositoryPaths.childFiles(root, segments("a"))).containsExactly("file.txt");
+	}
+
+	@Test
+	void childFilesOfAnUnsafeOrMissingFolderAreEmpty() {
+		assertThat(RepositoryPaths.childFiles(root, segments(".git"))).isEmpty();
+		assertThat(RepositoryPaths.childFiles(root, segments(".."))).isEmpty();
+		assertThat(RepositoryPaths.childFiles(root, segments("nothing"))).isEmpty();
+		assertThat(RepositoryPaths.childFiles(root, segments("a", "file.txt"))).isEmpty();
+	}
 }

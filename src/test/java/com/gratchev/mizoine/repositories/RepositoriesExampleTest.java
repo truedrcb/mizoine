@@ -51,5 +51,7 @@ class RepositoriesExampleTest {
 		assertThat(alice.isWholeRepository()).isTrue();
 		assertThat(RepositoryPaths.childFolders(notes.root(), List.of())).containsExactly("projects", "public");
 		assertThat(RepositoryPaths.childFolders(notes.root(), List.of("projects"))).containsExactly("shared");
+		// the curl example in the README
+		assertThat(RepositoryPaths.childFiles(notes.root(), List.of("projects"))).containsExactly("README.md");
 	}
 }

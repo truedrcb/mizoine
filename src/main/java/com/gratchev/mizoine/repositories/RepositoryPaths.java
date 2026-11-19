@@ -5,14 +5,17 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 /**
- * Turns folder segments (from a URL) into real paths below a repository root — never outside it.
+ * Turns folder segments (from a URL) into real paths below a repository root — never outside it — and lists
+ * the subfolders and files there by the same rules.
  * <ul>
  * <li>Segments must be plain names ({@link FolderNames}): no hidden names (D3), {@code .}, {@code ..},
  * empty names, separators or NUL.</li>
  * <li>Symbolic links are resolved; a link whose target is outside the root, or hidden, counts as not existing.</li>
+ * <li>Files are regular files only (no devices, sockets, ...).</li>
  * </ul>
  */
 public final class RepositoryPaths {
@@ -31,7 +34,7 @@ public final class RepositoryPaths {
 			for (final String segment : segments) {
 				path = path.resolve(segment);
 			}
-			return safeFolder(realRoot, path);
+			return safe(realRoot, path, Files::isDirectory);
 		} catch (final IOException e) {
 			return Optional.empty();
 		}
@@ -39,6 +42,15 @@ public final class RepositoryPaths {
 
 	/** @return names of the visible subfolders, sorted; empty if the folder is not reachable */
 	public static List<String> childFolders(final Path root, final List<String> segments) {
+		return children(root, segments, Files::isDirectory);
+	}
+
+	/** @return names of the visible regular files, sorted; empty if the folder is not reachable */
+	public static List<String> childFiles(final Path root, final List<String> segments) {
+		return children(root, segments, Files::isRegularFile);
+	}
+
+	private static List<String> children(final Path root, final List<String> segments, final Predicate<Path> kind) {
 		final Optional<Path> folder = resolveFolder(root, segments);
 		if (folder.isEmpty()) {
 			return List.of();
@@ -47,7 +59,7 @@ public final class RepositoryPaths {
 			final Path realRoot = root.toRealPath();
 			return entries
 					.filter(entry -> FolderNames.isPlain(entry.getFileName().toString()))
-					.filter(entry -> safeFolder(realRoot, entry).isPresent())
+					.filter(entry -> safe(realRoot, entry, kind).isPresent())
 					.map(entry -> entry.getFileName().toString())
 					.sorted()
 					.toList();
@@ -56,10 +68,11 @@ public final class RepositoryPaths {
 		}
 	}
 
-	private static Optional<Path> safeFolder(final Path realRoot, final Path path) {
+	/** @return the real path, if it is inside the root, not hidden and of the given kind (folder or file) */
+	private static Optional<Path> safe(final Path realRoot, final Path path, final Predicate<Path> kind) {
 		try {
 			final Path real = path.toRealPath();
-			if (!real.startsWith(realRoot) || !Files.isDirectory(real)) {
+			if (!real.startsWith(realRoot) || !kind.test(real)) {
 				return Optional.empty();
 			}
 			// the real target must not be hidden either (e.g. a link "git" -> ".git")
