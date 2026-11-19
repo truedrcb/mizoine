@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-19): steps 0–22 done (334 tests green). All planned steps are done; see "Open decisions" for follow-ups.
+**Status** (updated: 2026-11-19): steps 0–22 done (344 tests green). All planned steps are done; see "Open decisions" for follow-ups.
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -278,7 +278,11 @@ browser ──HTTPS──▶ nginx (TLS, certificates) ──HTTP──▶ 127.0
   - Live test found the first rate limit too strict (it also counted loading the login page). Now only `POST /login` counts: 10/min per address, burst 5. Retested: 15 page loads pass; 6 quick wrong logins pass, then 429.
   - `X-Forwarded-For` is overwritten with `$remote_addr`, not appended: otherwise a client could put a fake private address in it, which Tomcat would skip as a "proxy".
   - Not limited by nginx: password guessing over HTTP Basic (any path). *Done in step 13 (in the application).*
-- *Bug fix 2026-11-19:* behind Cloudflare → nginx with a custom domain, users were redirected to `https://localhost/login`. Tomcat made every redirect absolute from the `Host` header the proxy sent (Spring Boot turns Tomcat's relative redirects off). Reproduced in `ReverseProxyTest` with a proxy that sends no `X-Forwarded-Host` (→ `https://127.0.0.1/login`, also for folder redirects). Fix: `server.tomcat.use-relative-redirects: true`, so `Location` is `/login` and the browser stays on the host it used. 12.1 now requires exactly `/login`.
+- *Bug fix 2026-11-19:* behind Cloudflare → nginx with a custom domain, users were redirected to `https://localhost/login`. Tomcat makes every `sendRedirect` absolute from the `Host` header, and nginx with a minimal config (`proxy_pass http://localhost:12013;`) sends `Host: localhost:12013`; `X-Forwarded-Proto: https` came from Cloudflare.
+  - First attempt `server.tomcat.use-relative-redirects: true` did not help: Tomcat ignores it for HTTP/1.0, and nginx talks HTTP/1.0 to the application by default. Found by running the user's nginx config locally; removed again.
+  - Fix: Spring's `RelativeRedirectFilter` (first filter, status 302) sets `Location` itself, so Tomcat cannot rewrite it. After login Spring Security returns to the saved page with its full URL; `RelativeRedirectStrategy` keeps only path and query (also no redirect to another host).
+  - Tests: `ReverseProxyTest` over HTTP/1.0 with a raw socket (`HttpClient` cannot do HTTP/1.0) and without `X-Forwarded-Host`; `SecurityIntegrationTest.formLoginReturnsToSavedPageWithRelativeUrl`; `RelativeRedirectStrategyTest`. 12.1 now requires exactly `/login`.
+  - Live with the user's nginx config: `/login`, `/?continue`, `/login?logout`, `/login?error` — all relative.
 
 ### 13. Limit failed logins (HTTP Basic and form)  ☑
 *Requested 2026-11-16, follow-up of step 12.* nginx cannot do it for HTTP Basic: a valid client sends credentials with every request, and nginx does not know which attempts failed.

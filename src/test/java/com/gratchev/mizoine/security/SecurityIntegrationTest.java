@@ -103,6 +103,23 @@ class SecurityIntegrationTest {
 				.andExpect(authenticated().withUsername("artem").withRoles("USER"));
 	}
 
+	/**
+	 * After login the browser goes back to the page it first asked for, relative to the host it used
+	 * (bug: https://localhost/?continue behind Cloudflare → nginx, which did not pass the public host on).
+	 */
+	@Test
+	void formLoginReturnsToSavedPageWithRelativeUrl() throws Exception {
+		final MockHttpSession session = (MockHttpSession) mockMvc
+				.perform(get("/notes/projects/").queryParam("q", "a b").accept(MediaType.TEXT_HTML))
+				.andExpect(redirectedUrl("/login"))
+				.andReturn().getRequest().getSession();
+
+		mockMvc.perform(post("/login").param("username", "artem").param("password", "artem-pass")
+						.with(csrf()).session(session))
+				.andExpect(authenticated())
+				.andExpect(redirectedUrl("/notes/projects/?q=a%20b&continue"));
+	}
+
 	@Test
 	void formLoginWithWrongPasswordReturnsToLoginWithError() throws Exception {
 		mockMvc.perform(formLogin().user("artem").password("wrong"))

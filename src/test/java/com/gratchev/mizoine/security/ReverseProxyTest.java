@@ -56,6 +56,21 @@ class ReverseProxyTest {
 		assertThat(response.headers().firstValue("Location")).hasValue("/notes/");
 	}
 
+	/**
+	 * nginx talks HTTP/1.0 to the application unless {@code proxy_http_version 1.1} is set, and Tomcat makes
+	 * redirects absolute for HTTP/1.0 whatever {@code server.tomcat.use-relative-redirects} says
+	 * (bug: still https://localhost/login behind Cloudflare → nginx).
+	 */
+	@Test
+	void redirectToLoginIsRelativeForHttp10Proxy() throws Exception {
+		assertThat(http.locationViaHttp10Proxy("/", null)).hasValue("/login");
+	}
+
+	@Test
+	void folderRedirectIsRelativeForHttp10Proxy() throws Exception {
+		assertThat(http.locationViaHttp10Proxy("/notes", "artem:artem-pass")).hasValue("/notes/");
+	}
+
 	@Test
 	void httpsRequestGetsHsts() throws Exception {
 		final HttpResponse<String> response = http.getViaHttpsProxy("/login");
