@@ -16,7 +16,8 @@ import org.springframework.core.env.Environment;
  * {@code X-Forwarded-*} headers. Needs a real server: Tomcat evaluates these headers.
  */
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT,
-		properties = "mizoine.users-file=src/test/resources/users-test.yaml")
+		properties = {"mizoine.users-file=src/test/resources/users-test.yaml",
+		"mizoine.repositories-dir=src/test/resources/repositories"})
 class ReverseProxyTest {
 
 	private final ProxyHttp http;
@@ -32,8 +33,27 @@ class ReverseProxyTest {
 		final HttpResponse<String> response = http.getViaHttpsProxy("/");
 
 		assertThat(response.statusCode()).isEqualTo(302);
-		assertThat(response.headers().firstValue("Location")).hasValueSatisfying(location -> assertThat(location)
-				.isIn("/login", "https://example.org/login"));
+		assertThat(response.headers().firstValue("Location")).hasValue("/login");
+	}
+
+	/**
+	 * Redirects are relative, so the browser stays on the host it used, even if the proxy does not pass
+	 * the public host name on (bug: Cloudflare → nginx → app redirected to https://localhost/login).
+	 */
+	@Test
+	void redirectToLoginIsRelativeWithoutForwardedHost() throws Exception {
+		final HttpResponse<String> response = http.getViaHttpsProxyWithoutHost("/", null);
+
+		assertThat(response.statusCode()).isEqualTo(302);
+		assertThat(response.headers().firstValue("Location")).hasValue("/login");
+	}
+
+	@Test
+	void folderRedirectIsRelativeWithoutForwardedHost() throws Exception {
+		final HttpResponse<String> response = http.getViaHttpsProxyWithoutHost("/notes", "artem:artem-pass");
+
+		assertThat(response.statusCode()).isEqualTo(302);
+		assertThat(response.headers().firstValue("Location")).hasValue("/notes/");
 	}
 
 	@Test

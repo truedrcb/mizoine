@@ -11,6 +11,10 @@ server:
   # Trust X-Forwarded-Proto/Host/For from nginx. Tomcat accepts them only from internal addresses
   # (server.tomcat.remoteip.internal-proxies, default: loopback and private networks).
   forward-headers-strategy: native
+  tomcat:
+    # Location: /login, not https://<host>/login. The browser stays on the host it used, even when a proxy
+    # (nginx, Cloudflare tunnel) does not pass the public host name on.
+    use-relative-redirects: true
   servlet:
     session:
       cookie:

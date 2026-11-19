@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-18): steps 0–22 done (332 tests green). All planned steps are done; see "Open decisions" for follow-ups.
+**Status** (updated: 2026-11-19): steps 0–22 done (334 tests green). All planned steps are done; see "Open decisions" for follow-ups.
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -271,13 +271,14 @@ browser ──HTTPS──▶ nginx (TLS, certificates) ──HTTP──▶ 127.0
 - *Done, with findings:*
   - Red showed the real problem: without the setting, a browser behind nginx was redirected to `http://127.0.0.1:<port>/login`.
   - Test 4 solved in `UntrustedProxyTest`: trusted proxies narrowed to `192.0.2.1/32`, so the test client on 127.0.0.1 is untrusted → forwarded `https` is ignored (no HSTS, cookie not `Secure`).
-  - 12.1 accepts both `/login` and `https://example.org/login` (it is absolute in practice).
+  - 12.1 accepted both `/login` and `https://example.org/login` (it was absolute in practice; relative since the bug fix below).
   - Boot 4 writes `server.tomcat.remoteip.internal-proxies` as CIDR (default: loopback and private networks).
   - "Secure" on the session cookie needs no setting: Tomcat adds it for HTTPS requests.
   - `docs/nginx.conf.example` tested live: nginx 1.28 unpacked without root (`apt-get download`), self-signed certificate, the example with only ports, paths and name replaced. `nginx -t` ok; HTTP→HTTPS 301; anonymous → `https://…/login`; HSTS; cookie `Secure; HttpOnly; SameSite=Lax`; form login with CSRF and HTTP Basic work; app not reachable on the LAN address.
   - Live test found the first rate limit too strict (it also counted loading the login page). Now only `POST /login` counts: 10/min per address, burst 5. Retested: 15 page loads pass; 6 quick wrong logins pass, then 429.
   - `X-Forwarded-For` is overwritten with `$remote_addr`, not appended: otherwise a client could put a fake private address in it, which Tomcat would skip as a "proxy".
   - Not limited by nginx: password guessing over HTTP Basic (any path). *Done in step 13 (in the application).*
+- *Bug fix 2026-11-19:* behind Cloudflare → nginx with a custom domain, users were redirected to `https://localhost/login`. Tomcat made every redirect absolute from the `Host` header the proxy sent (Spring Boot turns Tomcat's relative redirects off). Reproduced in `ReverseProxyTest` with a proxy that sends no `X-Forwarded-Host` (→ `https://127.0.0.1/login`, also for folder redirects). Fix: `server.tomcat.use-relative-redirects: true`, so `Location` is `/login` and the browser stays on the host it used. 12.1 now requires exactly `/login`.
 
 ### 13. Limit failed logins (HTTP Basic and form)  ☑
 *Requested 2026-11-16, follow-up of step 12.* nginx cannot do it for HTTP Basic: a valid client sends credentials with every request, and nginx does not know which attempts failed.
