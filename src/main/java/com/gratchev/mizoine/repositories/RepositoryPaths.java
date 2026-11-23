@@ -40,6 +40,20 @@ public final class RepositoryPaths {
 		}
 	}
 
+	/** @return the real path of an existing regular file inside the root, or empty; never a hidden one */
+	public static Optional<Path> resolveFile(final Path root, final List<String> segments) {
+		if (segments.isEmpty() || !FolderNames.isPlain(segments.getLast())) {
+			return Optional.empty();
+		}
+		final Optional<Path> folder = resolveFolder(root, segments.subList(0, segments.size() - 1));
+		try {
+			final Path realRoot = root.toRealPath();
+			return folder.flatMap(real -> safe(realRoot, real.resolve(segments.getLast()), Files::isRegularFile));
+		} catch (final IOException e) {
+			return Optional.empty();
+		}
+	}
+
 	/** @return names of the visible subfolders, sorted; empty if the folder is not reachable */
 	public static List<String> childFolders(final Path root, final List<String> segments) {
 		return children(root, segments, Files::isDirectory);

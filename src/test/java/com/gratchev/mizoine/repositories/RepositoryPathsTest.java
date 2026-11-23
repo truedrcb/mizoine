@@ -163,6 +163,23 @@ class RepositoryPathsTest {
 	// files, with the same rules
 
 	@Test
+	void fileResolvesToItsRealPath() throws IOException {
+		assertThat(RepositoryPaths.resolveFile(root, segments("a", "file.txt")))
+				.hasValue(root.toRealPath().resolve("a/file.txt"));
+	}
+
+	@Test
+	void notAFileOrNotAllowedIsEmpty() throws IOException {
+		Files.writeString(root.resolve("a/.hidden.txt"), "x");
+		assertThat(RepositoryPaths.resolveFile(root, segments())).isEmpty();
+		assertThat(RepositoryPaths.resolveFile(root, segments("a"))).isEmpty();
+		assertThat(RepositoryPaths.resolveFile(root, segments("a", ".hidden.txt"))).isEmpty();
+		assertThat(RepositoryPaths.resolveFile(root, segments("a", "missing.txt"))).isEmpty();
+		assertThat(RepositoryPaths.resolveFile(root, segments("..", "outside", "secret"))).isEmpty();
+		assertThat(RepositoryPaths.resolveFile(root.resolveSibling("gone"), segments("a", "file.txt"))).isEmpty();
+	}
+
+	@Test
 	void childFilesAreOnlySafeVisibleRegularFilesSortedByName() throws IOException {
 		Files.writeString(root.resolve("readme.md"), "x");
 		Files.writeString(root.resolve("B.txt"), "x");

@@ -166,6 +166,49 @@ class RepositoryAccessTest {
 	}
 
 	@Test
+	void fileIsReadableWhenItWouldBeListed() {
+		final RepositoryAccess access = access(repository("guest", "projects/shared"), "guest");
+
+		assertThat(access.canReadFile(folder("projects/shared/a.md"))).isTrue();
+		assertThat(access.canReadFile(folder("projects/plan.md"))).isFalse();
+		assertThat(access.canReadFile(folder("projects/shared/.hidden"))).isFalse();
+		assertThat(access.canReadFile(ROOT)).isFalse();
+	}
+
+	// writing: inside a granted folder only (folders above a grant stay read-only, D4)
+
+	@Test
+	void writableInsideAGrantedFolder() {
+		final RepositoryAccess access = access(repository("guest", "projects/shared"), "guest");
+
+		assertThat(access.canWriteIn(folder("projects/shared"))).isTrue();
+		assertThat(access.canWriteIn(folder("projects/shared/deep/er"))).isTrue();
+		assertThat(access.canWriteIn(folder("projects"))).isFalse();
+		assertThat(access.canWriteIn(ROOT)).isFalse();
+		assertThat(access.canWriteIn(folder("private"))).isFalse();
+		assertThat(access.canWriteIn(folder("projects/shared/.git"))).isFalse();
+	}
+
+	@Test
+	void theTopOfAGrantIsKnown() {
+		// such a folder cannot be deleted by the user: it would remove the grant's place (step 32)
+		final RepositoryAccess access = access(repository("guest", "projects/shared"), "guest");
+
+		assertThat(access.isGrantedFolder(folder("projects/shared"))).isTrue();
+		assertThat(access.isGrantedFolder(folder("projects/shared/deep"))).isFalse();
+		assertThat(access(repository("artem", "/"), "artem").isGrantedFolder(ROOT)).isTrue();
+	}
+
+	@Test
+	void wholeRepositoryIsWritableExceptHiddenFolders() {
+		final RepositoryAccess access = access(repository("artem", "/"), "artem");
+
+		assertThat(access.canWriteIn(ROOT)).isTrue();
+		assertThat(access.canWriteIn(folder(".git"))).isFalse();
+		assertThat(access.canWriteIn(folder("a/100%"))).isFalse();
+	}
+
+	@Test
 	void hiddenFilesAreNeverVisible() {
 		final RepositoryAccess access = access(repository("artem", "/"), "artem");
 

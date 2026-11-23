@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.util.unit.DataSize;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -50,6 +51,20 @@ class MizoinePropertiesTest {
 		runner.withPropertyValues("mizoine.users-file=users.yaml", "mizoine.repositories-dir=/srv/repositories")
 				.run(context -> assertThat(context.getBean(MizoineProperties.class).repositoriesDirPath())
 						.isEqualTo(Path.of("/srv/repositories")));
+	}
+
+	@Test
+	void maxFileSizeIs100MegabytesByDefault() {
+		runner.withPropertyValues("mizoine.users-file=users.yaml")
+				.run(context -> assertThat(context.getBean(MizoineProperties.class).maxFileSize())
+						.isEqualTo(DataSize.ofMegabytes(100)));
+	}
+
+	@Test
+	void bindsMaxFileSize() {
+		runner.withPropertyValues("mizoine.users-file=users.yaml", "mizoine.max-file-size=1GB")
+				.run(context -> assertThat(context.getBean(MizoineProperties.class).maxFileSize())
+						.isEqualTo(DataSize.ofGigabytes(1)));
 	}
 
 	@Test

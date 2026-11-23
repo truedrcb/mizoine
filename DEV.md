@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-19): steps 0–27 done (393 tests green). Steps 28–39 planned (files: read and write; MCP access for agents; browser UI, text editor; Markdown page, step 38 right after 28). Decided: T1 REST, T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 later (textarea first), D14, D15. Open: T3.2, D10–D13, D16–D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-23): steps 0–32 done (515 tests green; T1, the file API, complete). Steps 33–39 planned (MCP access for agents; browser UI, text editor; Markdown page, step 38, can follow now). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 later (textarea first), D10–D15. Open: T3.2, D16–D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -555,7 +555,7 @@ Rules for all of them:
 - every endpoint annotated for OpenAPI (smoke test in `OpenApiDocumentationTest`);
 - writes never touch `.git` or any hidden name.
 
-### 28. Download a file  ☐
+### 28. Download a file  ☑
 `GET /{repository}/{path}` without trailing slash: a file → its content, a folder → redirect to `…/` (as now).
 - **Red:**
   1. `GET` of a granted file → 200, the exact bytes, `Content-Type` from the file name (unknown → `application/octet-stream`).
@@ -565,15 +565,30 @@ Rules for all of them:
   5. Non-ASCII and special names (`a <b>.md`, `Rücksendeportal.pdf` in NFD) download by their encoded URL.
 - **Green:** in `RepositoryController`: return a `Resource` (Spring gives `Range` and `HEAD`); `RepositoryPaths.resolveFile` with the same checks as folders.
 - The HTML listing links file names (removes the "names only" decision of step 26).
+- *Done 2026-11-23 (ub-mode), with findings:*
+  - **Redesign of the controller:** `Target` is now a sealed type (`Problem`, `Redirect`, `Folder`, `File`), so each request has exactly one answer; before, a record carried an optional redirect next to the listing data.
+  - **Routing by `Accept`:** the HTML and JSON methods (`produces`) answer for files too: a browser navigates with `text/html`, a JSON client gets the raw `.json`. A third method without `produces` answers every other `Accept` (`image/*`, `text/markdown`, …), for files only; a folder there → 406.
+  - **Types:** Spring's type table has no `.md` and no `.yaml`, so Markdown would always be downloaded. `FileDownload` has its own small table (`md`, `markdown` → `text/markdown`; `yaml`, `yml` → `application/yaml`), then Spring's.
+  - **Inline is an allow-list** (images except SVG, audio, video, PDF, plain text, Markdown, CSV, JSON, YAML); everything else is `attachment`. The file CSP is the application's CSP plus `sandbox` (`SecurityConfig.FILE_CONTENT_SECURITY_POLICY`). Spring Security keeps the header that the controller set (checked live).
+  - **ETag:** strong, from size and modification time in nanoseconds. 304, 206 and `HEAD` come from Spring.
+  - **`HEAD`:** MockMvc does not drop the body (Tomcat does), so the test checks only the headers; the empty body was checked live with `curl -I`.
+  - **Coverage:** JaCoCo 0.8.16 added to the build (`target/site/jacoco/jacoco.xml`, needed for Java 25). Uncovered new lines got behaviour tests. Left uncovered: the `catch` for a file removed between the check and the read (a race, no honest test).
+  - **ub-mode tools** (crapper, dryer, mutator) could not be installed: running them was blocked by the permission system. See "Quality gates (ub-mode)" in CLAUDE.md.
+  - **Live:** the jar with a test repository, `curl -I` and `curl`: `text/markdown`, `inline`, CSP with `sandbox`, `nosniff`, ETag, exact bytes.
 
-### 29. Writing prerequisites: CSRF for API clients, upload size  ☐
+### 29. Writing prerequisites: CSRF for API clients  ☑
 - **Red:**
-  1. `PUT` / `DELETE` with HTTP Basic and without CSRF token are not rejected by CSRF (today: 403).
+  1. `PUT` / `DELETE` with HTTP Basic and without CSRF token are not rejected by CSRF (before: 403).
   2. With a session cookie and without token → 403; with the token in the `X-CSRF-TOKEN` header → passes (D11).
-  3. A body over `mizoine.max-file-size` → 413 before the file is written (D12).
-- **Green:** `SecurityConfig` CSRF rule; size limit while streaming (the `Content-Length` alone cannot be trusted); setting in README.
+  3. `POST` with HTTP Basic and without token → still 403.
+- **Green:** `SecurityConfig.isApiClientWrite`: CSRF is not required for `PUT` / `DELETE` with an `Authorization` header.
+- *Done 2026-11-23 (ub-mode), with findings:*
+  - **`POST` is not exempt:** browsers also send a cached Basic login on cross-site form posts. Only `PUT` and `DELETE` are, which cross-site forms cannot send (and there is no CORS).
+  - **A `PUT` without any credentials** has no `Authorization` header, so CSRF answers first with 403. An API client always sends credentials; with a wrong password it gets 401 (`FileWriteTest`).
+  - **The size limit (planned item 3) moved to step 30:** it needs the `PUT` handler.
+  - `ApiClientCsrfTest` writes to a folder that does not exist (`/notes/no-such-folder/`): requests that pass CSRF get 409 and never write into `src/test/resources`.
 
-### 30. Create or replace a file  ☐
+### 30. Create or replace a file  ☑
 `PUT /{repository}/{path}`; the body is the new content.
 - **Red:**
   1. New file → 201 with `Location` and `ETag`; existing file → 204 with the new `ETag`; content exactly the body bytes.
@@ -582,8 +597,18 @@ Rules for all of them:
   4. Missing parent folder → 409 (D14).
   5. Not writable: hidden names, folders above a grant, outside the grants, `.git/…`, names with `%`, links leading outside the root → 404; a folder at that path → 409.
   6. Works with HTTP Basic (AI agents, curl); HTML page unchanged.
+- *Done 2026-11-23 (ub-mode), with findings:*
+  - **`RepositoryWriter`** does all writes and answers with a sealed result (`Created`, `Replaced`, `PreconditionFailed`, `ParentMissing`, `IsFolder`, `NotFound`, `TooLarge`); `FileWriteController` only maps results to status codes.
+  - **Atomic:** the body is streamed into a hidden temporary file in the target folder (`.mizoine-upload-…`), then moved over the target with `ATOMIC_MOVE`; the temporary file is removed after every outcome, also after a broken upload (tested with a failing stream).
+  - **One writer at a time:** the version check and the move run under one lock, so two clients with the same `If-Match` cannot both win. Editors outside Mizoine cannot be locked; the ETag still sees their changes.
+  - **Size (D12, was item 3 of step 29):** `mizoine.max-file-size`, default 100 MB. A known `Content-Length` over the limit → 413 before reading; otherwise counted while streaming (chunked uploads, checked on a real server in `FileApiServerTest`).
+  - **Permissions:** a replaced file keeps its POSIX permissions; a new one gets the usual ones (umask). A plain temporary file would be readable only by the owner.
+  - **Symbolic links:** a link to a visible file inside the root is written through to that file; any other link → 404.
+  - **Shared pieces** (one decision in one place): `GrantedRepository` (repository + access, or the one 404) and `RepositoryUrls` (path ↔ segments, encoded URLs), used by both controllers.
+  - **Writable** = inside a granted folder and not hidden (`RepositoryAccess.canWriteIn`); folders above a grant stay read-only (D4).
+  - The planned "a reader during the write sees old or new" test was not written: `ATOMIC_MOVE` gives it, and a timing test would be flaky. The no-leftover tests cover what can be checked.
 
-### 31. Create a folder  ☐
+### 31. Create a folder  ☑
 `PUT /{repository}/{path}/` (trailing slash = folder, as in the Solid Protocol; empty body). Folders are created only explicitly (D14).
 - **Red:**
   1. → 201 with `Location`.
@@ -591,8 +616,9 @@ Rules for all of them:
   3. Missing parent → 409 (D14, as WebDAV `MKCOL`). A file at that path → 409.
   4. A body → 415 (as WebDAV `MKCOL`: a folder has no content).
   5. Same "not writable" cases as step 30.
+- *Done 2026-11-23 (ub-mode):* `RepositoryWriter.createFolder` with its own result type (`Created`, `Exists`, `PreconditionFailed`, `ParentMissing`, `FileInTheWay`, `NotFound`). A body, also a chunked one, → 415 (real server). The repository root → 409.
 
-### 32. Delete a file or an empty folder  ☐
+### 32. Delete a file or an empty folder  ☑
 `DELETE /{repository}/{path}`, or `…/` for a folder. Folders are removed only explicitly and only when empty (D15).
 - **Red:**
   1. File → 204; `If-Match` → 412 if it changed.
@@ -601,6 +627,7 @@ Rules for all of them:
   4. The repository root and the top of a grant (the user's own granted folder) → 409.
   5. `DELETE` of a file URL with trailing slash, or of a folder URL without → 404 (the type must match the URL, D5).
   6. Same "not writable" cases as step 30; missing → 404.
+- *Done 2026-11-23 (ub-mode):* `RepositoryWriter.delete` with its own result type (`Deleted`, `NotEmpty`, `PreconditionFailed`, `NotFound`). A symbolic link is removed, never its target (file and folder links tested). The top of a grant is recognized by `RepositoryAccess.isGrantedFolder` → 409, before the write check (which would give 404 there).
 
 ### 33. MCP endpoint for agents  ☐
 T2 decided 2026-11-19: remote MCP in Mizoine, so that Claude (also on the smartphone) and other agents store and retrieve knowledge.
@@ -731,10 +758,10 @@ Proposals; details in [docs/technology-decisions.md](docs/technology-decisions.m
 - **T2 — AI connection:** **Decided 2026-11-19:** remote MCP server in Mizoine (`/mcp`) with OAuth (steps 33–35). Requirement: Claude or another agent on the smartphone stores and retrieves knowledge as a technical agent user limited to a few folders, connected in the most standard and easy way. Only a remote MCP connector reaches smartphone chat apps, and the same connection serves Claude Code. Not chosen: REST + Skill, local MCP program, WebDAV mount.
 - **T3 — UI technology:** **Decided 2026-11-19:** a small library without build step, Preact + htm or Lit, copied into `ui/vendor/` (D26). Not chosen: plain JavaScript modules only; server pages only; htmx; SPA with a Node build.
 - **D26 — Preact + htm or Lit:** *To decide in step 36.* Preact + htm: React-style components and state, ~5 kB. Lit: web components, a browser standard, ~6 kB. Both run without build and under the strict CSP.
-- **D10 — showing files in the browser:** *Proposed:* inline only for types a browser does not execute (images, PDF, plain text, …), always with `CSP: sandbox` and `nosniff`; `attachment` for HTML, SVG, XML, JavaScript and unknown types. Alternative: a separate domain for downloads.
-- **D11 — CSRF for writes:** *Proposed:* token required for session-cookie requests (the UI), not for requests with an `Authorization` header (agents, curl). Cross-site forms cannot send PUT or DELETE, and there is no CORS. Alternative: a token endpoint that API clients must call first.
-- **D12 — maximum file size:** *Proposed:* `mizoine.max-file-size`, default 100 MB (nginx at the server has `client_max_body_size 100M`).
-- **D13 — concurrent changes:** *Proposed:* `ETag` from size and modification time; `If-Match` / `If-None-Match: *` honoured, not required. Alternative: require `If-Match` for every replace (safer, but more work for every client).
+- **D10 — showing files in the browser:** **Implemented 2026-11-23 as proposed (step 28):** inline only for types a browser does not execute (images, PDF, plain text, …), always with `CSP: sandbox` and `nosniff`; `attachment` for HTML, SVG, XML, JavaScript and unknown types. Alternative: a separate domain for downloads.
+- **D11 — CSRF for writes:** **Implemented 2026-11-23 as proposed (step 29), limited to PUT and DELETE:** token required for session-cookie requests (the UI), not for requests with an `Authorization` header (agents, curl). Cross-site forms cannot send PUT or DELETE, and there is no CORS. Alternative: a token endpoint that API clients must call first.
+- **D12 — maximum file size:** **Implemented 2026-11-23 as proposed (step 30):** `mizoine.max-file-size`, default 100 MB (nginx at the server has `client_max_body_size 100M`).
+- **D13 — concurrent changes:** **Implemented 2026-11-23 as proposed (steps 30, 32):** `ETag` from size and modification time; `If-Match` / `If-None-Match: *` honoured, not required. Alternative: require `If-Match` for every replace (safer, but more work for every client).
 - **D14 — missing parent folders:** **Decided 2026-11-19:** 409; folders are created only explicitly (`PUT …/`, step 31). The same rule as WebDAV (`PUT` and `MKCOL` answer 409 when the parent is missing). Not chosen: create parents automatically, as the Solid Protocol does (handier for agents, but a typo creates a new folder tree).
 - **D15 — deleting folders:** **Decided 2026-11-19:** only empty folders; with content → 409, as the Solid Protocol. Not chosen: recursive delete, as WebDAV `DELETE` (one request removes a whole tree; Git keeps the history only of what was committed). If WebDAV is added later, its recursive `DELETE` needs a decision of its own.
 - References for the folder API: WebDAV ([RFC 4918](https://www.rfc-editor.org/rfc/rfc4918)) and the [Solid Protocol](https://solidproject.org/TR/protocol). Mizoine takes from each the part that matches D14 and D15. `PUT …/` instead of WebDAV's own `MKCOL` method: Spring MVC and Spring Security's firewall accept only the standard HTTP methods, and OpenAPI 3.1 cannot describe others. `MKCOL` can be added as an alias when WebDAV comes.

@@ -14,3 +14,9 @@ mizoine.iml
 /users.yaml
 # real repositories folder, if kept in the project (see repositories.example)
 /repositories/
+
+# Quality-gate snapshots of the ub-mode tools (crapper, dryer, mutator)
+/.metrics/
+
+# Claude Code: local settings and skills
+/.claude/

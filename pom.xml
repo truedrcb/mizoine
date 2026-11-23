@@ -20,6 +20,8 @@
 	<properties>
 		<java.version>25</java.version>
 		<checkstyle.version>14.4.0</checkstyle.version>
+		<!-- Java 25 needs JaCoCo 0.8.14 or later -->
+		<jacoco.version>0.8.16</jacoco.version>
 		<!-- OpenAPI: keep in line (springdoc 3.2.0 is built on Spring Boot 4.1.2 and swagger 2.2.55) -->
 		<springdoc.version>3.2.0</springdoc.version>
 		<swagger-annotations.version>2.2.55</swagger-annotations.version>
@@ -123,6 +125,27 @@
 						<phase>validate</phase>
 						<goals>
 							<goal>check</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<!-- Test coverage: target/site/jacoco/jacoco.xml, read by the ub-mode quality gates (CLAUDE.md) -->
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>${jacoco.version}</version>
+				<executions>
+					<execution>
+						<id>prepare-agent</id>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>report</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>report</goal>
 						</goals>
 					</execution>
 				</executions>

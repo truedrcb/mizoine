@@ -11,9 +11,8 @@
 	<ul th:unless="${links.isEmpty()}">
 		<li th:each="link : ${links}"><a th:href="${link.href}" th:text="${link.name}">folder</a></li>
 	</ul>
-	<!-- files cannot be opened yet: names only -->
-	<ul th:unless="${listing.files.isEmpty()}">
-		<li th:each="file : ${listing.files}" th:text="${file}">file</li>
+	<ul th:unless="${fileLinks.isEmpty()}">
+		<li th:each="link : ${fileLinks}"><a th:href="${link.href}" th:text="${link.name}">file</a></li>
 	</ul>
 	<p th:if="${links.isEmpty() and listing.files.isEmpty()}">Empty folder.</p>
 </body>

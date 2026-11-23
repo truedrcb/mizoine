@@ -143,12 +143,11 @@ class RepositoryListingTest {
 	}
 
 	@Test
-	void htmlShowsFilesAsTextWithoutLinks() throws Exception {
-		// files cannot be opened yet: no links that would only lead to 404
+	void htmlLinksFilesToo() throws Exception {
+		// files can be opened since step 28
 		mockMvc.perform(folder("/tree/projects/shared/", "artem"))
-				.andExpect(content().string(containsString("<li>notes.md</li>")))
-				.andExpect(content().string(containsString("<li>a &lt;b&gt;.md</li>")))
-				.andExpect(content().string(not(containsString("href=\"notes.md"))))
+				.andExpect(content().string(containsString("<a href=\"notes.md\">notes.md</a>")))
+				.andExpect(content().string(containsString("<a href=\"a%20%3Cb%3E.md\">a &lt;b&gt;.md</a>")))
 				.andExpect(content().string(not(containsString("Empty folder."))));
 	}
 
@@ -157,7 +156,7 @@ class RepositoryListingTest {
 		mockMvc.perform(json("/tree/public/", "artem"))
 				.andExpect(jsonPath("$.files", contains("Ru\u0308cksendeportal.pdf")));
 		mockMvc.perform(folder("/tree/public/", "artem"))
-				.andExpect(content().string(containsString("<li>Ru\u0308cksendeportal.pdf</li>")));
+				.andExpect(content().string(containsString(">Ru\u0308cksendeportal.pdf</a>")));
 	}
 
 	@Test

@@ -5,6 +5,7 @@ import java.time.Duration;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
+import org.springframework.util.unit.DataSize;
 import org.springframework.validation.annotation.Validated;
 
 import jakarta.validation.Valid;
@@ -23,13 +24,15 @@ import jakarta.validation.constraints.Positive;
  * @param loginLimit limit for failed logins per client address ({@code mizoine.login-limit.*})
  * @param repositoriesDir folder with one {@code <name>.yaml} per repository ({@code mizoine.repositories-dir});
  *            default: the current directory
+ * @param maxFileSize the largest file that can be written over HTTP ({@code mizoine.max-file-size}, D12)
  */
 @Validated
 @ConfigurationProperties("mizoine")
 public record MizoineProperties(
 		@NotBlank(message = "set mizoine.users-file to the path of the users YAML file") String usersFile,
 		@Valid @DefaultValue LoginLimit loginLimit,
-		@NotBlank @DefaultValue(".") String repositoriesDir) {
+		@NotBlank @DefaultValue(".") String repositoriesDir,
+		@NotNull @DefaultValue("100MB") DataSize maxFileSize) {
 
 	/** {@code mizoine.users-file}, relative to the working directory. */
 	public Path usersFilePath() {

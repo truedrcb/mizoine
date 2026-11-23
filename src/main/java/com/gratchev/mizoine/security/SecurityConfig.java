@@ -6,6 +6,7 @@ import java.time.Clock;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
@@ -18,6 +19,7 @@ import com.gratchev.mizoine.MizoineProperties;
 import com.gratchev.mizoine.WebConfig;
 
 import jakarta.servlet.DispatcherType;
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * Everything requires login, except the login page. Browsers get a login form,
@@ -29,8 +31,10 @@ import jakarta.servlet.DispatcherType;
 public class SecurityConfig {
 
 	/** Only own resources, no plugins, no framing, forms post only to this server. */
-	static final String CONTENT_SECURITY_POLICY =
+	public static final String CONTENT_SECURITY_POLICY =
 			"default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
+	/** For repository files (step 28, D10): the same, and never scripts, even in an uploaded HTML or SVG file. */
+	public static final String FILE_CONTENT_SECURITY_POLICY = CONTENT_SECURITY_POLICY + "; sandbox";
 
 	@Bean
 	SecurityFilterChain securityFilterChain(final HttpSecurity http, final LoginAttemptLimiter limiter) {
@@ -46,6 +50,7 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, WebConfig.UI_PATTERN).permitAll()
 						.anyRequest().authenticated())
 				.requestCache(cache -> cache.requestCache(requestCache()))
+				.csrf(csrf -> csrf.ignoringRequestMatchers(SecurityConfig::isApiClientWrite))
 				.formLogin(form -> form.permitAll().successHandler(loginSuccessHandler()))
 				.httpBasic(withDefaults())
 				.logout(logout -> logout.permitAll())
@@ -53,6 +58,17 @@ public class SecurityConfig {
 						.contentSecurityPolicy(csp -> csp.policyDirectives(CONTENT_SECURITY_POLICY))
 						.referrerPolicy(referrer -> referrer.policy(ReferrerPolicy.SAME_ORIGIN)))
 				.build();
+	}
+
+	/**
+	 * D11: PUT or DELETE with an {@code Authorization} header (agents, curl) needs no CSRF token: such clients have
+	 * none, and cross-site forms cannot send these methods (no CORS either). POST is not exempt: browsers also send
+	 * a cached Basic login on cross-site form posts. The browser UI, logged in by session cookie, sends the token.
+	 */
+	static boolean isApiClientWrite(final HttpServletRequest request) {
+		final String method = request.getMethod();
+		return (HttpMethod.PUT.matches(method) || HttpMethod.DELETE.matches(method))
+				&& request.getHeader(HttpHeaders.AUTHORIZATION) != null;
 	}
 
 	/**

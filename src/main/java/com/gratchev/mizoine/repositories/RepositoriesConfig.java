@@ -31,6 +31,12 @@ public class RepositoriesConfig {
 				username -> exists(users, username), properties.usersFilePath());
 	}
 
+	/** One instance: it allows one writer at a time (version check and move). */
+	@Bean
+	RepositoryWriter repositoryWriter() {
+		return new RepositoryWriter();
+	}
+
 	private static boolean exists(final UserDetailsService users, final String username) {
 		try {
 			users.loadUserByUsername(username);

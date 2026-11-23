@@ -48,6 +48,7 @@ effect without a restart.
 |---|---|---|
 | `mizoine.users-file` | — (required) | The users file |
 | `mizoine.repositories-dir` | `.` (current directory) | Folder with one `<name>.yaml` per repository |
+| `mizoine.max-file-size` | `100MB` | Largest file that can be uploaded (`PUT`); behind nginx also set `client_max_body_size` |
 | `mizoine.login-limit.max-failures` | `5` | Failed logins per client address before it is blocked |
 | `mizoine.login-limit.window` | `5m` | How long failures count and the block lasts |
 | `server.address` | `127.0.0.1` | Listen address (only nginx on the same machine can connect) |
@@ -125,7 +126,30 @@ Public without login: `/favicon.ico` and `/ui/…`, the files in `src/main/resou
 files of the user interface).
 
 Above a granted folder (for `guest` in the example above: `/` and `projects/`) only the way down to it
-is shown, no files. Files are listed by name; opening them is not possible yet.
+is shown, no files.
+
+### Files
+
+Plain HTTP on the file's own URL. A grant allows reading and writing inside its folder; folders above a grant
+stay read-only. Hidden names (`.git`, …) can never be read or written.
+
+```sh
+curl -u alice http://127.0.0.1:12013/notes/projects/README.md                 # download
+curl -u alice -T plan.md http://127.0.0.1:12013/notes/projects/plan.md        # upload: create or replace (PUT)
+curl -u alice -X PUT http://127.0.0.1:12013/notes/projects/drafts/            # create a folder (URL ends with /)
+curl -u alice -X DELETE http://127.0.0.1:12013/notes/projects/plan.md         # delete a file
+curl -u alice -X DELETE http://127.0.0.1:12013/notes/projects/drafts/         # delete an empty folder
+```
+
+- **Folders are created and deleted explicitly.** Writing into a missing folder gives 409, and a folder with
+  content (also hidden content such as `.git`) is never deleted.
+- **Writes are atomic.** Readers and Git see the old or the new content, never a part.
+- **Lost updates:** every download has an `ETag`. `-H 'If-Match: "<etag>"'` writes or deletes only if the file
+  is unchanged since then (else 412); `-H 'If-None-Match: *'` creates only.
+- **Downloads are safe in the browser:** they are sent with `Content-Security-Policy: sandbox`. Types a browser
+  could run (HTML, SVG, unknown) are downloaded instead of shown.
+- **CSRF:** clients that send credentials (`-u`, `Authorization`) need no CSRF token for `PUT` and `DELETE`;
+  the browser, logged in by the form, does.
 
 ## Development
 

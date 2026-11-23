@@ -95,11 +95,14 @@ class OpenApiDocumentationTest {
 				.andExpect(jsonPath("$.info.description").value(containsString("/ui/")));
 	}
 
+	/** Method and path; springdoc writes {*path} as {path}. */
 	@ParameterizedTest
-	@ValueSource(strings = {"/", "/{repository}", "/{repository}/{path}"}) // springdoc writes {*path} as {path}
-	void everyEndpointIsDocumented(final String path) throws Exception {
+	@ValueSource(strings = {"get /", "get /{repository}", "get /{repository}/{path}", "put /{repository}/{path}",
+			"delete /{repository}/{path}"})
+	void everyEndpointIsDocumented(final String endpoint) throws Exception {
+		final String[] methodAndPath = endpoint.split(" ");
 		mockMvc.perform(apiDocs(API_DOCS_PATH))
-				.andExpect(jsonPath("$.paths['" + path + "'].get.summary").isNotEmpty());
+				.andExpect(jsonPath("$.paths['" + methodAndPath[1] + "']." + methodAndPath[0] + ".summary").isNotEmpty());
 	}
 
 	@Test

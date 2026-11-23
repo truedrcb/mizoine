@@ -13,6 +13,174 @@ servers:
 security:
 - basicAuth: []
 paths:
+  /{repository}/{path}:
+    get:
+      tags:
+      - Repositories
+      summary: Folder or file of a repository
+      description: "A folder (URL ending with '/') lists the subfolders and files\
+        \ the user may see, sorted by name: an HTML page (default; folders and files\
+        \ as links), or JSON when asked for. Hidden folders and files (starting with\
+        \ '.' or containing '%') are not listed; above a granted folder only the way\
+        \ down is shown, no files. A folder URL without '/' redirects. A file (URL\
+        \ without '/') gives its content, whatever the Accept header asks for: type\
+        \ from the name, ETag and Last-Modified (304 for If-None-Match), Range (206),\
+        \ HEAD. For safety it is sent with 'Content-Security-Policy: sandbox', and\
+        \ as download (attachment) unless its type cannot run in a browser."
+      operationId: folder
+      parameters:
+      - name: repository
+        in: path
+        description: Repository name
+        required: true
+        schema:
+          type: string
+      - name: path
+        in: path
+        description: Folder (ending with '/') or file below the repository root
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: The folder page (HTML) or its subfolders and files (JSON);
+            or the file's content
+          content:
+            text/html: {}
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FolderListing"
+            '*/*': {}
+        "206":
+          description: Part of a file (Range)
+        "304":
+          description: "File not modified (If-None-Match, If-Modified-Since)"
+        "302":
+          description: "Folder URL without trailing slash: redirect to the same URL\
+            \ with '/' (only for folders the user may see); or Browser not logged\
+            \ in: redirect to the login page"
+        "401":
+          description: "Not logged in (non-browser clients): HTTP Basic challenge"
+        "404":
+          description: "Unknown repository or folder, or no access to it — deliberately\
+            \ the same answer"
+        "406":
+          description: Neither text/html nor application/json accepted (folders only)
+        "500":
+          description: Repository configured wrongly (e.g. missing root folder); the
+            file to fix and the problems only for users with access to the whole repository
+          content:
+            text/html: {}
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepositoryProblem"
+    put:
+      tags:
+      - Repositories
+      summary: "Create or replace a file, or create a folder"
+      description: "A folder URL (ending with '/', empty body) creates the folder;\
+        \ it exists already → 204. A file URL: the request body is the new content,\
+        \ stored exactly as sent. Atomic: readers see the old or the new content,\
+        \ never a part. The folder must exist (folders are created explicitly). If-Match:\
+        \ <ETag> writes only if the file is unchanged since it was read; If-None-Match:\
+        \ * creates only. API clients with an Authorization header need no CSRF token;\
+        \ the browser UI (session cookie) sends X-CSRF-TOKEN."
+      operationId: put
+      parameters:
+      - name: repository
+        in: path
+        description: Repository name
+        required: true
+        schema:
+          type: string
+      - name: path
+        in: path
+        description: "File below the repository root; or a folder, ending with '/'"
+        required: true
+        schema:
+          type: string
+      - name: If-Match
+        in: header
+        description: "Files: the ETag the file must still have"
+        required: false
+        schema:
+          type: string
+      - name: If-None-Match
+        in: header
+        description: "'*': create only"
+        required: false
+        schema:
+          type: string
+      responses:
+        "201":
+          description: Created; Location (and for files the ETag)
+        "204":
+          description: "File replaced (ETag of the new content), or folder exists\
+            \ already"
+        "401":
+          description: "Not logged in (non-browser clients): HTTP Basic challenge"
+        "403":
+          description: Browser session without CSRF token
+        "404":
+          description: "Unknown repository or path, no write access, or a hidden name\
+            \ — deliberately the same answer"
+        "409":
+          description: The parent folder does not exist; a folder or file is in the
+            way; or the repository root
+        "412":
+          description: If-Match or If-None-Match not met; nothing written
+        "413":
+          description: Larger than mizoine.max-file-size; nothing written
+        "415":
+          description: A folder URL with a request body
+        "500":
+          description: Repository configured wrongly
+    delete:
+      tags:
+      - Repositories
+      summary: Delete a file or an empty folder
+      description: "A file URL deletes the file, a folder URL (ending with '/') an\
+        \ empty folder. A folder with content, also hidden content such as .git, is\
+        \ never deleted (409); nor the repository root or the user's own granted folder.\
+        \ If-Match: <ETag> deletes a file only if unchanged. A symbolic link is removed,\
+        \ never its target."
+      operationId: delete
+      parameters:
+      - name: repository
+        in: path
+        description: Repository name
+        required: true
+        schema:
+          type: string
+      - name: path
+        in: path
+        description: "File; or folder, ending with '/'"
+        required: true
+        schema:
+          type: string
+      - name: If-Match
+        in: header
+        description: "Files: the ETag the file must still have"
+        required: false
+        schema:
+          type: string
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          description: "Not logged in (non-browser clients): HTTP Basic challenge"
+        "403":
+          description: Browser session without CSRF token
+        "404":
+          description: "Unknown repository or path, no write access, or a hidden name\
+            \ — deliberately the same answer; or a folder URL for a file, or the other\
+            \ way round"
+        "409":
+          description: Folder not empty; or the repository root or a granted folder
+        "412":
+          description: If-Match not met; nothing deleted
+        "500":
+          description: Repository configured wrongly
   /{repository}:
     get:
       tags:
@@ -37,57 +205,6 @@ paths:
           description: "Not logged in (non-browser clients): HTTP Basic challenge"
         "404":
           description: Not a valid repository name
-  /{repository}/{path}:
-    get:
-      tags:
-      - Repositories
-      summary: Folder of a repository
-      description: "Lists the subfolders and files of a folder that the user may see,\
-        \ sorted by name: an HTML page (default; folders as links, files as names),\
-        \ or JSON when asked for. Folder URLs end with '/'; without it the server\
-        \ redirects. Hidden folders and files (starting with '.' or containing '%')\
-        \ are not listed; above a granted folder only the way down is shown, no files."
-      operationId: folder
-      parameters:
-      - name: repository
-        in: path
-        description: Repository name
-        required: true
-        schema:
-          type: string
-      - name: path
-        in: path
-        description: "Folder below the repository root, ending with '/'"
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          description: The folder page (HTML) or its subfolders and files (JSON)
-          content:
-            text/html: {}
-            application/json:
-              schema:
-                $ref: "#/components/schemas/FolderListing"
-        "302":
-          description: "Folder URL without trailing slash: redirect to the same URL\
-            \ with '/' (only for folders the user may see); or Browser not logged\
-            \ in: redirect to the login page"
-        "401":
-          description: "Not logged in (non-browser clients): HTTP Basic challenge"
-        "404":
-          description: "Unknown repository or folder, or no access to it — deliberately\
-            \ the same answer"
-        "406":
-          description: Neither text/html nor application/json accepted
-        "500":
-          description: Repository configured wrongly (e.g. missing root folder); the
-            file to fix and the problems only for users with access to the whole repository
-          content:
-            text/html: {}
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RepositoryProblem"
   /:
     get:
       tags:

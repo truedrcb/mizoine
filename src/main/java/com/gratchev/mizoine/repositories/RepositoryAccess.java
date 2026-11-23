@@ -76,6 +76,26 @@ public final class RepositoryAccess {
 		return files.stream().filter(file -> !FolderNames.isHidden(file)).toList();
 	}
 
+	/** @param file path segments of a file: readable when it would be listed in its folder */
+	public boolean canReadFile(final List<String> file) {
+		return !file.isEmpty()
+				&& !visibleFiles(file.subList(0, file.size() - 1), List.of(file.getLast())).isEmpty();
+	}
+
+	/**
+	 * @param folder where a file or folder would be created, replaced or deleted
+	 * @return the folder lies inside a granted folder and is not hidden; folders above a grant stay read-only (D4)
+	 */
+	public boolean canWriteIn(final List<String> folder) {
+		return folder.stream().noneMatch(FolderNames::isHidden)
+				&& grants.stream().anyMatch(grant -> startsWith(folder, grant.segments()));
+	}
+
+	/** @return the folder is exactly one of the user's granted folders (the root for a whole-repository grant) */
+	public boolean isGrantedFolder(final List<String> folder) {
+		return grants.stream().anyMatch(grant -> grant.segments().equals(folder));
+	}
+
 	private static boolean startsWith(final List<String> path, final List<String> prefix) {
 		return path.size() >= prefix.size() && path.subList(0, prefix.size()).equals(prefix);
 	}

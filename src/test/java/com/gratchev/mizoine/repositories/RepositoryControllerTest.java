@@ -5,11 +5,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.net.URI;
 import java.nio.file.Path;
 
 import org.junit.jupiter.api.Test;
@@ -20,6 +22,8 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+
+import com.gratchev.mizoine.TestUsers;
 
 /**
  * Step 18: {@code /{repository}/}. Test repositories in {@code src/test/resources/repositories/}:
@@ -187,5 +191,12 @@ class RepositoryControllerTest {
 	@Test
 	void problemPageAlsoForFoldersBelowTheRoot() throws Exception {
 		mockMvc.perform(page("/moved/public/", "guest")).andExpect(status().isInternalServerError());
+	}
+
+	@Test
+	void writingIntoAMisconfiguredRepositoryIsAServerError() throws Exception {
+		// "moved": readable file, missing root folder (D8)
+		mockMvc.perform(put(URI.create("/moved/x.md")).with(loggedInAs(TestUsers.ARTEM)).content("x"))
+				.andExpect(status().isInternalServerError());
 	}
 }
