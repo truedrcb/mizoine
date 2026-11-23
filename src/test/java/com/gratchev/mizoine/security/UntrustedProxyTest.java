@@ -9,6 +9,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
+import com.gratchev.mizoine.TestUsers;
+
 /**
  * Step 12: forwarded headers count only when they come from a trusted proxy.
  * Here only 192.0.2.1 (a documentation address) is trusted, so the test client on 127.0.0.1 is not.
@@ -28,6 +30,7 @@ class UntrustedProxyTest {
 		final HttpResponse<String> response = http.getViaHttpsProxy("/login");
 
 		assertThat(response.headers().firstValue("Strict-Transport-Security")).isEmpty();
-		assertThat(ProxyHttp.sessionCookie(response)).doesNotContain("Secure");
+		assertThat(ProxyHttp.cookie(response, "XSRF-TOKEN")).doesNotContain("Secure");
+		assertThat(ProxyHttp.sessionCookie(http.formLoginViaHttpsProxy(TestUsers.ARTEM))).doesNotContain("Secure");
 	}
 }

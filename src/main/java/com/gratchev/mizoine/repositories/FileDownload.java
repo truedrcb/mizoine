@@ -86,6 +86,19 @@ final class FileDownload {
 				|| INLINE_MEDIA.contains(type.getType()) && !SVG.equalsTypeAndSubtype(type);
 	}
 
+	/**
+	 * Whether an {@code If-Match} names the current version. Compares the tag values, so a weak tag counts too:
+	 * compressing proxies and CDNs (Cloudflare, nginx with gzip) turn the strong ETag into {@code W/"…"} on the way
+	 * to the client, which sends it back like that. The value is still size and modification time of this file.
+	 */
+	static boolean isSameVersion(final String ifMatch, final String etag) {
+		return withoutWeakPrefix(ifMatch).equals(withoutWeakPrefix(etag));
+	}
+
+	private static String withoutWeakPrefix(final String etag) {
+		return etag.startsWith("W/") ? etag.substring(2) : etag;
+	}
+
 	/** Strong ETag: changes with every write (size or modification time). */
 	static String etag(final BasicFileAttributes attributes) {
 		return "\"" + Long.toHexString(attributes.size()) + "-"

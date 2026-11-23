@@ -81,9 +81,17 @@ class ReverseProxyTest {
 
 	@Test
 	void sessionCookieIsSecureHttpOnlyAndSameSiteLax() throws Exception {
-		final String cookie = ProxyHttp.sessionCookie(http.getViaHttpsProxy("/login"));
+		final String cookie = ProxyHttp.sessionCookie(http.formLoginViaHttpsProxy(TestUsers.ARTEM));
 
 		assertThat(cookie).contains("Secure").contains("HttpOnly").contains("SameSite=Lax");
+	}
+
+	/** D27: readable by the pages' JavaScript (not HttpOnly), otherwise as safe as the session cookie. */
+	@Test
+	void csrfCookieIsSecureAndSameSiteLaxButReadableByScripts() throws Exception {
+		final String cookie = ProxyHttp.cookie(http.getViaHttpsProxy("/login"), "XSRF-TOKEN");
+
+		assertThat(cookie).contains("Secure").contains("SameSite=Lax").doesNotContain("HttpOnly");
 	}
 
 	@Test

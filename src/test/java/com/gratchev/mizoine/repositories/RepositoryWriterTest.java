@@ -94,6 +94,28 @@ class RepositoryWriterTest {
 		assertThat(result).isInstanceOf(Result.Replaced.class);
 	}
 
+	/**
+	 * Compressing proxies and CDNs (Cloudflare, nginx with gzip) turn the strong ETag into a weak one on the way
+	 * (bug 2026-11-23: behind Cloudflare every save was a conflict). The tag value still names the version.
+	 */
+	@Test
+	void ifMatchWithTheCurrentEtagMadeWeakByAProxyWrites() throws IOException {
+		final Result result = write("a/old.md", "new", Precondition.ifMatch("W/" + etagOf("a/old.md")));
+
+		assertThat(result).isInstanceOf(Result.Replaced.class);
+	}
+
+	@Test
+	void anOldEtagMadeWeakStillChangesNothing() throws IOException {
+		assertThat(write("a/old.md", "new", Precondition.ifMatch("W/\"outdated\""))).isEqualTo(new Result.PreconditionFailed());
+		assertThat(Files.readString(root.resolve("a/old.md"))).isEqualTo("old");
+	}
+
+	@Test
+	void deleteWithTheCurrentEtagMadeWeakByAProxyDeletes() throws IOException {
+		assertThat(delete("a/old.md", false, Optional.of("W/" + etagOf("a/old.md")))).isEqualTo(new DeleteResult.Deleted());
+	}
+
 	@Test
 	void ifMatchWithAnOldEtagChangesNothing() throws IOException {
 		final Result result = write("a/old.md", "new", Precondition.ifMatch("\"outdated\""));

@@ -3,10 +3,13 @@ package com.gratchev.mizoine.security;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.net.URLEncoder;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.gratchev.mizoine.TestHttp;
 import com.gratchev.mizoine.TestUsers;
@@ -76,10 +79,41 @@ final class ProxyHttp {
 				.header("X-Forwarded-For", "203.0.113.7");
 	}
 
+	/**
+	 * Form login as a browser behind nginx serving {@code https://example.org} does it: the login page gives the
+	 * CSRF cookie and the form token; the login answer gives the session cookie. (The login page alone creates no
+	 * session: the CSRF token is a cookie, D27.)
+	 *
+	 * @return the answer to the login POST
+	 */
+	HttpResponse<String> formLoginViaHttpsProxy(final String user) throws IOException, InterruptedException {
+		final HttpResponse<String> page = getViaHttpsProxy("/login");
+		final String xsrf = cookie(page, "XSRF-TOKEN").split(";", 2)[0];
+		final Matcher hidden = Pattern.compile("name=\"_csrf\" type=\"hidden\" value=\"([^\"]+)\"").matcher(page.body());
+		if (!hidden.find()) {
+			throw new AssertionError("no CSRF field in the login page");
+		}
+		final String form = "username=" + enc(user) + "&password=" + enc(TestUsers.password(user)) + "&_csrf=" + enc(hidden.group(1));
+		return http.send(viaHttpsProxy("/login", null).header("X-Forwarded-Host", "example.org")
+						.header("Cookie", xsrf)
+						.header("Content-Type", "application/x-www-form-urlencoded")
+						.POST(HttpRequest.BodyPublishers.ofString(form)),
+				HttpResponse.BodyHandlers.ofString());
+	}
+
+	private static String enc(final String value) {
+		return URLEncoder.encode(value, StandardCharsets.UTF_8);
+	}
+
 	static String sessionCookie(final HttpResponse<String> response) {
+		return cookie(response, "JSESSIONID");
+	}
+
+	/** @return the whole Set-Cookie value with its attributes */
+	static String cookie(final HttpResponse<String> response, final String name) {
 		return response.headers().allValues("Set-Cookie").stream()
-				.filter(cookie -> cookie.startsWith("JSESSIONID="))
+				.filter(cookie -> cookie.startsWith(name + "="))
 				.findFirst()
-				.orElseThrow(() -> new AssertionError("no session cookie in " + response.headers().map()));
+				.orElseThrow(() -> new AssertionError("no cookie " + name + " in " + response.headers().map()));
 	}
 }

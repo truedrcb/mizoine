@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Mizoine – editor</title>
+	<link rel="stylesheet" href="editor/editor.css">
+	<script type="module" src="editor/page.js"></script>
+</head>
+<body>
+	<nav>
+		<a id="page-link" href="/">Page</a>
+		<a id="folder-link" href="/">Folder</a>
+		<button id="save" type="button" disabled>Save</button>
+		<button id="reload" type="button" hidden>Reload</button>
+		<span id="status" role="status"></span>
+		<a id="login-link" href="/login" target="_blank" rel="noopener" hidden>Log in</a>
+	</nav>
+	<h1 id="file-name">Editor</h1>
+	<textarea id="text" spellcheck="false" aria-label="File content"></textarea>
+</body>
+</html>

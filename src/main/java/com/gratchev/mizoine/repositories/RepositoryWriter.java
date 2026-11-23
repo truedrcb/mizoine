@@ -50,7 +50,8 @@ public class RepositoryWriter {
 
 		boolean isMetBy(final Optional<String> currentEtag) {
 			return !(createOnly && currentEtag.isPresent())
-					&& ifMatch.map(expected -> currentEtag.map(expected::equals).orElse(false)).orElse(true);
+					&& ifMatch.map(expected -> currentEtag.map(etag -> FileDownload.isSameVersion(expected, etag)).orElse(false))
+							.orElse(true);
 		}
 	}
 
@@ -189,7 +190,8 @@ public class RepositoryWriter {
 			if (folder && !Files.isSymbolicLink(path) && hasEntries(path)) {
 				return new DeleteResult.NotEmpty();
 			}
-			if (!folder && ifMatch.isPresent() && !ifMatch.equals(etag(visible.get()))) {
+			if (!folder && ifMatch.isPresent()
+					&& !etag(visible.get()).map(etag -> FileDownload.isSameVersion(ifMatch.get(), etag)).orElse(false)) {
 				return new DeleteResult.PreconditionFailed();
 			}
 			Files.delete(path);

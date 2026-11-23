@@ -20,3 +20,6 @@ mizoine.iml
 
 # Claude Code: local settings and skills
 /.claude/
+
+# CodeMirror bundle build (tools/codemirror/build.sh): only the lock file is kept
+/tools/codemirror/node_modules/

@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-23): steps 0–32 and 38 done (566 tests green; T1, the file API, and the Markdown page complete). Steps 33–37 and 39 planned (MCP access for agents; browser UI, text editor). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 later (textarea first), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D16–D19, D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-23): steps 0–32 and 37–39 done (582 Java and 51 JavaScript tests green; file API, Markdown page, editor with syntax highlighting). Steps 33–36 planned (MCP access for agents; browser UI). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D16–D19, D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -675,7 +675,7 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
 - the CSRF token from the page;
 - JavaScript tests with Node's built-in test runner (needs Node.js for development only).
 
-### 37. Text editor in the browser (plain textarea)  ☐
+### 37. Text editor in the browser (plain textarea)  ☑
 *Requested 2026-11-19:* edit text files in the browser; usable on the smartphone. T3.1 decided: CodeMirror 6 later (step 39). For now a plain `<textarea>`, so that everything except highlighting is built and tested here.
 - Builds the editor page described in step 39 (`/ui/editor.html?file=…`, save button, links), with a textarea; step 39 then puts CodeMirror in its place.
 - **The editor only uses the public file API** (requested 2026-11-19): it reads with `GET`, creates and saves with `PUT` on the file's URL (steps 28 and 30), the same requests as curl and the MCP tools use. There is no editor-specific endpoint, and the server knows nothing about the editor: the editor is a static file under `/ui/`.
@@ -687,6 +687,32 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
   1. JavaScript tests (Node test runner, with a fake `fetch`): loading is a `GET` of the file URL; saving is a `PUT` of the same URL with `If-Match` and the text as body; a new file is a `PUT` with `If-None-Match: *`; 412 leads to the conflict choice; text round-trips without changes to line endings or non-ASCII.
   2. Java: the editor page loads under the strict CSP.
 - The editing part (get and set the text) sits behind a small interface, so that step 39 only replaces the textarea.
+- *Done 2026-11-23 (ub-mode), with findings:*
+  - **The page:**
+    - `ui/editor.html` and `ui/editor/editor.css`;
+    - `ui/editor/editor.js`: all decisions, without the DOM;
+    - `ui/editor/page.js`: only connects them to the page, through the field interface `{getText, setText, onChange}` that step 39 replaces.
+  - **No UI library needed** for one page (D26 stays open for step 36).
+  - **JavaScript tests** (`src/test/js/editor.test.mjs`, Node's runner with a fake `fetch`, 29 tests) are part of `mvn verify` through exec-maven-plugin: **Node.js must be on the PATH** to build. `-DskipTests` skips them too. `page.js` has no unit tests (no DOM in Node without npm packages); it holds no decisions and was checked live.
+  - **Line endings:** a textarea turns CRLF into LF. `restoreLineEndings` gives a file that used CRLF throughout its CRLF back on save, otherwise every line would change in `git diff`.
+  - **Login:**
+    - A 401 shows "Log in", which opens a new tab, so the text stays.
+    - The script's requests carry `X-Requested-With: XMLHttpRequest`, so Spring Security sends no Basic challenge (no browser dialog).
+    - Root cause found by a test: the own request cache (clean URLs, step 12) also remembered script requests as "the page to return to after login". Now it skips them, as Spring's default does.
+  - **D27 in practice:**
+    - `csrf.spa()` (cookie `XSRF-TOKEN`, header `X-XSRF-TOKEN`);
+    - a `CsrfCookieFilter`, because Spring creates the token only when asked and a static page never asks;
+    - the cookie gets `SameSite=Lax` (and `Secure` behind HTTPS).
+  - **Consequence: `GET /login` no longer creates a session** (the token was what needed one). `ReverseProxyTest` and `UntrustedProxyTest` checked the session cookie of the login page; they now log in for real through the proxy.
+  - **Test tooling:** spring-security-test's `csrf()` replaces the token repository of the whole test context with a session-based one. `EditorPageTest` therefore runs in its own context and logs in like a browser (login page → cookie + form token → POST). One assertion of `ApiClientCsrfTest` that relied on `csrf().asHeader()` was removed; `EditorPageTest` covers it.
+  - **Bug found live, fixed at the root:** `curl --data-binary` sends `application/x-www-form-urlencoded` by default, and Spring Boot's `FormContentFilter` read such `PUT` bodies as form fields, so the file was saved **empty**. The filter is off (`spring.mvc.formcontent.filter.enabled: false`); Mizoine has no form `PUT`s. Red: `FileWriteTest.contentIsStoredWhateverTheContentType`.
+  - **Live** (jar, curl with a cookie jar, the editor's requests):
+    - the page and its modules load without login;
+    - load before login → 401;
+    - form login, then load as the script;
+    - save with the cookie's token → 204; with a stale ETag → 412; without token → 403;
+    - the bytes on disk are exact, with CRLF and `ü`.
+
 
 ### 38. Markdown as a readable page  ☑
 *Requested 2026-11-19.* Needs only step 28 (reading files), so it can be done right after it.
@@ -739,7 +765,7 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
   - **Live** (jar, `curl` with a browser's `Accept`): Russian title, heading ID `расходы`, links, `Vary: Accept`; raw for curl's default and `?raw`.
 
 
-### 39. Syntax highlighting with CodeMirror 6  ☐
+### 39. Syntax highlighting with CodeMirror 6  ☑
 *When highlighting is wanted* (T3.1). Replaces the textarea of step 37; loading, saving and conflicts stay as they are.
 
 **The editor page** (requested 2026-11-23; first built in step 37 with a textarea):
@@ -766,6 +792,29 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
   3. Java: the editor page and `ui/vendor/` load under the strict CSP without login. If CodeMirror needs a style nonce, a nonce per response in the CSP header.
   4. Java: with the CSRF cookie (D27), a `PUT` with the cookie's token in the header passes; without the header → 403.
 - The vendor bundle is made by a small script in the repository (`ui/vendor/README` says how and which versions). It runs only when the editor is updated, not in `mvn verify`.
+- *Done 2026-11-23 (ub-mode), with findings:*
+  - **Bundle:** CodeMirror 6.0.2 with the language packages for Markdown, JSON, YAML, HTML, CSS, JavaScript/TypeScript, XML, Java, and `legacy-modes` for properties and shell.
+    - Built with npm in `tools/codemirror/` (`npm ci`, `npm run build`: esbuild; exact versions in `package-lock.json`; `.npmrc` pins exact versions and turns install scripts off) into `ui/vendor/codemirror.js`, about 700 kB, with `codemirror.LICENSE.txt` (MIT).
+    - Not part of `mvn verify`; `tools/codemirror/node_modules/` is git-ignored.
+  - **Upgrading the libraries** (added on request): plain npm, described in `tools/codemirror/README.md` (`npm outdated`, `npm install <package>@latest …`, `npm run build`). No shell scripts (requested). Checked: `npm run build` gives the same bundle byte for byte.
+  - **Language choice** is plain logic in `editor.js` (`languageFor`, 20 tests); the bundle only maps the name to the package.
+  - **Same interface as the textarea:** `codeMirrorField(host, language)` → `{getText, setText, onChange}`. `page.js` loads the bundle with a dynamic `import`; if it fails, the textarea stays (logged in the console). The step 37 tests pass unchanged.
+  - **CSP:** CodeMirror's style library inserts a `<style>` element into a normal document, which the strict CSP blocks. In a shadow root it uses a constructed style sheet (`adoptedStyleSheets`) instead, so the editor is mounted in one. No nonce and no CSP change needed. The bundle has no `eval` or `new Function`.
+  - **Checked in a real browser** (headless Chrome on the Windows side, against the jar):
+    - CodeMirror is styled: gutter, active line, frame;
+    - `?file=/ui/editor/editor.js` (a public file, so no login needed) shows JavaScript highlighting, folding markers and wrapped lines;
+    - no CSP errors in the console;
+    - not logged in: the page says so.
+  - **Gap found by that check, fixed test-first:** when `fetch` itself fails (no answer: network down, server stopped), the editor showed nothing; the error stayed in the console. Now every request goes through one place in `FileSession`, which turns "no answer" into status 0. The page says "no answer from the server" and keeps the text (2 JavaScript tests).
+  - **Not checked in the browser:** highlighting of a logged-in Markdown file. Headless Chrome with a session needs a scripted login; the styles come from the same mechanism as the JavaScript highlighting that was checked.
+- *Bug fix 2026-11-23: every save was "Changed elsewhere"* (reported from the real setup, behind Cloudflare):
+  - **Reproduced** by a new end-to-end test, `EditorEndToEndTest`:
+    - the real `editor.js` runs in Node (`src/test/js/e2e/editor-flow.mjs`) against the real server, with a browser's session (form login, cookies, CSRF header): load, save, save again;
+    - once direct (passed), once through `WeakeningProxy`, which does to ETags what compressing proxies and CDNs do: `"x"` → `W/"x"`. That run gave "conflict" on every save.
+  - **Cause:** `If-Match` was compared as exact text, and the editor sends back the weak tag it received.
+  - **Fix:** `FileDownload.isSameVersion` compares the tag values without `W/`, for save and delete. Mizoine's tags are strong (size and modification time); `W/` only shows that the response was compressed on the way. An old tag, weak or not, still fails (`RepositoryWriterTest`).
+  - The end-to-end test stays as the harness for such problems: it runs in `mvn verify` (needs Node.js).
+
 
 ---
 

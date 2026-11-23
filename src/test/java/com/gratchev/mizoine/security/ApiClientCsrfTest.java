@@ -61,7 +61,7 @@ class ApiClientCsrfTest {
 
 		assertThat(statusOf(put(TARGET).session(session).content("x"))).isEqualTo(403);
 		assertThat(statusOf(delete(TARGET).session(session))).isEqualTo(403);
-		assertThat(statusOf(put(TARGET).session(session).content("x").with(csrf().asHeader())))
-				.isNotEqualTo(403);
+		// that the browser's token (cookie XSRF-TOKEN, header X-XSRF-TOKEN, D27) passes: EditorPageTest, in a context
+		// of its own. spring-security-test's csrf() replaces the token repository of the whole test context.
 	}
 }

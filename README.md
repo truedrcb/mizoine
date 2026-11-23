@@ -162,12 +162,28 @@ agents with an OAuth token always get the file itself.
 - **Supported:** GitHub's tables, task lists, strikethrough and autolinks.
 - **Not supported:** HTML inside the Markdown is shown as text; pictures from other sites are not shown.
 - **Not rendered:** files over 2 MB or not in UTF-8 are given as they are.
-- The page links to its folder, to the raw file and to the editor (coming in steps 37/39).
+- The page links to its folder, to the raw file and to the editor.
+
+### Editor
+
+`/ui/editor.html?file=/notes/projects/plan.md` (the **Edit** link of a document page): a text editor in the
+browser that loads and saves through the same file API.
+
+- **Save** writes only if nobody changed the file since it was opened; otherwise it says so and keeps your text
+  (Reload shows the other version).
+- A file that does not exist yet opens empty and is created on the first save.
+- Syntax highlighting (CodeMirror 6) for Markdown, JSON, YAML, HTML, CSS, JavaScript, XML, Java, properties
+  and shell, chosen by the file name. The bundle in `src/main/resources/ui/vendor/` is built by
+  [tools/codemirror/](tools/codemirror/README.md), which also describes how to upgrade its libraries with npm.
+- Line endings and non-ASCII text are kept exactly.
+- Not logged in: "Log in" opens a new tab; your text stays, then press Save again.
 
 ## Development
 
 Test-driven, step by step: plan and status in [DEV.md](DEV.md), way of working in [CLAUDE.md](CLAUDE.md).
 
+- Building needs **Node.js** on the PATH as well: `mvn verify` also runs the JavaScript tests of the pages
+  under `/ui/` (`node --test src/test/js/`, no npm packages).
 - `mvn verify` runs all tests and Checkstyle (`final` wherever possible), and writes the API description
   [docs/openapi.yaml](docs/openapi.yaml) (the application itself does not serve it).
 - Known vulnerabilities in dependencies: `NVD_API_KEY=<key> mvn verify -Psecurity-check -DskipTests`

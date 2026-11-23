@@ -12,6 +12,8 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 
@@ -40,6 +42,7 @@ public class SecurityConfig {
 	SecurityFilterChain securityFilterChain(final HttpSecurity http, final LoginAttemptLimiter limiter) {
 		return http
 				.addFilterBefore(new LoginLimitFilter(limiter), UsernamePasswordAuthenticationFilter.class)
+				.addFilterAfter(new CsrfCookieFilter(), BasicAuthenticationFilter.class)
 				.authorizeHttpRequests(requests -> requests
 						// rendering an error (e.g. 400 for a rejected URL) needs no login: otherwise the error turns
 						// into a login redirect. Error pages show no internals (step 8). A direct GET /error still needs login.
@@ -50,7 +53,10 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, WebConfig.UI_PATTERN).permitAll()
 						.anyRequest().authenticated())
 				.requestCache(cache -> cache.requestCache(requestCache()))
-				.csrf(csrf -> csrf.ignoringRequestMatchers(SecurityConfig::isApiClientWrite))
+				// D27: the token also as cookie XSRF-TOKEN, readable by the static pages under /ui/, which send it back
+				// in the X-XSRF-TOKEN header (Spring Security's setup for single-page applications)
+				.csrf(csrf -> csrf.spa().csrfTokenRepository(csrfCookie())
+						.ignoringRequestMatchers(SecurityConfig::isApiClientWrite))
 				.formLogin(form -> form.permitAll().successHandler(loginSuccessHandler()))
 				.httpBasic(withDefaults())
 				.logout(logout -> logout.permitAll())
@@ -71,6 +77,13 @@ public class SecurityConfig {
 				&& request.getHeader(HttpHeaders.AUTHORIZATION) != null;
 	}
 
+	/** D27: readable by the pages' JavaScript; {@code SameSite=Lax} like the session cookie; Secure behind HTTPS. */
+	private static CookieCsrfTokenRepository csrfCookie() {
+		final CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+		repository.setCookieCustomizer(cookie -> cookie.sameSite("Lax"));
+		return repository;
+	}
+
 	/**
 	 * Remembers the page asked for before login. Without the {@code continue} parameter that Spring Security
 	 * adds by default (to look into the session only then): clean URLs after login. Every page needs a login,
@@ -79,6 +92,8 @@ public class SecurityConfig {
 	private static HttpSessionRequestCache requestCache() {
 		final HttpSessionRequestCache requestCache = new HttpSessionRequestCache();
 		requestCache.setMatchingRequestParameterName(null);
+		// a script's request (the editor's load or save) is no page to return to after login (Spring's default too)
+		requestCache.setRequestMatcher(request -> !"XMLHttpRequest".equals(request.getHeader("X-Requested-With")));
 		return requestCache;
 	}
 

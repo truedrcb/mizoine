@@ -108,6 +108,20 @@ class FileWriteTest {
 		assertThat(Files.readString(TREE.resolve("public/new.md"))).isEqualTo("# Neu: ü\r\n");
 	}
 
+	/**
+	 * Bug found live 2026-11-23: {@code curl --data-binary} sends this content type by default, and Spring Boot's
+	 * FormContentFilter read such PUT bodies as form fields, so the file was saved empty.
+	 */
+	@ParameterizedTest
+	@ValueSource(strings = {"application/x-www-form-urlencoded", "text/plain;charset=UTF-8", "application/octet-stream"})
+	void contentIsStoredWhateverTheContentType(final String contentType) throws Exception {
+		final String name = "typed-" + Math.abs(contentType.hashCode()) + ".md";
+		mockMvc.perform(write("/tree/public/" + name, ARTEM, "a=b&c=d\r\n# Plan").contentType(contentType))
+				.andExpect(status().isCreated());
+
+		assertThat(Files.readString(TREE.resolve("public/" + name))).isEqualTo("a=b&c=d\r\n# Plan");
+	}
+
 	@Test
 	void theEtagOfTheAnswerIsTheEtagOfTheFile() throws Exception {
 		final String written = mockMvc.perform(write("/tree/public/tagged.md", ARTEM, "x"))

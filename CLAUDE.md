@@ -45,6 +45,7 @@ Act as an expert Java developer. Build with Java 25, Maven 3.9+ (`mvn`, no Maven
 
 ## Repo notes
 - JDK 25 and Maven are in `~/.local/opt/` and not on `PATH`. Before `mvn`, run `export JAVA_HOME=$(ls -d ~/.local/opt/jdk-25*); export PATH=$JAVA_HOME/bin:$HOME/.local/opt/apache-maven-3.9.16/bin:$PATH`.
+- Node.js (from nvm, on the PATH) runs the JavaScript tests in `src/test/js/` (`node --test`, also in `mvn verify`). No npm packages for tests; vendor libraries go to `src/main/resources/ui/vendor/`.
 - Spring Boot 4 uses Jackson 3 (`tools.jackson.*` packages), not Jackson 2 (`com.fasterxml.jackson.*`).
 - Never commit `users.yaml` or any real password hashes; only `users.example.yaml`.
 - Commit only when the user asks.
