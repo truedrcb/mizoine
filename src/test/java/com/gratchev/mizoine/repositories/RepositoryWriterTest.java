@@ -10,7 +10,6 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -18,6 +17,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import com.gratchev.mizoine.files.FileVersion;
 import com.gratchev.mizoine.repositories.RepositoryWriter.DeleteResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.FolderResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.Precondition;
@@ -50,7 +50,7 @@ class RepositoryWriterTest {
 	}
 
 	private String etagOf(final String path) throws IOException {
-		return FileDownload.etag(Files.readAttributes(root.resolve(path), BasicFileAttributes.class));
+		return FileVersion.of(root.resolve(path)).orElseThrow().etag();
 	}
 
 	private List<String> namesIn(final String folder) throws IOException {

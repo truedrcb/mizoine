@@ -1,9 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head>
-	<meta charset="UTF-8">
-	<title th:text="|Mizoine – ${listing.repository} ${listing.path}|">Mizoine – repository /</title>
-</head>
+<head th:replace="~{fragments/head :: head(|Mizoine – ${listing.repository} ${listing.path}|)}"></head>
 <body>
 	<h1><span th:text="${listing.repository}">repository</span> <span th:text="${listing.path}">/</span></h1>
 	<p th:if="${root}"><a href="/">All repositories</a></p>

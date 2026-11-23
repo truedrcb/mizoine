@@ -9,7 +9,6 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.PosixFileAttributeView;
 import java.util.List;
 import java.util.Optional;
@@ -17,6 +16,8 @@ import java.util.UUID;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
+
+import com.gratchev.mizoine.files.FileVersion;
 
 /**
  * Writes repository files (step 30). Paths are checked like reading ({@link RepositoryPaths}); access (grants)
@@ -48,10 +49,9 @@ public class RepositoryWriter {
 			return new Precondition(Optional.of(etag), false);
 		}
 
-		boolean isMetBy(final Optional<String> currentEtag) {
-			return !(createOnly && currentEtag.isPresent())
-					&& ifMatch.map(expected -> currentEtag.map(etag -> FileDownload.isSameVersion(expected, etag)).orElse(false))
-							.orElse(true);
+		boolean isMetBy(final Optional<FileVersion> current) {
+			return !(createOnly && current.isPresent())
+					&& ifMatch.map(expected -> current.map(version -> version.isNamedBy(expected)).orElse(false)).orElse(true);
 		}
 	}
 
@@ -187,12 +187,9 @@ public class RepositoryWriter {
 		final Path path = parent.get().resolve(segments.getLast());
 		lock.lock();
 		try {
-			if (folder && !Files.isSymbolicLink(path) && hasEntries(path)) {
-				return new DeleteResult.NotEmpty();
-			}
-			if (!folder && ifMatch.isPresent()
-					&& !etag(visible.get()).map(etag -> FileDownload.isSameVersion(ifMatch.get(), etag)).orElse(false)) {
-				return new DeleteResult.PreconditionFailed();
+			final Optional<DeleteResult> refused = folder ? refuseFolder(path) : refuseFile(visible.get(), ifMatch);
+			if (refused.isPresent()) {
+				return refused.get();
 			}
 			Files.delete(path);
 			return new DeleteResult.Deleted();
@@ -203,6 +200,17 @@ public class RepositoryWriter {
 		} finally {
 			lock.unlock();
 		}
+	}
+
+	/** D15: a folder with content, visible or hidden, is not deleted; a link to a folder is just a link. */
+	private static Optional<DeleteResult> refuseFolder(final Path folder) throws IOException {
+		return !Files.isSymbolicLink(folder) && hasEntries(folder) ? Optional.of(new DeleteResult.NotEmpty()) : Optional.empty();
+	}
+
+	/** D13: with {@code If-Match}, only the version the client knows is deleted. */
+	private static Optional<DeleteResult> refuseFile(final Path file, final Optional<String> ifMatch) {
+		return ifMatch.filter(expected -> !FileVersion.of(file).map(version -> version.isNamedBy(expected)).orElse(false))
+				.map(expected -> new DeleteResult.PreconditionFailed());
 	}
 
 	/** @return the real parent folder of a plain, non-empty path, or empty */
@@ -235,13 +243,13 @@ public class RepositoryWriter {
 			}
 			lock.lock();
 			try {
-				final Optional<String> current = etag(target);
+				final Optional<FileVersion> current = FileVersion.of(target);
 				if (!precondition.isMetBy(current)) {
 					return new Result.PreconditionFailed();
 				}
 				current.ifPresent(etag -> keepPermissions(target, temporary));
 				Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-				final String etag = etag(target).orElseThrow();
+				final String etag = FileVersion.of(target).orElseThrow().etag();
 				return current.isPresent() ? new Result.Replaced(etag) : new Result.Created(etag);
 			} finally {
 				lock.unlock();
@@ -267,12 +275,6 @@ public class RepositoryWriter {
 			}
 		}
 		return true;
-	}
-
-	private static Optional<String> etag(final Path file) throws IOException {
-		return Files.isRegularFile(file)
-				? Optional.of(FileDownload.etag(Files.readAttributes(file, BasicFileAttributes.class)))
-				: Optional.empty();
 	}
 
 	/** A replaced file keeps its permissions (e.g. readable for the group), where the file system has them. */

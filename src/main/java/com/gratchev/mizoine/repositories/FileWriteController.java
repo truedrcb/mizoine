@@ -93,12 +93,17 @@ class FileWriteController {
 		if (RepositoryUrls.isFolder(path)) {
 			return createFolder(granted, segments, createOnly, hasBody(request, body));
 		}
+		return writeFile(granted, segments, new Precondition(Optional.ofNullable(ifMatch), createOnly),
+				request.getContentLengthLong(), body);
+	}
+
+	private ResponseEntity<Void> writeFile(final GrantedRepository granted, final List<String> segments,
+			final Precondition precondition, final long contentLength, final InputStream body) {
 		checkWritable(granted, segments);
-		if (request.getContentLengthLong() > maxFileSize) {
+		if (contentLength > maxFileSize) {
 			// known too large before reading anything
 			return status(HttpStatus.CONTENT_TOO_LARGE);
 		}
-		final Precondition precondition = new Precondition(Optional.ofNullable(ifMatch), createOnly);
 		return switch (writer.write(granted.config().root(), segments, body, maxFileSize, precondition)) {
 			case Result.Created created -> ResponseEntity.created(location(granted, segments, false)).eTag(created.etag()).build();
 			case Result.Replaced replaced -> ResponseEntity.noContent().eTag(replaced.etag()).build();

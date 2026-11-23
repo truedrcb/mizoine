@@ -14,13 +14,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Comparator;
-import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -37,6 +33,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import com.gratchev.mizoine.TestRepositories;
+
 /**
  * Step 28: {@code GET /{repository}/{path}} of a file gives its content, safely for the browser.
  * artem may access everything, guest only {@code public}.
@@ -45,56 +43,39 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 @AutoConfigureMockMvc
 class FileDownloadTest {
 
-	private static final Path BASE = createTree();
 	private static final String NOTE = "# Note\n\nÜber uns: ü\r\n";
 	private static final String RUSSIAN = "мой дом - ";
 	/** "ü" decomposed, as macOS writes names. */
 	private static final String NFD_NAME = "Rücksendeportal.pdf";
 
-	private static Path createTree() {
-		try {
-			final Path base = Files.createTempDirectory("mizoine-files");
-			final Path tree = Files.createDirectories(base.resolve("tree"));
-			Files.createDirectories(tree.resolve("public/sub"));
-			Files.createDirectories(tree.resolve("private"));
-			Files.createDirectories(tree.resolve(".git"));
-			Files.writeString(tree.resolve("public/note.md"), NOTE);
-			Files.writeString(tree.resolve("public/russian.md"), RUSSIAN);
-			Files.writeString(tree.resolve("public/plain.txt"), RUSSIAN);
-			Files.write(tree.resolve("public/image.png"), new byte[] {(byte) 0x89, 'P', 'N', 'G', 1, 2, 3});
-			Files.writeString(tree.resolve("public/page.html"), "<script>alert(1)</script>");
-			Files.writeString(tree.resolve("public/drawing.svg"), "<svg xmlns=\"http://www.w3.org/2000/svg\"/>");
-			Files.writeString(tree.resolve("public/data.unknownext"), "?");
-			Files.writeString(tree.resolve("public/a <b>.md"), "special");
-			Files.writeString(tree.resolve("public/" + NFD_NAME), "pdf");
-			Files.writeString(tree.resolve("public/.secret"), "hidden");
-			Files.writeString(tree.resolve("readme.md"), "above guest's grant");
-			Files.writeString(tree.resolve("private/plan.md"), "outside guest's grant");
-			Files.writeString(tree.resolve(".git/config"), "git");
-			final Path outside = Files.writeString(base.resolve("outside.txt"), "outside the root");
-			Files.createSymbolicLink(tree.resolve("public/leak.txt"), outside);
-			Files.writeString(base.resolve("tree.yaml"), """
-					path: tree
-					access:
-					  artem: ["/"]
-					  guest: [public]
-					""");
-			return base;
-		} catch (final IOException e) {
-			throw new UncheckedIOException(e);
-		}
-	}
+	private static final TestRepositories REPOSITORIES = TestRepositories.create()
+			.folder("tree/public/sub")
+			.folder("tree/private")
+			.file("tree/public/note.md", NOTE)
+			.file("tree/public/russian.md", RUSSIAN)
+			.file("tree/public/plain.txt", RUSSIAN)
+			.file("tree/public/image.png", new byte[] {(byte) 0x89, 'P', 'N', 'G', 1, 2, 3})
+			.file("tree/public/page.html", "<script>alert(1)</script>")
+			.file("tree/public/drawing.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\"/>")
+			.file("tree/public/data.unknownext", "?")
+			.file("tree/public/a <b>.md", "special")
+			.file("tree/public/" + NFD_NAME, "pdf")
+			.file("tree/public/.secret", "hidden")
+			.file("tree/readme.md", "above guest's grant")
+			.file("tree/private/plan.md", "outside guest's grant")
+			.file("tree/.git/config", "git")
+			.file("outside.txt", "outside the root")
+			.link("tree/public/leak.txt", "outside.txt")
+			.repository("tree", "path: tree\n" + "access:\n  artem: [\"/\"]\n  guest: [public]\n");
 
 	@DynamicPropertySource
 	static void repositories(final DynamicPropertyRegistry registry) {
-		registry.add("mizoine.repositories-dir", BASE::toString);
+		REPOSITORIES.register(registry);
 	}
 
 	@AfterAll
 	static void deleteTree() throws IOException {
-		try (Stream<Path> paths = Files.walk(BASE)) {
-			paths.sorted(Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
-		}
+		REPOSITORIES.delete();
 	}
 
 	private final MockMvc mockMvc;
@@ -115,7 +96,7 @@ class FileDownloadTest {
 			"text/markdown", "application/json"})
 	void contentIsTheExactBytesWhateverTheBrowserAccepts(final String accept) throws Exception {
 		// not Markdown: that is a rendered page for browsers since step 38 (DocumentPageTest)
-		Files.writeString(BASE.resolve("tree/public/guest.txt"), RUSSIAN);
+		Files.writeString(REPOSITORIES.path("tree/public/guest.txt"), RUSSIAN);
 		mockMvc.perform(file("/tree/public/guest.txt", GUEST).header(HttpHeaders.ACCEPT, accept))
 				.andExpect(status().isOk())
 				.andExpect(content().bytes(RUSSIAN.getBytes(StandardCharsets.UTF_8)));

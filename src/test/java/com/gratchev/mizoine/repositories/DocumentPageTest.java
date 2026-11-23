@@ -12,13 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Comparator;
-import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -34,6 +29,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import com.gratchev.mizoine.TestRepositories;
 import com.gratchev.mizoine.security.SecurityConfig;
 
 /** Step 38: {@code /repo/folder/document.md} in the browser is a readable page; everyone else gets the file. */
@@ -53,36 +49,24 @@ class DocumentPageTest {
 
 			<script>alert(1)</script>
 			""";
-	private static final Path BASE = createTree();
 
-	private static Path createTree() {
-		try {
-			final Path base = Files.createTempDirectory("mizoine-page");
-			final Path notes = Files.createDirectories(base.resolve("tree/notes"));
-			Files.createDirectories(notes.resolve("images"));
-			Files.writeString(notes.resolve("plan.md"), PLAN);
-			Files.writeString(notes.resolve("a b.md"), "# Space");
-			Files.write(notes.resolve("images/diagram.png"), new byte[] {(byte) 0x89, 'P', 'N', 'G'});
-			Files.write(notes.resolve("latin1.md"), "Grüße".getBytes(StandardCharsets.ISO_8859_1));
-			Files.writeString(notes.resolve("big.md"), "x".repeat((int) MarkdownPage.MAX_BYTES + 1));
-			Files.writeString(notes.resolve(".hidden.md"), "# Hidden");
-			Files.writeString(base.resolve("tree.yaml"), "path: tree\naccess:\n  artem: [\"/\"]\n");
-			return base;
-		} catch (final IOException e) {
-			throw new UncheckedIOException(e);
-		}
-	}
+	private static final TestRepositories REPOSITORIES = TestRepositories.create()
+			.file("tree/notes/plan.md", PLAN)
+			.file("tree/notes/a b.md", "# Space")
+			.file("tree/notes/images/diagram.png", new byte[] {(byte) 0x89, 'P', 'N', 'G'})
+			.file("tree/notes/latin1.md", "Gr\u00fc\u00dfe".getBytes(StandardCharsets.ISO_8859_1))
+			.file("tree/notes/big.md", "x".repeat((int) MarkdownPage.MAX_BYTES + 1))
+			.file("tree/notes/.hidden.md", "# Hidden")
+			.repository("tree", "path: tree\n" + TestRepositories.ARTEM_EVERYTHING);
 
 	@DynamicPropertySource
 	static void repositories(final DynamicPropertyRegistry registry) {
-		registry.add("mizoine.repositories-dir", BASE::toString);
+		REPOSITORIES.register(registry);
 	}
 
 	@AfterAll
 	static void deleteTree() throws IOException {
-		try (Stream<Path> paths = Files.walk(BASE)) {
-			paths.sorted(Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
-		}
+		REPOSITORIES.delete();
 	}
 
 	private final MockMvc mockMvc;

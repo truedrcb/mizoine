@@ -41,9 +41,4 @@ public record FolderGrant(List<String> segments) {
 	public boolean isWholeRepository() {
 		return segments.isEmpty();
 	}
-
-	@Override
-	public String toString() {
-		return "/" + String.join("/", segments);
-	}
 }

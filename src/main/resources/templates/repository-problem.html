@@ -1,9 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head>
-	<meta charset="UTF-8">
-	<title th:text="|Mizoine – ${repository}|">Mizoine – repository</title>
-</head>
+<head th:replace="~{fragments/head :: head(|Mizoine – ${repository}|)}"></head>
 <body>
 	<h1 th:text="${repository}">repository</h1>
 	<p>This repository is not available.</p>

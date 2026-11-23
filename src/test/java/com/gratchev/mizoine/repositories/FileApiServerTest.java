@@ -5,13 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Comparator;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterAll;
@@ -23,6 +21,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import com.gratchev.mizoine.TestHttp;
+import com.gratchev.mizoine.TestRepositories;
 
 /**
  * Steps 28–31 on a real server, for what MockMvc cannot show: uploads without {@code Content-Length} (chunked,
@@ -31,32 +30,19 @@ import com.gratchev.mizoine.TestHttp;
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 class FileApiServerTest {
 
-	private static final Path BASE = createTree();
-	private static final Path TREE = BASE.resolve("tree");
-
-	private static Path createTree() {
-		try {
-			final Path base = Files.createTempDirectory("mizoine-server");
-			Files.createDirectories(base.resolve("tree/public"));
-			Files.writeString(base.resolve("tree/public/note.md"), "# Note\n");
-			Files.writeString(base.resolve("tree.yaml"), "path: tree\naccess:\n  artem: [\"/\"]\n");
-			return base;
-		} catch (final IOException e) {
-			throw new UncheckedIOException(e);
-		}
-	}
+	private static final TestRepositories REPOSITORIES = TestRepositories.create()
+			.file("tree/public/note.md", "# Note\n")
+			.repository("tree", "path: tree\n" + TestRepositories.ARTEM_EVERYTHING);
 
 	@DynamicPropertySource
 	static void repositories(final DynamicPropertyRegistry registry) {
-		registry.add("mizoine.repositories-dir", BASE::toString);
+		REPOSITORIES.register(registry);
 		registry.add("mizoine.max-file-size", () -> "1KB");
 	}
 
 	@AfterAll
 	static void deleteTree() throws IOException {
-		try (Stream<Path> paths = Files.walk(BASE)) {
-			paths.sorted(Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
-		}
+		REPOSITORIES.delete();
 	}
 
 	private final TestHttp http;
@@ -77,15 +63,15 @@ class FileApiServerTest {
 	void chunkedUploadIsWritten() throws Exception {
 		assertThat(putChunked("/tree/public/chunked.md", "streamed")).isEqualTo(201);
 
-		assertThat(Files.readString(TREE.resolve("public/chunked.md"))).isEqualTo("streamed");
+		assertThat(Files.readString(REPOSITORIES.path("tree/public/chunked.md"))).isEqualTo("streamed");
 	}
 
 	@Test
 	void chunkedUploadOverTheLimitIsRejectedWhileStreaming() throws Exception {
 		assertThat(putChunked("/tree/public/huge.md", "x".repeat(2048))).isEqualTo(413);
 
-		assertThat(TREE.resolve("public/huge.md")).doesNotExist();
-		try (Stream<Path> entries = Files.list(TREE.resolve("public"))) {
+		assertThat(REPOSITORIES.path("tree/public/huge.md")).doesNotExist();
+		try (Stream<Path> entries = Files.list(REPOSITORIES.path("tree/public"))) {
 			assertThat(entries.map(entry -> entry.getFileName().toString())).noneMatch(name -> name.startsWith("."));
 		}
 	}
@@ -94,7 +80,7 @@ class FileApiServerTest {
 	void chunkedBodyForAFolderIsRejected() throws Exception {
 		assertThat(putChunked("/tree/public/with-body/", "x")).isEqualTo(415);
 
-		assertThat(TREE.resolve("public/with-body")).doesNotExist();
+		assertThat(REPOSITORIES.path("tree/public/with-body")).doesNotExist();
 	}
 
 	@Test

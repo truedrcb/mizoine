@@ -1,12 +1,9 @@
 package com.gratchev.mizoine.users;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.attribute.FileTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -16,6 +13,8 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+
+import com.gratchev.mizoine.files.FileVersion;
 
 /**
  * Users from the hand-editable users file. Usernames are case-sensitive. Every user has role {@code USER}.
@@ -32,20 +31,16 @@ public class FileUserDetailsService implements UserDetailsService {
 
 	private static final String ROLE = "USER";
 
-	/** What identifies a version of the file; {@code null} fields when it cannot be read. */
-	private record FileVersion(FileTime modified, long size) {
-		static final FileVersion UNREADABLE = new FileVersion(null, -1);
-	}
-
 	private final Path usersFile;
 	private final UsersFileParser parser;
 	private volatile Map<String, UserEntry> users;
-	private FileVersion loadedVersion;
+	/** Empty while the file cannot be read. */
+	private Optional<FileVersion> loadedVersion;
 
 	public FileUserDetailsService(final Path usersFile, final UsersFileParser parser) {
 		this.usersFile = usersFile;
 		this.parser = parser;
-		this.loadedVersion = currentVersion();
+		this.loadedVersion = FileVersion.of(usersFile);
 		this.users = load();
 	}
 
@@ -65,7 +60,7 @@ public class FileUserDetailsService implements UserDetailsService {
 
 	private synchronized void reloadIfChanged() {
 		// read the version before the content: a change during loading is picked up next time
-		final FileVersion version = currentVersion();
+		final Optional<FileVersion> version = FileVersion.of(usersFile);
 		if (version.equals(loadedVersion)) {
 			return;
 		}
@@ -94,14 +89,5 @@ public class FileUserDetailsService implements UserDetailsService {
 			log.warn("Users file {} has no users: nobody can log in", usersFile);
 		}
 		return loaded;
-	}
-
-	private FileVersion currentVersion() {
-		try {
-			final BasicFileAttributes attributes = Files.readAttributes(usersFile, BasicFileAttributes.class);
-			return new FileVersion(attributes.lastModifiedTime(), attributes.size());
-		} catch (final IOException e) {
-			return FileVersion.UNREADABLE;
-		}
 	}
 }

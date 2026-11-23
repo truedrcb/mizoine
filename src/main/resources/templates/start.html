@@ -1,9 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head>
-	<meta charset="UTF-8">
-	<title>Mizoine</title>
-</head>
+<head th:replace="~{fragments/head :: head('Mizoine')}"></head>
 <body>
 	<h1 th:text="|Hello, ${page.user}|">Hello, user</h1>
 	<ul th:unless="${page.repositories.isEmpty()}">

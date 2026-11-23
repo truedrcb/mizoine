@@ -13,12 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.net.URI;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Comparator;
-import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -31,6 +26,8 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import com.gratchev.mizoine.TestRepositories;
+
 /**
  * Step 21: folders list their subfolders, as HTML (default) or JSON. The repository "tree" is created
  * in a temporary folder (names with '#', '%', '<' or non-ASCII letters do not belong in Git):
@@ -40,45 +37,34 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 @AutoConfigureMockMvc
 class RepositoryListingTest {
 
-	private static final Path BASE = createTree();
-
-	private static Path createTree() {
-		try {
-			final Path base = Files.createTempDirectory("mizoine-listing");
-			final Path tree = base.resolve("tree");
-			for (final String folder : new String[] {"public/sub", "projects/shared/deep", "projects/other", "private",
-					"with space", "hash#", "50%", "Ünïcode", "a <b>", ".hidden/inside"}) {
-				Files.createDirectories(tree.resolve(folder));
-			}
-			Files.writeString(tree.resolve("file.txt"), "not a folder");
-			Files.writeString(tree.resolve(".secret"), "hidden file");
-			Files.writeString(tree.resolve("projects/plan.md"), "above the guest's grant");
-			Files.writeString(tree.resolve("projects/shared/notes.md"), "inside the guest's grant");
-			Files.writeString(tree.resolve("projects/shared/a <b>.md"), "special name");
+	private static final TestRepositories REPOSITORIES = TestRepositories.create()
+			.folder("tree/public/sub")
+			.folder("tree/projects/shared/deep")
+			.folder("tree/projects/other")
+			.folder("tree/private")
+			.folder("tree/with space")
+			.folder("tree/hash#")
+			.folder("tree/50%")
+			.folder("tree/Ünïcode")
+			.folder("tree/a <b>")
+			.folder("tree/.hidden/inside")
+			.file("tree/file.txt", "not a folder")
+			.file("tree/.secret", "hidden file")
+			.file("tree/projects/plan.md", "above the guest's grant")
+			.file("tree/projects/shared/notes.md", "inside the guest's grant")
+			.file("tree/projects/shared/a <b>.md", "special name")
 			// "ü" decomposed (NFD, as macOS writes names): u + combining diaeresis
-			Files.writeString(tree.resolve("public/Ru\u0308cksendeportal.pdf"), "non-ASCII name");
-			Files.writeString(base.resolve("tree.yaml"), """
-					path: tree
-					access:
-					  artem: ["/"]
-					  guest: [public, projects/shared]
-					""");
-			return base;
-		} catch (final IOException e) {
-			throw new UncheckedIOException(e);
-		}
-	}
+			.file("tree/public/Ru\u0308cksendeportal.pdf", "non-ASCII name")
+			.repository("tree", "path: tree\n" + "access:\n  artem: [\"/\"]\n  guest: [public, projects/shared]\n");
 
 	@DynamicPropertySource
 	static void repositories(final DynamicPropertyRegistry registry) {
-		registry.add("mizoine.repositories-dir", BASE::toString);
+		REPOSITORIES.register(registry);
 	}
 
 	@AfterAll
 	static void deleteTree() throws IOException {
-		try (Stream<Path> paths = Files.walk(BASE)) {
-			paths.sorted(Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
-		}
+		REPOSITORIES.delete();
 	}
 
 	private final MockMvc mockMvc;

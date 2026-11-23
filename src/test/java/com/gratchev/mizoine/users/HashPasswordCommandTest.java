@@ -2,7 +2,9 @@ package com.gratchev.mizoine.users;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
@@ -109,5 +111,25 @@ class HashPasswordCommandTest {
 		assertThat(HashPasswordCommand.isRequested(new String[] {})).isFalse();
 		assertThat(HashPasswordCommand.isRequested(new String[] {"--server.port=9000"})).isFalse();
 		assertThat(HashPasswordCommand.isRequested(new String[] {"--x", "hash-password"})).isFalse();
+	}
+
+	/** {@code echo secret | java -jar mizoine.jar hash-password}: no terminal, so the password comes from stdin. */
+	@Test
+	void pipedPasswordFromStandardInput() {
+		final InputStream originalIn = System.in;
+		final PrintStream originalOut = System.out;
+		final ByteArrayOutputStream out = new ByteArrayOutputStream();
+		try {
+			System.setIn(new ByteArrayInputStream("secret\n".getBytes(StandardCharsets.UTF_8)));
+			System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+
+			assertThat(HashPasswordCommand.fromSystem().run()).isZero();
+		} finally {
+			System.setIn(originalIn);
+			System.setOut(originalOut);
+		}
+		final String hash = out.toString(StandardCharsets.UTF_8).strip();
+		assertThat(PasswordHashing.isSupported(hash)).isTrue();
+		assertThat(PasswordHashing.encoder().matches("secret", hash)).isTrue();
 	}
 }

@@ -5,14 +5,11 @@ import static com.gratchev.mizoine.TestUsers.password;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -32,30 +29,19 @@ import org.springframework.test.context.DynamicPropertySource;
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 class EditorEndToEndTest {
 
-	private static final Path BASE = createTree();
-	private static final Path FILE = BASE.resolve("tree/notes/plan.md");
-
-	private static Path createTree() {
-		try {
-			final Path base = Files.createTempDirectory("mizoine-e2e");
-			Files.createDirectories(base.resolve("tree/notes"));
-			Files.writeString(base.resolve("tree.yaml"), "path: tree\naccess:\n  artem: [\"/\"]\n");
-			return base;
-		} catch (final IOException e) {
-			throw new UncheckedIOException(e);
-		}
-	}
+	private static final TestRepositories REPOSITORIES = TestRepositories.create()
+			.folder("tree/notes")
+			.repository("tree", "path: tree\n" + TestRepositories.ARTEM_EVERYTHING);
+	private static final Path FILE = REPOSITORIES.path("tree/notes/plan.md");
 
 	@DynamicPropertySource
 	static void repositories(final DynamicPropertyRegistry registry) {
-		registry.add("mizoine.repositories-dir", BASE::toString);
+		REPOSITORIES.register(registry);
 	}
 
 	@AfterAll
 	static void deleteTree() throws IOException {
-		try (Stream<Path> paths = Files.walk(BASE)) {
-			paths.sorted(Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
-		}
+		REPOSITORIES.delete();
 	}
 
 	private final int port;

@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-23): steps 0–32 and 37–39 done (582 Java and 51 JavaScript tests green; file API, Markdown page, editor with syntax highlighting). Steps 33–36 planned (MCP access for agents; browser UI). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D16–D19, D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-23): steps 0–32 and 37–40 done (593 Java and 51 JavaScript tests green; file API, Markdown page, editor with syntax highlighting). Steps 33–36 planned (MCP access for agents; browser UI). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D16–D19, D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -815,6 +815,40 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
   - **Fix:** `FileDownload.isSameVersion` compares the tag values without `W/`, for save and delete. Mizoine's tags are strong (size and modification time); `W/` only shows that the response was compressed on the way. An old tag, weak or not, still fails (`RepositoryWriterTest`).
   - The end-to-end test stays as the harness for such problems: it runs in `mvn verify` (needs Node.js).
 
+
+### 40. Review and refactoring (ub-mode)  ☑
+*Requested 2026-11-23:* review UI and backend, improve with the development skills (ub-mode). Behaviour unchanged except the two UI improvements below.
+- **Measured first** ("Build the Lever"): crapper is not installed, so CRAP = CC² × (1 − coverage)³ + CC was computed from JaCoCo's report. Before: 2 of 276 methods at 10 or more, highest 12.0 (`HashPasswordCommand.fromSystem`, never run in tests), then `RepositoryWriter.delete` 10.2, `FileWriteController.put` 9.0. After: none at 10 or more; highest 8.1.
+- **Subtracted dead code** (JaCoCo: never run, nothing refers to it): `UsersFileException(message, cause)`, `FolderGrant.toString`.
+- **One rule in one place — `files.FileVersion`:** "the version of a file is its size and modification time" was written three times:
+  - in `RepositoryRegistry` and in `FileUserDetailsService`, each with its own private record (the latter with a special `UNREADABLE` value);
+  - in `FileDownload.etag` with `isSameVersion`.
+  Now one record gives the version (`Optional`: empty = missing or unreadable), the ETag and the `If-Match` check. Red: `FileVersionTest`; the four users were switched with the existing tests as pin.
+- **Split by job:** `RepositoryWriter.delete` → `refuseFolder` (D15) and `refuseFile` (D13); `FileWriteController.put` → `writeFile`.
+- **Covered:** `HashPasswordCommand.fromSystem`, its piped mode (`echo … | java -jar … hash-password`), tested with replaced standard input and output. The terminal branch cannot be reached in a test.
+- **UI on the smartphone (improvement):** none of the four server pages had `<meta name="viewport">`, so phones showed them shrunk to desktop width, and each repeated its `<head>`. Now one fragment, `templates/fragments/head.html`, gives every page the viewport and the shared stylesheet `/ui/mizoine.css` (readable width, images and tables). The editor page uses it too; `editor.css` keeps only what the editor adds. Red: `PageLayoutTest`.
+- **Tests: one helper instead of seven copies.** Seven test classes each wrote their own code to create a temporary repositories folder, register it and delete it; now `TestRepositories` (builder: `file`, `folder`, `link`, `repository`, `path`, `register`, `delete`). The test count did not change, so the trees are the same. While migrating, two classes lost their `max-file-size` setting; their own tests caught it.
+- **Glossary** added below (ub-mode "Model the Domain").
+- **Looked at and left:**
+  - `RepositoryController` (folder listing, file download, Markdown page) is the largest class at about 260 lines, but each part is one `Target` case and short ("if the code is already clear and local, leave it");
+  - `editor.js` and `page.js`: decisions in the tested module, the page file only shows them.
+- **Result:** 22 files changed, 185 lines added, 335 removed; 593 Java and 51 JavaScript tests green.
+
+## Glossary
+
+| Term | Meaning |
+|---|---|
+| Repository | A folder on disk described by `<name>.yaml` in the repositories folder; the name is the first URL segment. |
+| Root | The repository's folder (`path` in its file). Nothing outside it is ever reachable. |
+| Grant | A folder a user may read and write, with everything below it (`access` in the repository file). `/` = whole repository. |
+| Above a grant | Folders on the way down to a grant: may be entered, show only the way down, no files, read-only (D4). |
+| Hidden name | Starts with `.` or contains `%`: never listed, read or written (D3, `FolderNames`). |
+| Plain name | A single visible name: not hidden, not empty, no separator, no NUL (`FolderNames.isPlain`). |
+| Folder URL / file URL | Ends with `/` / does not (D5). |
+| Version | Size + modification time of a file (`FileVersion`); changes with every write, also outside Mizoine. |
+| ETag | The version as HTTP header; `If-Match` with it protects against lost updates (D13). |
+| Target | What a URL below a repository leads to: problem page, redirect, folder or file (`RepositoryController.Target`). |
+| Agent | A user in `users.yaml` with grants to a few folders, used by an AI (BACKLOG §7). |
 
 ---
 

@@ -13,13 +13,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Comparator;
-import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -34,6 +30,8 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import com.gratchev.mizoine.TestRepositories;
+
 /**
  * Step 30: {@code PUT /{repository}/{path}} creates or replaces a file. artem may write everywhere, guest only
  * in {@code public}. Each test uses its own file names: the tree is shared.
@@ -42,42 +40,24 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 @AutoConfigureMockMvc
 class FileWriteTest {
 
-	private static final Path BASE = createTree();
-	private static final Path TREE = BASE.resolve("tree");
-
-	private static Path createTree() {
-		try {
-			final Path base = Files.createTempDirectory("mizoine-write");
-			final Path tree = Files.createDirectories(base.resolve("tree"));
-			Files.createDirectories(tree.resolve("public/folder"));
-			Files.createDirectories(tree.resolve("private"));
-			Files.createDirectories(tree.resolve(".git"));
-			Files.writeString(tree.resolve("public/existing.md"), "old");
-			final Path outside = Files.writeString(base.resolve("outside.txt"), "outside");
-			Files.createSymbolicLink(tree.resolve("public/leak.txt"), outside);
-			Files.writeString(base.resolve("tree.yaml"), """
-					path: tree
-					access:
-					  artem: ["/"]
-					  guest: [public]
-					""");
-			return base;
-		} catch (final IOException e) {
-			throw new UncheckedIOException(e);
-		}
-	}
+	private static final TestRepositories REPOSITORIES = TestRepositories.create()
+			.folder("tree/public/folder")
+			.folder("tree/private")
+			.folder("tree/.git")
+			.file("tree/public/existing.md", "old")
+			.file("outside.txt", "outside")
+			.link("tree/public/leak.txt", "outside.txt")
+			.repository("tree", "path: tree\n" + "access:\n  artem: [\"/\"]\n  guest: [public]\n");
 
 	@DynamicPropertySource
 	static void repositories(final DynamicPropertyRegistry registry) {
-		registry.add("mizoine.repositories-dir", BASE::toString);
+		REPOSITORIES.register(registry);
 		registry.add("mizoine.max-file-size", () -> "1KB");
 	}
 
 	@AfterAll
 	static void deleteTree() throws IOException {
-		try (Stream<Path> paths = Files.walk(BASE)) {
-			paths.sorted(Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
-		}
+		REPOSITORIES.delete();
 	}
 
 	private final MockMvc mockMvc;
@@ -105,7 +85,7 @@ class FileWriteTest {
 				.andExpect(header().string(HttpHeaders.LOCATION, "/tree/public/new.md"))
 				.andExpect(header().exists(HttpHeaders.ETAG));
 
-		assertThat(Files.readString(TREE.resolve("public/new.md"))).isEqualTo("# Neu: ü\r\n");
+		assertThat(Files.readString(REPOSITORIES.path("tree/public/new.md"))).isEqualTo("# Neu: ü\r\n");
 	}
 
 	/**
@@ -119,7 +99,7 @@ class FileWriteTest {
 		mockMvc.perform(write("/tree/public/" + name, ARTEM, "a=b&c=d\r\n# Plan").contentType(contentType))
 				.andExpect(status().isCreated());
 
-		assertThat(Files.readString(TREE.resolve("public/" + name))).isEqualTo("a=b&c=d\r\n# Plan");
+		assertThat(Files.readString(REPOSITORIES.path("tree/public/" + name))).isEqualTo("a=b&c=d\r\n# Plan");
 	}
 
 	@Test
@@ -132,7 +112,7 @@ class FileWriteTest {
 
 	@Test
 	void existingFileIsReplaced() throws Exception {
-		Files.writeString(TREE.resolve("public/replace.md"), "old");
+		Files.writeString(REPOSITORIES.path("tree/public/replace.md"), "old");
 
 		mockMvc.perform(write("/tree/public/replace.md", ARTEM, "new"))
 				.andExpect(status().isNoContent())
@@ -146,14 +126,14 @@ class FileWriteTest {
 				.andExpect(status().isCreated())
 				.andExpect(header().string(HttpHeaders.LOCATION, "/tree/public/a%20%3Cb%3E%20%C3%BC.md"));
 
-		assertThat(TREE.resolve("public/a <b> ü.md")).exists();
+		assertThat(REPOSITORIES.path("tree/public/a <b> ü.md")).exists();
 	}
 
 	// 2. preconditions (D13)
 
 	@Test
 	void ifMatchProtectsAgainstLostUpdates() throws Exception {
-		Files.writeString(TREE.resolve("public/shared.md"), "v1");
+		Files.writeString(REPOSITORIES.path("tree/public/shared.md"), "v1");
 		final String etag = etag("/tree/public/shared.md");
 
 		mockMvc.perform(write("/tree/public/shared.md", ARTEM, "v2").header(HttpHeaders.IF_MATCH, etag))
@@ -161,7 +141,7 @@ class FileWriteTest {
 		mockMvc.perform(write("/tree/public/shared.md", ARTEM, "lost").header(HttpHeaders.IF_MATCH, etag))
 				.andExpect(status().isPreconditionFailed());
 
-		assertThat(Files.readString(TREE.resolve("public/shared.md"))).isEqualTo("v2");
+		assertThat(Files.readString(REPOSITORIES.path("tree/public/shared.md"))).isEqualTo("v2");
 	}
 
 	@Test
@@ -171,7 +151,7 @@ class FileWriteTest {
 		mockMvc.perform(write("/tree/public/once.md", ARTEM, "second").header(HttpHeaders.IF_NONE_MATCH, "*"))
 				.andExpect(status().isPreconditionFailed());
 
-		assertThat(Files.readString(TREE.resolve("public/once.md"))).isEqualTo("first");
+		assertThat(Files.readString(REPOSITORIES.path("tree/public/once.md"))).isEqualTo("first");
 	}
 
 	// 3. size (D12)
@@ -181,7 +161,7 @@ class FileWriteTest {
 		mockMvc.perform(write("/tree/public/big.md", ARTEM, "x".repeat(1025)))
 				.andExpect(status().isPayloadTooLarge());
 
-		assertThat(TREE.resolve("public/big.md")).doesNotExist();
+		assertThat(REPOSITORIES.path("tree/public/big.md")).doesNotExist();
 	}
 
 	// 4. conflicts (D14)
@@ -190,7 +170,7 @@ class FileWriteTest {
 	void missingParentFolderIsAConflict() throws Exception {
 		mockMvc.perform(write("/tree/public/nothing/new.md", ARTEM, "x")).andExpect(status().isConflict());
 
-		assertThat(TREE.resolve("public/nothing")).doesNotExist();
+		assertThat(REPOSITORIES.path("tree/public/nothing")).doesNotExist();
 	}
 
 	@Test
@@ -215,8 +195,8 @@ class FileWriteTest {
 			final int status = mockMvc.perform(write(url, ARTEM, "x")).andReturn().getResponse().getStatus();
 			assertThat(status).as(url).isIn(400, 404);
 		}
-		assertThat(Files.readString(BASE.resolve("outside.txt"))).isEqualTo("outside");
-		assertThat(TREE.resolve(".git/config")).doesNotExist();
+		assertThat(Files.readString(REPOSITORIES.path("outside.txt"))).isEqualTo("outside");
+		assertThat(REPOSITORIES.path("tree/.git/config")).doesNotExist();
 	}
 
 	@Test
@@ -227,7 +207,7 @@ class FileWriteTest {
 		mockMvc.perform(put("/tree/public/anonymous.md").content("x").with(httpBasic(ARTEM, "wrong")))
 				.andExpect(status().isUnauthorized());
 
-		assertThat(TREE.resolve("public/anonymous.md")).doesNotExist();
+		assertThat(REPOSITORIES.path("tree/public/anonymous.md")).doesNotExist();
 	}
 
 	// step 31: create a folder (PUT …/, D14)
@@ -245,7 +225,7 @@ class FileWriteTest {
 		mockMvc.perform(createFolder("/tree/public/made/", GUEST).header(HttpHeaders.IF_NONE_MATCH, "*"))
 				.andExpect(status().isPreconditionFailed());
 
-		assertThat(TREE.resolve("public/made")).isDirectory();
+		assertThat(REPOSITORIES.path("tree/public/made")).isDirectory();
 	}
 
 	@Test
@@ -260,7 +240,7 @@ class FileWriteTest {
 		mockMvc.perform(createFolder("/tree/public/with-body/", ARTEM).content("x"))
 				.andExpect(status().isUnsupportedMediaType());
 
-		assertThat(TREE.resolve("public/with-body")).doesNotExist();
+		assertThat(REPOSITORIES.path("tree/public/with-body")).doesNotExist();
 	}
 
 	@ParameterizedTest
@@ -279,7 +259,7 @@ class FileWriteTest {
 
 	@Test
 	void fileIsDeleted() throws Exception {
-		Files.writeString(TREE.resolve("public/gone.md"), "x");
+		Files.writeString(REPOSITORIES.path("tree/public/gone.md"), "x");
 
 		mockMvc.perform(remove("/tree/public/gone.md", GUEST)).andExpect(status().isNoContent());
 		mockMvc.perform(remove("/tree/public/gone.md", GUEST)).andExpect(status().isNotFound());
@@ -287,7 +267,7 @@ class FileWriteTest {
 
 	@Test
 	void fileIsDeletedOnlyIfUnchanged() throws Exception {
-		Files.writeString(TREE.resolve("public/guarded.md"), "x");
+		Files.writeString(REPOSITORIES.path("tree/public/guarded.md"), "x");
 
 		mockMvc.perform(remove("/tree/public/guarded.md", ARTEM).header(HttpHeaders.IF_MATCH, "\"old\""))
 				.andExpect(status().isPreconditionFailed());
@@ -297,14 +277,14 @@ class FileWriteTest {
 
 	@Test
 	void onlyEmptyFoldersAreDeleted() throws Exception {
-		Files.createDirectories(TREE.resolve("public/empty"));
-		Files.createDirectories(TREE.resolve("public/full"));
-		Files.writeString(TREE.resolve("public/full/.gitkeep"), "");
+		Files.createDirectories(REPOSITORIES.path("tree/public/empty"));
+		Files.createDirectories(REPOSITORIES.path("tree/public/full"));
+		Files.writeString(REPOSITORIES.path("tree/public/full/.gitkeep"), "");
 
 		mockMvc.perform(remove("/tree/public/empty/", GUEST)).andExpect(status().isNoContent());
 		mockMvc.perform(remove("/tree/public/full/", GUEST)).andExpect(status().isConflict());
 
-		assertThat(TREE.resolve("public/full/.gitkeep")).exists();
+		assertThat(REPOSITORIES.path("tree/public/full/.gitkeep")).exists();
 	}
 
 	@Test
@@ -312,7 +292,7 @@ class FileWriteTest {
 		mockMvc.perform(remove("/tree/", ARTEM)).andExpect(status().isConflict());
 		mockMvc.perform(remove("/tree/public/", GUEST)).andExpect(status().isConflict());
 
-		assertThat(TREE.resolve("public")).isDirectory();
+		assertThat(REPOSITORIES.path("tree/public")).isDirectory();
 	}
 
 	@Test
@@ -320,7 +300,7 @@ class FileWriteTest {
 		mockMvc.perform(remove("/tree/public/existing.md/", ARTEM)).andExpect(status().isNotFound());
 		mockMvc.perform(remove("/tree/public/folder", ARTEM)).andExpect(status().isNotFound());
 
-		assertThat(TREE.resolve("public/existing.md")).exists();
+		assertThat(REPOSITORIES.path("tree/public/existing.md")).exists();
 	}
 
 	@ParameterizedTest

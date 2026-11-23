@@ -1,9 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head>
-	<meta charset="UTF-8">
-	<title th:text="${document.title}">Document</title>
-</head>
+<head th:replace="~{fragments/head :: head(${document.title})}"></head>
 <body>
 	<nav>
 		<a href="./">Folder</a>

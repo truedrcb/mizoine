@@ -3,8 +3,6 @@ package com.gratchev.mizoine.repositories;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.attribute.FileTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +15,8 @@ import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.gratchev.mizoine.files.FileVersion;
 
 /**
  * Finds repositories by name, reading {@code <repositories-dir>/<name>.yaml} on request — never at startup.
@@ -31,10 +31,6 @@ public class RepositoryRegistry {
 	private static final Logger log = LoggerFactory.getLogger(RepositoryRegistry.class);
 
 	private static final String EXTENSION = ".yaml";
-
-	/** What identifies a version of a file. */
-	private record FileVersion(FileTime modified, long size) {
-	}
 
 	/** A read file: its config, or empty if it was unreadable. */
 	private record Entry(FileVersion version, Optional<RepositoryConfig> config) {
@@ -67,7 +63,7 @@ public class RepositoryRegistry {
 		if (canonical(file).equals(usersFile)) {
 			return Optional.empty();
 		}
-		final Optional<FileVersion> version = version(file);
+		final Optional<FileVersion> version = FileVersion.of(file);
 		if (version.isEmpty()) {
 			cache.remove(name);
 			return Optional.empty();
@@ -125,16 +121,5 @@ public class RepositoryRegistry {
 
 	private static Path canonical(final Path file) {
 		return file.toAbsolutePath().normalize();
-	}
-
-	private static Optional<FileVersion> version(final Path file) {
-		try {
-			final BasicFileAttributes attributes = Files.readAttributes(file, BasicFileAttributes.class);
-			return attributes.isRegularFile()
-					? Optional.of(new FileVersion(attributes.lastModifiedTime(), attributes.size()))
-					: Optional.empty();
-		} catch (final IOException e) {
-			return Optional.empty();
-		}
 	}
 }

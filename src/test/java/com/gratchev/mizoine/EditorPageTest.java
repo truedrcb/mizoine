@@ -12,13 +12,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Comparator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -45,31 +41,20 @@ import jakarta.servlet.http.Cookie;
 @AutoConfigureMockMvc
 class EditorPageTest {
 
-	private static final Path BASE = createTree();
 	private static final String XHR = "X-Requested-With";
 
-	private static Path createTree() {
-		try {
-			final Path base = Files.createTempDirectory("mizoine-editor");
-			Files.createDirectories(base.resolve("tree/notes"));
-			Files.writeString(base.resolve("tree/notes/plan.md"), "# Plan");
-			Files.writeString(base.resolve("tree.yaml"), "path: tree\naccess:\n  artem: [\"/\"]\n");
-			return base;
-		} catch (final IOException e) {
-			throw new UncheckedIOException(e);
-		}
-	}
+	private static final TestRepositories REPOSITORIES = TestRepositories.create()
+			.file("tree/notes/plan.md", "# Plan")
+			.repository("tree", "path: tree\n" + TestRepositories.ARTEM_EVERYTHING);
 
 	@DynamicPropertySource
 	static void repositories(final DynamicPropertyRegistry registry) {
-		registry.add("mizoine.repositories-dir", BASE::toString);
+		REPOSITORIES.register(registry);
 	}
 
 	@AfterAll
 	static void deleteTree() throws IOException {
-		try (Stream<Path> paths = Files.walk(BASE)) {
-			paths.sorted(Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
-		}
+		REPOSITORIES.delete();
 	}
 
 	private final MockMvc mockMvc;
@@ -142,7 +127,7 @@ class EditorPageTest {
 		mockMvc.perform(put("/tree/notes/plan.md").session(session).cookie(token).content("# Saved")
 						.header("X-XSRF-TOKEN", token.getValue()))
 				.andExpect(status().isNoContent());
-		assertThat(Files.readString(BASE.resolve("tree/notes/plan.md"))).isEqualTo("# Saved");
+		assertThat(Files.readString(REPOSITORIES.path("tree/notes/plan.md"))).isEqualTo("# Saved");
 	}
 
 	@Test
