@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+	<meta charset="UTF-8">
+	<title th:text="${document.title}">Document</title>
+</head>
+<body>
+	<nav>
+		<a href="./">Folder</a>
+		<a th:href="${rawHref}" href="document.md?raw">Raw</a>
+		<a th:href="${editHref}" href="/ui/editor.html">Edit</a>
+	</nav>
+	<!-- rendered by MarkdownRenderer: HTML from the file is escaped, unsafe links dropped (D24) -->
+	<main th:utext="${document.html}">document</main>
+</body>
+</html>

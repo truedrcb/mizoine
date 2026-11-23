@@ -114,9 +114,11 @@ class FileDownloadTest {
 	@ValueSource(strings = {"*/*", "text/html,application/xhtml+xml,*/*;q=0.8", "image/avif,image/webp,*/*",
 			"text/markdown", "application/json"})
 	void contentIsTheExactBytesWhateverTheBrowserAccepts(final String accept) throws Exception {
-		mockMvc.perform(file("/tree/public/note.md", GUEST).header(HttpHeaders.ACCEPT, accept))
+		// not Markdown: that is a rendered page for browsers since step 38 (DocumentPageTest)
+		Files.writeString(BASE.resolve("tree/public/guest.txt"), RUSSIAN);
+		mockMvc.perform(file("/tree/public/guest.txt", GUEST).header(HttpHeaders.ACCEPT, accept))
 				.andExpect(status().isOk())
-				.andExpect(content().bytes(NOTE.getBytes(StandardCharsets.UTF_8)));
+				.andExpect(content().bytes(RUSSIAN.getBytes(StandardCharsets.UTF_8)));
 	}
 
 	@Test

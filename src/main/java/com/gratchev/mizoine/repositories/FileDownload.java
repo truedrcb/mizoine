@@ -60,6 +60,8 @@ final class FileDownload {
 				.header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
 				.header("Content-Security-Policy", SecurityConfig.FILE_CONTENT_SECURITY_POLICY)
 				.eTag(etag(attributes))
+				// the same URL is a rendered page for browsers (step 38): caches keep both apart
+				.varyBy(HttpHeaders.ACCEPT)
 				.lastModified(attributes.lastModifiedTime().toInstant())
 				.body(new FileSystemResource(file));
 	}

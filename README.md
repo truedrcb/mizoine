@@ -151,6 +151,19 @@ curl -u alice -X DELETE http://127.0.0.1:12013/notes/projects/drafts/         # 
 - **CSRF:** clients that send credentials (`-u`, `Authorization`) need no CSRF token for `PUT` and `DELETE`;
   the browser, logged in by the form, does.
 
+### Markdown in the browser
+
+A `.md` file opened in the browser is shown as a readable page, on the same URL. curl, downloads, `?raw` and
+agents with an OAuth token always get the file itself.
+
+- **Pictures and links** are plain relative Markdown links, resolved against the document's folder:
+  `![Diagram](images/diagram.png)`, `[Budget](budget.md#total)`, `[Folder](sub/)`.
+- **Bookmarks:** headings get IDs as on GitHub, so `document.md#costs-and-risks` jumps to `## Costs and Risks`.
+- **Supported:** GitHub's tables, task lists, strikethrough and autolinks.
+- **Not supported:** HTML inside the Markdown is shown as text; pictures from other sites are not shown.
+- **Not rendered:** files over 2 MB or not in UTF-8 are given as they are.
+- The page links to its folder, to the raw file and to the editor (coming in steps 37/39).
+
 ## Development
 
 Test-driven, step by step: plan and status in [DEV.md](DEV.md), way of working in [CLAUDE.md](CLAUDE.md).

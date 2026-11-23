@@ -5,8 +5,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.security.Principal;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -22,10 +24,12 @@ import com.gratchev.mizoine.ApiTexts;
 import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 /**
@@ -42,6 +46,9 @@ class RepositoryController {
 
 	private static final String REPOSITORY = "repository";
 	private static final String PATH = "path";
+	private static final String RAW = "raw";
+	/** The editor page (step 39, D28): the file's URL path as parameter {@code file}. */
+	private static final String EDITOR = "/ui/editor.html?file=";
 
 	// HTML and JSON on one URL: documented once, see ApiTexts
 	private static final String SUMMARY = "Folder or file of a repository";
@@ -51,7 +58,10 @@ class RepositoryController {
 			+ "only the way down is shown, no files. A folder URL without '/' redirects. "
 			+ "A file (URL without '/') gives its content, whatever the Accept header asks for: type from the name, "
 			+ "ETag and Last-Modified (304 for If-None-Match), Range (206), HEAD. For safety it is sent with "
-			+ "'Content-Security-Policy: sandbox', and as download (attachment) unless its type cannot run in a browser.";
+			+ "'Content-Security-Policy: sandbox', and as download (attachment) unless its type cannot run in a browser. "
+			+ "Exception: a Markdown file (valid UTF-8, up to 2 MB) is a rendered HTML page when the request asks "
+			+ "explicitly for text/html (a browser), and neither '?raw' nor an OAuth token (Bearer) is given; "
+			+ "relative links and pictures work, headings have GitHub-style ids for '#topic'.";
 	private static final String OK = "The folder page (HTML) or its subfolders and files (JSON); or the file's content";
 	private static final String REDIRECT = "Folder URL without trailing slash: redirect to the same URL with '/' "
 			+ "(only for folders the user may see); or " + ApiTexts.LOGIN_REDIRECT;
@@ -74,8 +84,8 @@ class RepositoryController {
 		record Folder(RepositoryConfig config, RepositoryAccess access, List<String> segments) implements Target {
 		}
 
-		/** A readable file: its real path, already checked. */
-		record File(Path path) implements Target {
+		/** A readable file: its real path, already checked, and where it is in the repository. */
+		record File(RepositoryConfig config, List<String> segments, Path path) implements Target {
 		}
 	}
 
@@ -103,6 +113,8 @@ class RepositoryController {
 	// returns a view name, not a ModelAndView: springdoc leaves methods returning ModelAndView out of the description
 	@GetMapping(value = "/{repository}/{*path}", produces = MediaType.TEXT_HTML_VALUE)
 	@Operation(summary = SUMMARY, description = DESCRIPTION)
+	@Parameter(name = RAW, in = ParameterIn.QUERY, description = "Markdown files: '?raw' gives the file itself, never "
+			+ "the rendered page")
 	@ApiResponse(responseCode = "200", description = OK, content = {
 			@Content(mediaType = MediaType.TEXT_HTML_VALUE),
 			@Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = FolderListing.class)),
@@ -119,7 +131,9 @@ class RepositoryController {
 			@Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = RepositoryProblem.class))})
 	Object folder(@PathVariable(REPOSITORY) @Parameter(description = "Repository name") final String repository,
 			@PathVariable(PATH) @Parameter(description = "Folder (ending with '/') or file below the repository root")
-			final String path, final Principal principal, final Model model, final HttpServletResponse response) {
+			final String path,
+			final Principal principal, final Model model, final HttpServletRequest request,
+			final HttpServletResponse response) {
 		return switch (target(repository, path, principal)) {
 			case Target.Problem problem -> {
 				final RepositoryProblem details = problem(problem);
@@ -131,7 +145,8 @@ class RepositoryController {
 			}
 			// fully encoded, so names with '{' cannot be taken for URI template variables
 			case Target.Redirect redirect -> "redirect:" + redirect.url();
-			case Target.File file -> download(file);
+			// '?raw' has no value: present or not
+			case Target.File file -> pageOrDownload(file, request.getParameterMap().containsKey(RAW), model, request, response);
 			case Target.Folder folder -> {
 				final FolderListing listing = listing(folder);
 				model.addAttribute("listing", listing);
@@ -184,10 +199,29 @@ class RepositoryController {
 					: new Target.Redirect(RepositoryUrls.url(config.name(), segments, true));
 		}
 		if (!folderUrl && access.canReadFile(segments)) {
-			return RepositoryPaths.resolveFile(config.root(), segments).map(Target.File::new)
+			return RepositoryPaths.resolveFile(config.root(), segments).map(file -> new Target.File(config, segments, file))
 					.orElseThrow(GrantedRepository::notFound);
 		}
 		throw GrantedRepository.notFound();
+	}
+
+	/** Step 38, D22: a Markdown file is a readable page for a person's browser, the raw file for everyone else. */
+	private static Object pageOrDownload(final Target.File file, final boolean raw, final Model model,
+			final HttpServletRequest request, final HttpServletResponse response) {
+		final Optional<String> text = MarkdownPage.isMarkdown(file.path())
+				&& MarkdownPage.isWanted(request.getHeader(HttpHeaders.ACCEPT), request.getHeader(HttpHeaders.AUTHORIZATION), raw)
+				? MarkdownPage.text(file.path()) : Optional.empty();
+		if (text.isEmpty()) {
+			return download(file);
+		}
+		final String name = file.segments().getLast();
+		final MarkdownRenderer.Document document = MarkdownRenderer.render(text.get(), name);
+		response.addHeader(HttpHeaders.VARY, HttpHeaders.ACCEPT);
+		model.addAttribute("document", document);
+		model.addAttribute("rawHref", UriUtils.encodePathSegment(name, StandardCharsets.UTF_8) + "?" + RAW);
+		model.addAttribute("editHref", EDITOR + UriUtils.encodeQueryParam(
+				RepositoryUrls.url(file.config().name(), file.segments(), false), StandardCharsets.UTF_8));
+		return "document";
 	}
 
 	private static ResponseEntity<Resource> download(final Target.File file) {

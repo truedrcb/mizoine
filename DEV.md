@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-23): steps 0–32 done (518 tests green; T1, the file API, complete). Steps 33–39 planned (MCP access for agents; browser UI, text editor; Markdown page, step 38, can follow now). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 later (textarea first), D10–D15. Open: T3.2, D16–D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-23): steps 0–32 and 38 done (566 tests green; T1, the file API, and the Markdown page complete). Steps 33–37 and 39 planned (MCP access for agents; browser UI, text editor). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 later (textarea first), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D16–D19, D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -632,6 +632,7 @@ Rules for all of them:
 
 ### 33. MCP endpoint for agents  ☐
 T2 decided 2026-11-19: remote MCP in Mizoine, so that Claude (also on the smartphone) and other agents store and retrieve knowledge.
+- Tools return files raw, exactly as stored: `read_file` gives the Markdown text, never rendered HTML (step 38 renders only for browsers).
 - `/mcp` over Streamable HTTP, with tools built on the same file service as steps 28–32 and the same grants: `list_repositories`, `list_folder`, `read_file`, `write_file`, `create_folder`, `delete`.
 - Tool descriptions tell the agent that writes are plain files that a human reviews with `git diff` and commits.
 - Login in this step: HTTP Basic, for Claude Code (`--header`), the MCP Inspector and tests. OAuth follows in step 34.
@@ -676,6 +677,7 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
 
 ### 37. Text editor in the browser (plain textarea)  ☐
 *Requested 2026-11-19:* edit text files in the browser; usable on the smartphone. T3.1 decided: CodeMirror 6 later (step 39). For now a plain `<textarea>`, so that everything except highlighting is built and tested here.
+- Builds the editor page described in step 39 (`/ui/editor.html?file=…`, save button, links), with a textarea; step 39 then puts CodeMirror in its place.
 - **The editor only uses the public file API** (requested 2026-11-19): it reads with `GET`, creates and saves with `PUT` on the file's URL (steps 28 and 30), the same requests as curl and the MCP tools use. There is no editor-specific endpoint, and the server knows nothing about the editor: the editor is a static file under `/ui/`.
 - Open from the listing: text files up to a size limit (D21) open in the editor, others download.
 - Save = `PUT` with `If-Match` (D20). On 412 the editor offers to reload or to keep its text; nothing is overwritten silently.
@@ -686,18 +688,20 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
   2. Java: the editor page loads under the strict CSP.
 - The editing part (get and set the text) sits behind a small interface, so that step 39 only replaces the textarea.
 
-### 38. Markdown as a readable page  ☐
+### 38. Markdown as a readable page  ☑
 *Requested 2026-11-19.* Needs only step 28 (reading files), so it can be done right after it.
 - `GET /{repository}/…/document.md` from a browser shows the rendered document on the same URL, chosen by `Accept` (D22).
 - Pictures and links are relative Markdown links, resolved by the browser against the document's folder: `![](images/a.png)`, `[x](other.md#part)`, `[y](sub/)`.
 - Bookmarks: every heading has an `id`, GitHub style (D23), so `document.md#topic` works.
 - Options and reasons: [docs/technology-decisions.md](docs/technology-decisions.md), T3.2.
+- **Agents always get raw files** (requested 2026-11-23): access through the MCP API or with an OAuth token (steps 33–34) never renders a page, whatever `Accept` says. Rendering is only for people in a browser.
 - **Red:**
   1. Which version is returned:
      - `Accept: text/html` (as browsers send it) → 200 `text/html`, rendered;
      - `Accept: text/markdown`, `*/*` or none → the exact bytes as `text/markdown; charset=UTF-8`;
      - `?raw` → raw;
-     - all answers have `Vary: Accept`.
+     - all answers have `Vary: Accept`;
+     - with an OAuth token (`Authorization: Bearer …`, step 34) → raw even with `Accept: text/html` (written when step 34 exists, or step 38 adds the rule with a fake bearer request if it comes first).
   2. Relative references stay as written in the HTML (`<img src="images/a.png">`, `<a href="other.md#part">`), and the picture itself downloads at that URL. A test fetches both.
   3. Heading IDs:
      - `## Costs and Risks` → `id="costs-and-risks"`;
@@ -711,18 +715,56 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
      - the strict CSP header is unchanged.
   6. The page:
      - its title is the first heading, else the file name;
-     - links to the folder (`./`) and to the raw file (`?raw`).
+     - links to the folder (`./`) and to the raw file (`?raw`);
+     - an **Edit** link to the editor page, `/ui/editor.html?file=<the file's path, encoded>` (step 39). Only shown when the user may write the file (`canWriteIn` of its folder); read-only users see no edit link.
   7. The same 404 cases as step 28. A file over the size limit (D21), or not UTF-8, is returned raw, not rendered.
   8. OpenAPI: the file `GET` lists both media types (smoke test only).
 - **Green:** commonmark-java with its GFM extensions and heading anchors (D23); a Thymeleaf page around the rendered HTML; the `Accept` choice in `RepositoryController`.
 - The folder listing links `.md` files to this page; other files download (step 28).
+- *Done 2026-11-23 (ub-mode), with findings:*
+  - **Two pure pieces:**
+    - `MarkdownRenderer` (Markdown → title + HTML) with commonmark-java 0.33.0 and its GFM extensions;
+    - `MarkdownPage` (whether the request gets the page; whether the file can be one).
+    The controller only joins them.
+  - **D23 needs no own generator:** commonmark's heading-anchor extension gives GitHub's IDs, also for non-ASCII (`über-uns`, `мой-дом`) and punctuation (`whats-new-2026`).
+  - **D22 in practice:** with an HTML and a JSON method on one URL, Spring sends `*/*` and requests without `Accept` to the HTML method (D6). So the method itself checks whether `text/html` is named explicitly (and not refused with `q=0`). A `Bearer` token or `?raw` gives the raw file; the token is not checked yet (step 34), but the header already decides.
+  - **`?raw` has no value:** MockMvc passes it as `null`, Tomcat as `""`. The controller checks whether the parameter is present, and documents it on the method for OpenAPI.
+  - **`rel="nofollow"`:** commonmark adds it to every link when it sanitizes URLs. It is harmless, so the tests check `href` and link text, not whole tags.
+  - **No `sandbox` on the page:** a sandboxed page has an opaque origin, so its pictures would be loaded cross-site, without the `SameSite=Lax` session cookie, and would end at the login page. The page keeps the application's strict CSP; HTML from the file is escaped (D24).
+  - **`Vary: Accept`** on raw files too (`FileDownload`), so caches keep page and file apart.
+  - **Edit link for everyone who can read:** every grant allows reading and writing, so the planned "only for writers" check would always be true, and dead code. Add it when read-only grants come.
+  - **The Edit link leads to `/ui/editor.html`, which does not exist yet** (steps 37, 39): 404 until then.
+  - **Changed test:** `FileDownloadTest.contentIsTheExactBytesWhateverTheBrowserAccepts` now uses a `.txt` file; for a browser, a `.md` is a page since this step.
+  - **Untested:** the `catch` for a file removed between the check and the read (a race).
+  - **Live** (jar, `curl` with a browser's `Accept`): Russian title, heading ID `расходы`, links, `Vary: Accept`; raw for curl's default and `?raw`.
+
 
 ### 39. Syntax highlighting with CodeMirror 6  ☐
 *When highlighting is wanted* (T3.1). Replaces the textarea of step 37; loading, saving and conflicts stay as they are.
+
+**The editor page** (requested 2026-11-23; first built in step 37 with a textarea):
+- A static page under `/ui/`: `/ui/editor.html?file=/notes/projects/plan.md`. The URL parameter `file` is the file's path on the server, URL-encoded (D28).
+- It shows the editor with the file's content, and a **Save** button.
+- It uses only the existing file API:
+  - load with `GET` of that path (`Accept: text/markdown` or `*/*`, so never the rendered page);
+  - save with `PUT` and `If-Match`;
+  - a missing file opens empty and is created with `If-None-Match: *`.
+- It sends `X-Requested-With: XMLHttpRequest`. Without login, Spring Security then answers 401 without the Basic challenge, so the browser shows no login dialog of its own. The page shows a "Log in" link instead and keeps the text.
+- CSRF: the page reads the token from Spring Security's CSRF cookie and sends it as a header (D27).
+- `file` must be a path on this server: starting with `/`, not with `//`, no scheme. Anything else is rejected before any request.
+- Links back to the rendered page (`…/plan.md`) and to the folder (`…/`).
+- Save is disabled while nothing changed; leaving the page with unsaved changes asks first.
 - The language comes from the file name: `.md`, `.json`, `.yaml`/`.yml`, `.html`, `.css`, `.js`, `.xml`, `.java`, `.properties`, `.sh`, …; plain text otherwise.
 - **Red:**
   1. JavaScript: choice of language by file name; the step 37 tests pass unchanged with CodeMirror in place of the textarea.
-  2. Java: the editor page and `ui/vendor/` load under the strict CSP. If CodeMirror needs a style nonce, a nonce per response in the CSP header.
+  2. JavaScript (with a fake `fetch`):
+     - `?file=` decides the URL of `GET` and `PUT`;
+     - an absolute URL, `//host/…` or `javascript:` in `file` makes no request at all;
+     - 401 shows the login link and keeps the text;
+     - the CSRF header is sent with `PUT`;
+     - the links point to the page and to the folder.
+  3. Java: the editor page and `ui/vendor/` load under the strict CSP without login. If CodeMirror needs a style nonce, a nonce per response in the CSP header.
+  4. Java: with the CSRF cookie (D27), a `PUT` with the cookie's token in the header passes; without the header → 403.
 - The vendor bundle is made by a small script in the repository (`ui/vendor/README` says how and which versions). It runs only when the editor is updated, not in `mvn verify`.
 
 ---
@@ -771,11 +813,13 @@ Proposals; details in [docs/technology-decisions.md](docs/technology-decisions.m
 - **D18 — token storage:** *Proposed:* in memory, so no database (BACKLOG principle 1); after a restart the connector logs in again. Alternative: a token file.
 - **D19 — who logs in during "Connect":** *Proposed:* the agent user itself (its password is entered once in the phone's browser). Alternative: the human logs in and picks which agent user the connector acts as (more code: a consent page with a choice).
 - **T3.1 — text editor:** **Decided 2026-11-19:** CodeMirror 6, bundled once into `ui/vendor/` (best on the phone; Markdown, JSON, YAML packages). For the moment it is more than needed: the editor starts as a plain `<textarea>` (step 37), and CodeMirror 6 replaces it when highlighting is wanted (step 39). Not chosen: Ace; Monaco (not supported on mobile browsers).
-- **D20 — saving from the editor:** *Proposed:* always with `If-Match`; on 412 offer reload or keep. (D13 makes `If-Match` optional for API clients; the UI always uses it.)
-- **D21 — what opens in the editor:** *Proposed:* text files (valid UTF-8, no NUL bytes) up to 2 MB; others are downloaded.
-- **T3.2 — Markdown page:** *Proposed:* rendered on the server with commonmark-java, on the file's own URL (step 38). Alternatives: flexmark-java (more dialects, heavy); rendering in the browser (needs JavaScript; agents and curl get no page).
-- **D22 — rendered or raw:** *Proposed:* rendered when the request asks for `text/html` (browser navigation); raw for `text/markdown`, `*/*` or no `Accept` (curl, downloads, agents); `?raw` forces raw; `Vary: Accept`. This is the opposite default of folders (D6), because a file has bytes to give. Alternatives: a separate URL prefix for rendered pages (e.g. `/view/…`); rendered also for `*/*`.
-- **D23 — heading IDs:** *Proposed:* GitHub's rules (lower case, spaces → `-`, punctuation removed, non-ASCII letters kept, repeats `-1`, `-2`), so that links written for GitHub or VS Code keep working. To check in step 38: whether commonmark-java's heading-anchor extension follows these rules exactly, else a small own ID generator.
-- **D24 — HTML inside Markdown:** *Proposed:* shown as text, not rendered; unsafe link schemes dropped. Alternative: allow a safe subset with an HTML sanitizer (e.g. OWASP Java HTML Sanitizer).
-- **D25 — external pictures:** *Proposed:* not shown (CSP allows only Mizoine's own files): no tracking, no mixed content. Alternative: allow `https:` pictures (`img-src 'self' https:`).
+- **D20 — saving from the editor:** **Decided 2026-11-23 as proposed:** always with `If-Match`; on 412 offer reload or keep. (D13 makes `If-Match` optional for API clients; the UI always uses it.)
+- **D21 — what opens in the editor:** **Decided 2026-11-23 as proposed:** text files (valid UTF-8, no NUL bytes) up to 2 MB; others are downloaded.
+- **T3.2 — Markdown page:** **Decided 2026-11-23 as proposed:** rendered on the server with commonmark-java, on the file's own URL (step 38). Not chosen: flexmark-java (more dialects, heavy); rendering in the browser (needs JavaScript; agents and curl get no page).
+- **D22 — rendered or raw:** **Decided 2026-11-23 as proposed:** rendered when the request asks for `text/html` (browser navigation); raw for `text/markdown`, `*/*` or no `Accept` (curl, downloads, agents); `?raw` forces raw; `Vary: Accept`. This is the opposite default of folders (D6), because a file has bytes to give. Not chosen: a separate URL prefix for rendered pages (e.g. `/view/…`); rendered also for `*/*`. **Added 2026-11-23:** never rendered for agents: MCP tools and requests with an OAuth token (`Bearer`) always get the raw file.
+- **D23 — heading IDs:** **Decided 2026-11-23 as proposed:** GitHub's rules (lower case, spaces → `-`, punctuation removed, non-ASCII letters kept, repeats `-1`, `-2`), so that links written for GitHub or VS Code keep working. To check in step 38: whether commonmark-java's heading-anchor extension follows these rules exactly, else a small own ID generator.
+- **D24 — HTML inside Markdown:** **Decided 2026-11-23 as proposed:** shown as text, not rendered; unsafe link schemes dropped. Not chosen: allow a safe subset with an HTML sanitizer (e.g. OWASP Java HTML Sanitizer).
+- **D25 — external pictures:** **Decided 2026-11-23 as proposed:** not shown (CSP allows only Mizoine's own files): no tracking, no mixed content. Not chosen: allow `https:` pictures (`img-src 'self' https:`).
+- **D27 — CSRF token for the static UI pages:** **Decided 2026-11-23 as proposed:** Spring Security's cookie token (`CookieCsrfTokenRepository`, readable by JavaScript), sent back in the `X-XSRF-TOKEN` header: the standard setup for pages without a server template. The session-bound default cannot reach a static file under `/ui/`. Not chosen: a small endpoint that returns the token (one more endpoint).
+- **D28 — the editor's URL:** **Decided 2026-11-23 as proposed:** `/ui/editor.html?file=/repository/path/file.md`, the file's path on the server as one parameter, so that the page needs no knowledge of repositories. Not chosen: two parameters (`repository`, `path`).
 - **Later, not planned yet:** rename and move (`MOVE`), copy, live Markdown preview in the editor, Obsidian `[[wiki links]]`, links relative to the repository root (`/…`), syntax highlighting of code blocks in the page, per-grant read-only permissions.

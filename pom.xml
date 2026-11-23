@@ -22,12 +22,44 @@
 		<checkstyle.version>14.4.0</checkstyle.version>
 		<!-- Java 25 needs JaCoCo 0.8.14 or later -->
 		<jacoco.version>0.8.16</jacoco.version>
+		<!-- Markdown → HTML for the browser (DEV.md step 38, T3.2) -->
+		<commonmark.version>0.33.0</commonmark.version>
 		<!-- OpenAPI: keep in line (springdoc 3.2.0 is built on Spring Boot 4.1.2 and swagger 2.2.55) -->
 		<springdoc.version>3.2.0</springdoc.version>
 		<swagger-annotations.version>2.2.55</swagger-annotations.version>
 	</properties>
 
 	<dependencies>
+		<dependency>
+			<groupId>org.commonmark</groupId>
+			<artifactId>commonmark</artifactId>
+			<version>${commonmark.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.commonmark</groupId>
+			<artifactId>commonmark-ext-gfm-tables</artifactId>
+			<version>${commonmark.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.commonmark</groupId>
+			<artifactId>commonmark-ext-gfm-strikethrough</artifactId>
+			<version>${commonmark.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.commonmark</groupId>
+			<artifactId>commonmark-ext-task-list-items</artifactId>
+			<version>${commonmark.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.commonmark</groupId>
+			<artifactId>commonmark-ext-autolink</artifactId>
+			<version>${commonmark.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.commonmark</groupId>
+			<artifactId>commonmark-ext-heading-anchor</artifactId>
+			<version>${commonmark.version}</version>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>

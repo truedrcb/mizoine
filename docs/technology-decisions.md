@@ -239,6 +239,9 @@ unwanted: B (Ace), which needs no build at all and has a strict-CSP mode, but is
 
 ### T3.2 — Markdown as a readable page
 
+> **Decided 2026-11-23: rendered on the server with commonmark-java**, on the file's own URL by `Accept`, as
+> proposed below (DEV.md step 38, D22–D25).
+
 *Requirement added 2026-11-19:*
 - `/repo/folder/document.md` opened in the browser shows the rendered document;
 - embedded pictures work and are simple to reference;
@@ -252,6 +255,7 @@ unwanted: B (Ace), which needs no build at all and has a strict-CSP mode, but is
 | Browser navigation (`Accept: text/html,…`) | The rendered page (`text/html`) |
 | `Accept: text/markdown` (editor, agents), `*/*` or none (curl, wget) | The file as it is (`text/markdown`) |
 | `…/document.md?raw` | The file as it is, for links in the page ("source", "download") |
+| MCP tools, or any request with an OAuth token (`Authorization: Bearer …`) | Always the file as it is, whatever `Accept` says (added 2026-11-23: agents never get a rendered page) |
 
 Notes:
 - Every answer carries `Vary: Accept`, so that caches keep both versions apart.
@@ -308,4 +312,4 @@ resolves relative references by itself:
 | T2 AI | **Decided:** remote MCP in Mizoine (`/mcp`), OAuth with one configured client | Dynamic client registration for more agents | REST + Skill, local MCP program, WebDAV mount |
 | T3 UI | **Decided:** Preact + htm or Lit, without build (D26: which one) | Plain JavaScript modules | SPA with a Node build |
 | T3.1 editor | **Decided:** CodeMirror 6, bundled once into `ui/vendor/`; a plain textarea until then | Ace (no build at all) | Monaco (no phone) |
-| T3.2 Markdown page | Rendered on the server with commonmark-java, on the file's own URL by `Accept`; relative pictures and links; GitHub-style heading IDs | Live preview in the editor (browser) | Rendering only in the browser |
+| T3.2 Markdown page | **Decided:** rendered on the server with commonmark-java, on the file's own URL by `Accept`; relative pictures and links; GitHub-style heading IDs | Live preview in the editor (browser) | Rendering only in the browser |

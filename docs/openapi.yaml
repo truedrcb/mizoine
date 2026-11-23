@@ -26,7 +26,11 @@ paths:
         \ without '/') gives its content, whatever the Accept header asks for: type\
         \ from the name, ETag and Last-Modified (304 for If-None-Match), Range (206),\
         \ HEAD. For safety it is sent with 'Content-Security-Policy: sandbox', and\
-        \ as download (attachment) unless its type cannot run in a browser."
+        \ as download (attachment) unless its type cannot run in a browser. Exception:\
+        \ a Markdown file (valid UTF-8, up to 2 MB) is a rendered HTML page when the\
+        \ request asks explicitly for text/html (a browser), and neither '?raw' nor\
+        \ an OAuth token (Bearer) is given; relative links and pictures work, headings\
+        \ have GitHub-style ids for '#topic'."
       operationId: folder
       parameters:
       - name: repository
@@ -41,6 +45,10 @@ paths:
         required: true
         schema:
           type: string
+      - name: raw
+        in: query
+        description: "Markdown files: '?raw' gives the file itself, never the rendered\
+          \ page"
       responses:
         "200":
           description: The folder page (HTML) or its subfolders and files (JSON);
