@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-23): steps 0–32 done (515 tests green; T1, the file API, complete). Steps 33–39 planned (MCP access for agents; browser UI, text editor; Markdown page, step 38, can follow now). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 later (textarea first), D10–D15. Open: T3.2, D16–D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-23): steps 0–32 done (518 tests green; T1, the file API, complete). Steps 33–39 planned (MCP access for agents; browser UI, text editor; Markdown page, step 38, can follow now). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 later (textarea first), D10–D15. Open: T3.2, D16–D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -575,6 +575,7 @@ Rules for all of them:
   - **Coverage:** JaCoCo 0.8.16 added to the build (`target/site/jacoco/jacoco.xml`, needed for Java 25). Uncovered new lines got behaviour tests. Left uncovered: the `catch` for a file removed between the check and the read (a race, no honest test).
   - **ub-mode tools** (crapper, dryer, mutator) could not be installed: running them was blocked by the permission system. See "Quality gates (ub-mode)" in CLAUDE.md.
   - **Live:** the jar with a test repository, `curl -I` and `curl`: `text/markdown`, `inline`, CSP with `sandbox`, `nosniff`, ETag, exact bytes.
+  - *Bug fix 2026-11-23:* Russian text in `.md` showed as `Ð¼Ð¾Ð¹ Ð´Ð¾Ð¼` instead of `мой дом`. Text was sent without charset, and browsers then read it as Windows-1252, two characters per UTF-8 byte pair. Now every `text/*` type is sent with `charset=UTF-8` (`FileDownload.withCharset`); other types unchanged. Red: `FileDownloadTest.textIsDeclaredAsUtf8`. Files in another encoding than UTF-8 would now show wrongly; for a Markdown knowledge base UTF-8 is the norm.
 
 ### 29. Writing prerequisites: CSRF for API clients  ☑
 - **Red:**

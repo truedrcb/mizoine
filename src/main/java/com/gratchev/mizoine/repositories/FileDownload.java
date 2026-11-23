@@ -24,7 +24,8 @@ import com.gratchev.mizoine.security.SecurityConfig;
 /**
  * The answer to {@code GET} of a repository file (step 28): its bytes, safe in the browser (D10).
  * <ul>
- * <li>Type from the file name; unknown → {@code application/octet-stream}.</li>
+ * <li>Type from the file name; unknown → {@code application/octet-stream}. Text types with
+ * {@code charset=UTF-8}.</li>
  * <li>{@code Content-Security-Policy} with {@code sandbox}: a file never runs scripts in Mizoine's origin.</li>
  * <li>Shown inline only for types a browser does not execute (images except SVG, audio, video, PDF, plain text,
  * Markdown, JSON, …); everything else is downloaded ({@code attachment}).</li>
@@ -55,7 +56,7 @@ final class FileDownload {
 				.filename(name, StandardCharsets.UTF_8)
 				.build();
 		return ResponseEntity.ok()
-				.contentType(type)
+				.contentType(withCharset(type))
 				.header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
 				.header("Content-Security-Policy", SecurityConfig.FILE_CONTENT_SECURITY_POLICY)
 				.eTag(etag(attributes))
@@ -68,6 +69,14 @@ final class FileDownload {
 		return Optional.ofNullable(OWN_TYPES.get(extension))
 				.or(() -> MediaTypeFactory.getMediaType(name))
 				.orElse(MediaType.APPLICATION_OCTET_STREAM);
+	}
+
+	/**
+	 * Text is declared as UTF-8, the encoding of Markdown and of the files Git tools write. Without it browsers read
+	 * text as Windows-1252 ("мой дом" became "Ð¼Ð¾Ð¹ Ð´Ð¾Ð¼").
+	 */
+	static MediaType withCharset(final MediaType type) {
+		return "text".equals(type.getType()) ? new MediaType(type, StandardCharsets.UTF_8) : type;
 	}
 
 	static boolean isInline(final MediaType type) {

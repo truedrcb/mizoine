@@ -47,6 +47,7 @@ class FileDownloadTest {
 
 	private static final Path BASE = createTree();
 	private static final String NOTE = "# Note\n\nÜber uns: ü\r\n";
+	private static final String RUSSIAN = "мой дом - ";
 	/** "ü" decomposed, as macOS writes names. */
 	private static final String NFD_NAME = "Rücksendeportal.pdf";
 
@@ -58,6 +59,8 @@ class FileDownloadTest {
 			Files.createDirectories(tree.resolve("private"));
 			Files.createDirectories(tree.resolve(".git"));
 			Files.writeString(tree.resolve("public/note.md"), NOTE);
+			Files.writeString(tree.resolve("public/russian.md"), RUSSIAN);
+			Files.writeString(tree.resolve("public/plain.txt"), RUSSIAN);
 			Files.write(tree.resolve("public/image.png"), new byte[] {(byte) 0x89, 'P', 'N', 'G', 1, 2, 3});
 			Files.writeString(tree.resolve("public/page.html"), "<script>alert(1)</script>");
 			Files.writeString(tree.resolve("public/drawing.svg"), "<svg xmlns=\"http://www.w3.org/2000/svg\"/>");
@@ -122,6 +125,22 @@ class FileDownloadTest {
 				.andExpect(status().isOk())
 				.andExpect(content().contentType(MediaType.IMAGE_PNG))
 				.andExpect(content().bytes(new byte[] {(byte) 0x89, 'P', 'N', 'G', 1, 2, 3}));
+	}
+
+	/** Without a charset browsers read text as Windows-1252: "мой дом" became "Ð¼Ð¾Ð¹ Ð´Ð¾Ð¼". */
+	@ParameterizedTest
+	@ValueSource(strings = {"russian.md:text/markdown", "plain.txt:text/plain"})
+	void textIsDeclaredAsUtf8(final String nameAndType) throws Exception {
+		final String[] parts = nameAndType.split(":");
+		mockMvc.perform(file("/tree/public/" + parts[0], ARTEM))
+				.andExpect(header().string(HttpHeaders.CONTENT_TYPE, parts[1] + ";charset=UTF-8"))
+				.andExpect(content().bytes(RUSSIAN.getBytes(StandardCharsets.UTF_8)));
+	}
+
+	@Test
+	void binaryTypesGetNoCharset() throws Exception {
+		mockMvc.perform(file("/tree/public/image.png", ARTEM))
+				.andExpect(header().string(HttpHeaders.CONTENT_TYPE, "image/png"));
 	}
 
 	@Test
