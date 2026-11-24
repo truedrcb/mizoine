@@ -4,11 +4,14 @@ import static org.springframework.security.config.Customizer.withDefaults;
 
 import java.time.Clock;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -19,6 +22,7 @@ import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWrite
 
 import com.gratchev.mizoine.MizoineProperties;
 import com.gratchev.mizoine.WebConfig;
+import com.gratchev.mizoine.mcp.McpPaths;
 
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletRequest;
@@ -39,7 +43,26 @@ public class SecurityConfig {
 	public static final String FILE_CONTENT_SECURITY_POLICY = CONTENT_SECURITY_POLICY + "; sandbox";
 
 	@Bean
-	SecurityFilterChain securityFilterChain(final HttpSecurity http, final LoginAttemptLimiter limiter) {
+	SecurityFilterChain securityFilterChain(final HttpSecurity http, final LoginAttemptLimiter limiter,
+			final MizoineProperties properties, final ObjectProvider<JwtDecoder> oauthTokens) {
+		// step 34: with OAuth, /mcp also takes Mizoine's own Bearer tokens, and a 401 there leads chat apps to OAuth.
+		// Decided by the configuration, not by whether some JwtDecoder bean exists.
+		if (properties.oauthEnabled()) {
+			final JwtDecoder tokens = oauthTokens.getObject();
+			http
+				.oauth2ResourceServer(server -> server.jwt(jwt -> jwt.decoder(tokens))
+						.authenticationEntryPoint(new McpOAuthEntryPoint(properties))
+						// RFC 9728 at /.well-known/oauth-protected-resource[/mcp], answered by Spring Security without
+						// login; with the configured address, as behind a proxy the request's host may be wrong
+						.protectedResourceMetadata(metadata -> metadata.protectedResourceMetadataCustomizer(builder -> builder
+								.resource(OAuthConfig.resource(properties))
+								.authorizationServer(OAuthConfig.publicUrl(properties))
+								.resourceName("Mizoine")
+								// tokens are not bound to client certificates
+								.claims(claims -> claims.remove("tls_client_certificate_bound_access_tokens")))))
+				.exceptionHandling(exceptions -> exceptions.defaultAuthenticationEntryPointFor(
+						new McpOAuthEntryPoint(properties), request -> McpPaths.ENDPOINT.equals(request.getServletPath())));
+		}
 		return http
 				.addFilterBefore(new LoginLimitFilter(limiter), UsernamePasswordAuthenticationFilter.class)
 				.addFilterAfter(new CsrfCookieFilter(), BasicAuthenticationFilter.class)
@@ -73,8 +96,20 @@ public class SecurityConfig {
 	 */
 	static boolean isApiClientWrite(final HttpServletRequest request) {
 		final String method = request.getMethod();
-		return (HttpMethod.PUT.matches(method) || HttpMethod.DELETE.matches(method))
-				&& request.getHeader(HttpHeaders.AUTHORIZATION) != null;
+		final boolean fileWrite = HttpMethod.PUT.matches(method) || HttpMethod.DELETE.matches(method);
+		return fileWrite && request.getHeader(HttpHeaders.AUTHORIZATION) != null || isMcpCall(request);
+	}
+
+	/**
+	 * The MCP endpoint (step 33) takes JSON-RPC by POST. A cross-site form can POST, but cannot send
+	 * {@code Content-Type: application/json} (that needs CORS, which Mizoine does not allow), so JSON is required,
+	 * with or without credentials: a chat app connects without them first and needs the 401 that leads it to the
+	 * OAuth login (step 34), not a 403 from CSRF.
+	 */
+	private static boolean isMcpCall(final HttpServletRequest request) {
+		return HttpMethod.POST.matches(request.getMethod()) && McpPaths.ENDPOINT.equals(request.getServletPath())
+				&& request.getContentType() != null
+				&& MediaType.APPLICATION_JSON.isCompatibleWith(MediaType.parseMediaType(request.getContentType()));
 	}
 
 	/** D27: readable by the pages' JavaScript; {@code SameSite=Lax} like the session cookie; Secure behind HTTPS. */

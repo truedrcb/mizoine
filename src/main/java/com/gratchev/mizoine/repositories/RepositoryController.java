@@ -186,7 +186,8 @@ class RepositoryController {
 	}
 
 	private Target target(final String repository, final String path, final Principal principal) {
-		final GrantedRepository granted = GrantedRepository.find(registry, repository, principal);
+		final GrantedRepository granted = GrantedRepository.find(registry, repository, principal.getName())
+				.orElseThrow(GrantedRepository::notFound);
 		final RepositoryConfig config = granted.config();
 		final RepositoryAccess access = granted.access();
 		if (granted.hasProblems()) {
@@ -210,7 +211,7 @@ class RepositoryController {
 			final HttpServletRequest request, final HttpServletResponse response) {
 		final Optional<String> text = MarkdownPage.isMarkdown(file.path())
 				&& MarkdownPage.isWanted(request.getHeader(HttpHeaders.ACCEPT), request.getHeader(HttpHeaders.AUTHORIZATION), raw)
-				? MarkdownPage.text(file.path()) : Optional.empty();
+				? TextFile.read(file.path()) : Optional.empty();
 		if (text.isEmpty()) {
 			return download(file);
 		}
@@ -240,12 +241,7 @@ class RepositoryController {
 	}
 
 	private static FolderListing listing(final Target.Folder target) {
-		final Path root = target.config().root();
-		final List<String> segments = target.segments();
-		final String path = segments.isEmpty() ? "/" : "/" + String.join("/", segments) + "/";
-		return new FolderListing(target.config().name(), path,
-				target.access().visibleChildren(segments, RepositoryPaths.childFolders(root, segments)),
-				target.access().visibleFiles(segments, RepositoryPaths.childFiles(root, segments)));
+		return RepositoryFiles.listing(target.config(), target.access(), target.segments());
 	}
 
 	private static RepositoryProblem problem(final Target.Problem target) {

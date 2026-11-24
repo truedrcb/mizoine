@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-23): steps 0–32 and 37–40 done (593 Java and 51 JavaScript tests green; file API, Markdown page, editor with syntax highlighting). Steps 33–36 planned (MCP access for agents; browser UI). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D16–D19, D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-23): steps 0–34 and 37–40 done (633 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: live test from the phone open; step 36 (browser UI) planned. Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -630,7 +630,7 @@ Rules for all of them:
   6. Same "not writable" cases as step 30; missing → 404.
 - *Done 2026-11-23 (ub-mode):* `RepositoryWriter.delete` with its own result type (`Deleted`, `NotEmpty`, `PreconditionFailed`, `NotFound`). A symbolic link is removed, never its target (file and folder links tested). The top of a grant is recognized by `RepositoryAccess.isGrantedFolder` → 409, before the write check (which would give 404 there).
 
-### 33. MCP endpoint for agents  ☐
+### 33. MCP endpoint for agents  ☑
 T2 decided 2026-11-19: remote MCP in Mizoine, so that Claude (also on the smartphone) and other agents store and retrieve knowledge.
 - Tools return files raw, exactly as stored: `read_file` gives the Markdown text, never rendered HTML (step 38 renders only for browsers).
 - `/mcp` over Streamable HTTP, with tools built on the same file service as steps 28–32 and the same grants: `list_repositories`, `list_folder`, `read_file`, `write_file`, `create_folder`, `delete`.
@@ -643,8 +643,31 @@ T2 decided 2026-11-19: remote MCP in Mizoine, so that Claude (also on the smartp
   3. Paths outside its grants, hidden names, `.git`, `..`, links leading outside: an error without details, the same for "missing" and "not allowed" (D2).
   4. Without login → 401.
 - Library (D16): Spring AI's MCP server, or the Java MCP SDK directly; decided by what supports Spring Boot 4 at the time.
+- *Done 2026-11-23 (ub-mode), with findings:*
+  - **D16 decided:** the official MCP Java SDK 2.2.0 (`mcp-core` + `mcp-json-jackson3`, fits Spring Boot 4 and Jackson 3), without Spring AI.
+    - Stateless Streamable HTTP: `HttpServletStatelessServerTransport` as a servlet at `/mcp`, no MCP sessions.
+    - Spring AI 2.1 would also work, but brings a framework for one endpoint.
+  - **Redesign first** ("do not bolt it on"): the file rules lived in the HTTP controllers. New `RepositoryFiles` is the one place for what a user may do: list repositories and folders, read text, write, create folder, delete. It works with usernames; "not visible" is its own exception (`NotVisibleException`: 404 for HTTP, a tool error for MCP).
+    - `FileWriteController` uses it; `GrantedRepository.find` returns an `Optional`.
+    - Deleting the top of a grant is a result of its own (`DeleteResult.IsGrantedFolder`), so MCP gets the same rule.
+    - `TextFile` (valid UTF-8, up to 2 MB, D21) moved out of `MarkdownPage`; both the Markdown page and `read_file` use it.
+  - **Tools** (`McpTools`): `list_repositories`, `list_folder`, `read_file` (raw, never rendered), `write_file` (optional `if_match`), `create_folder`, `delete`. They are adapters over `RepositoryFiles`; descriptions tell the agent that a human reviews with `git diff`; error texts say what to do ("create it with create_folder first").
+  - **Login and CSRF:**
+    - The user comes from the request that Spring Security's filters already checked (`contextExtractor`).
+    - `POST /mcp` with `Content-Type: application/json` needs no CSRF token: cross-site forms cannot send JSON, a text/plain form post gets 403 (tested).
+    - Without credentials the answer is **401, not 403**: found in the live check; chat apps need the 401 to find the OAuth login (step 34).
+  - **Other changes:** `mcp` is a reserved repository name. The common API description mentions `/mcp` (not a controller, so not listed).
+  - **Tests:** `McpEndpointTest`, 19 tests with the SDK's own client against the real server. The agent (test user guest, grants `knowledge` and `inbox`) lists, reads byte for byte and writes; it sees nothing else; the same "Not found" for missing and not allowed; an old version is not overwritten.
+  - **Live** (jar + curl, JSON-RPC): initialize, `tools/list`, `write_file`, `read_file` outside the grant → "Not found"; no warnings in the log.
+  - **Make it right (2026-11-24):**
+    - CRAP from JaCoCo showed `McpTools.createFolder` at 10.7: only the success cases were tested.
+    - `McpToolsTest` (8 tests, no server: the real `RepositoryFiles` on a temporary folder) now checks every answer of every tool: parent missing, file in the way, folder exists, not empty, granted folder, too large, not text, missing argument.
+    - It found two different "Not found" texts (the folder's '/' lost in one): now the tool always repeats the agent's path.
+    - `OAuthConfigTest`: OAuth without `mizoine.public-url` stops the start with a clear message.
+    - None at CRAP 10 or more.
 
-### 34. OAuth for chat apps  ☐
+
+### 34. OAuth for chat apps  ☑
 What Claude's "custom connector" (and other chat apps) need to log in.
 - Mizoine becomes an OAuth 2.1 authorization server (Spring Security's authorization server) and protects `/mcp` with its tokens (resource server).
 - Discovery:
@@ -659,6 +682,27 @@ What Claude's "custom connector" (and other chat apps) need to log in.
   2. The full code + PKCE flow in a test gives a token; with it, `/mcp` works as the agent user, with only its grants.
   3. A wrong secret, a wrong redirect URI, a missing PKCE verifier, an expired or foreign token → rejected.
   4. User removed from `users.yaml` → its tokens stop working.
+- *Done 2026-11-23 (ub-mode), with findings:*
+  - **Spring's authorization server and resource server** (Boot 4.1 starters with the `security-` prefix), configured by Mizoine in `OAuthConfig`, only when `mizoine.oauth.client-id` is set.
+    - **D17:** one client from the settings, secret only as bcrypt hash; code + PKCE required, no consent page, no client registration endpoint.
+    - **D18:** signing key and authorizations in memory; access tokens 1 h, refresh tokens 30 days.
+    - **D19:** Mizoine's own login form, the agent user logs in.
+  - **`mizoine.public-url` is required with OAuth:** issuer, resource and metadata must name the public address; behind the user's nginx the request's host is `localhost`.
+  - **Tokens:** a JWT is valid at Mizoine only if all of these hold:
+    - signature, time and issuer are right;
+    - the audience is `<public-url>/mcp` (set by a token customizer);
+    - its user still exists in the users file, so removing the user stops its tokens.
+  - **Discovery:**
+    - Spring Security 7 already serves the protected resource metadata (RFC 9728); my own controller for it was removed again ("Subtract"). The built-in endpoint gets the public address, and loses the claim `tls_client_certificate_bound_access_tokens: true` (tokens are not bound to client certificates).
+    - A 401 at `/mcp` carries `WWW-Authenticate: Bearer resource_metadata="…"` (`McpOAuthEntryPoint`).
+  - **Root cause found:** Spring Boot's authorization-server auto-configuration creates its own key and `JwtDecoder` whenever the starter is on the classpath. The first version took "a `JwtDecoder` exists" as "OAuth is on", which broke every context without OAuth. Now the setting decides (`MizoineProperties.oauthEnabled()`), and Boot's OAuth auto-configurations are excluded (no key generated without OAuth).
+  - **Tests:** `OAuthTest`, 10 tests on a real server.
+    - Discovery: both metadata documents, and the 401 with its pointer.
+    - The whole flow as phone and chat app: authorize → login page → agent logs in → code → token with PKCE → MCP with the agent's grants only. Renewal with the refresh token.
+    - Refused: wrong client secret, unregistered redirect URI, missing PKCE verifier, forged token, user removed.
+  - **Live** (jar with the settings as command-line options): metadata with the public address, 401 with `resource_metadata`, authorize → `/login`; no warnings.
+- *Decided with this step:* D17, D18, D19 as proposed.
+
 
 ### 35. Connect Claude from the smartphone  ☐
 - README section "Connect an AI agent":
@@ -668,6 +712,8 @@ What Claude's "custom connector" (and other chat apps) need to log in.
   - it then works in the Claude mobile app.
 - nginx: `/mcp` without response buffering (streaming); `/.well-known/` passed through.
 - Check live with the real server behind Cloudflare: from the Claude app on the phone, store a note, read it back, and see it as a new file in `git status` on the server.
+- *2026-11-23:* the README section "Connect an AI agent (MCP)" is written (agent user, Claude Code with Basic, Claude on web and phone with OAuth, restart, Cloudflare). nginx needs nothing special for `/mcp`: the stateless endpoint answers with JSON, not a stream. **Open: the live test from the Claude app on the phone** against the real server behind Cloudflare.
+
 
 ### 36. Browser UI for files  ☐
 T3 decided: a small library without build, Preact + htm or Lit (D26), copied into `src/main/resources/ui/vendor/` with a note of its version and source; the application's code as plain JavaScript modules in `src/main/resources/ui/`.
@@ -891,10 +937,10 @@ Proposals; details in [docs/technology-decisions.md](docs/technology-decisions.m
 - **D14 — missing parent folders:** **Decided 2026-11-19:** 409; folders are created only explicitly (`PUT …/`, step 31). The same rule as WebDAV (`PUT` and `MKCOL` answer 409 when the parent is missing). Not chosen: create parents automatically, as the Solid Protocol does (handier for agents, but a typo creates a new folder tree).
 - **D15 — deleting folders:** **Decided 2026-11-19:** only empty folders; with content → 409, as the Solid Protocol. Not chosen: recursive delete, as WebDAV `DELETE` (one request removes a whole tree; Git keeps the history only of what was committed). If WebDAV is added later, its recursive `DELETE` needs a decision of its own.
 - References for the folder API: WebDAV ([RFC 4918](https://www.rfc-editor.org/rfc/rfc4918)) and the [Solid Protocol](https://solidproject.org/TR/protocol). Mizoine takes from each the part that matches D14 and D15. `PUT …/` instead of WebDAV's own `MKCOL` method: Spring MVC and Spring Security's firewall accept only the standard HTTP methods, and OpenAPI 3.1 cannot describe others. `MKCOL` can be added as an alias when WebDAV comes.
-- **D16 — MCP library:** Spring AI's MCP server (with the Spring AI community `mcp-security` module) or the Java MCP SDK directly. *To decide in step 33* by Spring Boot 4 support at that time.
-- **D17 — OAuth clients:** *Proposed:* one client configured in Mizoine ("Use your own OAuth client" in Claude): least code, no open registration endpoint. Alternatives: dynamic client registration (any agent can register itself); "Claude's published identity" (client ID metadata documents).
-- **D18 — token storage:** *Proposed:* in memory, so no database (BACKLOG principle 1); after a restart the connector logs in again. Alternative: a token file.
-- **D19 — who logs in during "Connect":** *Proposed:* the agent user itself (its password is entered once in the phone's browser). Alternative: the human logs in and picks which agent user the connector acts as (more code: a consent page with a choice).
+- **D16 — MCP library:** **Decided 2026-11-23 (step 33):** the official MCP Java SDK 2.2.0 directly (`mcp-core`, `mcp-json-jackson3`), stateless servlet transport. Not chosen: Spring AI 2.1 (a framework for one endpoint).
+- **D17 — OAuth clients:** **Decided 2026-11-23 as proposed (step 34):** one client configured in Mizoine ("Use your own OAuth client" in Claude): least code, no open registration endpoint. Not chosen: dynamic client registration (any agent can register itself); "Claude's published identity" (client ID metadata documents).
+- **D18 — token storage:** **Decided 2026-11-23 as proposed (step 34):** in memory, so no database (BACKLOG principle 1); after a restart the connector logs in again. Not chosen: a token file.
+- **D19 — who logs in during "Connect":** **Decided 2026-11-23 as proposed (step 34):** the agent user itself (its password is entered once in the phone's browser). Not chosen: the human logs in and picks which agent user the connector acts as (more code: a consent page with a choice).
 - **T3.1 — text editor:** **Decided 2026-11-19:** CodeMirror 6, bundled once into `ui/vendor/` (best on the phone; Markdown, JSON, YAML packages). For the moment it is more than needed: the editor starts as a plain `<textarea>` (step 37), and CodeMirror 6 replaces it when highlighting is wanted (step 39). Not chosen: Ace; Monaco (not supported on mobile browsers).
 - **D20 — saving from the editor:** **Decided 2026-11-23 as proposed:** always with `If-Match`; on 412 offer reload or keep. (D13 makes `If-Match` optional for API clients; the UI always uses it.)
 - **D21 — what opens in the editor:** **Decided 2026-11-23 as proposed:** text files (valid UTF-8, no NUL bytes) up to 2 MB; others are downloaded.

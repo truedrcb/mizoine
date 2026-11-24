@@ -24,12 +24,24 @@
 		<jacoco.version>0.8.16</jacoco.version>
 		<!-- Markdown → HTML for the browser (DEV.md step 38, T3.2) -->
 		<commonmark.version>0.33.0</commonmark.version>
+		<!-- MCP endpoint for AI agents (DEV.md step 33, D16): the official Java SDK, with Jackson 3 -->
+		<mcp.version>2.2.0</mcp.version>
 		<!-- OpenAPI: keep in line (springdoc 3.2.0 is built on Spring Boot 4.1.2 and swagger 2.2.55) -->
 		<springdoc.version>3.2.0</springdoc.version>
 		<swagger-annotations.version>2.2.55</swagger-annotations.version>
 	</properties>
 
 	<dependencies>
+		<dependency>
+			<groupId>io.modelcontextprotocol.sdk</groupId>
+			<artifactId>mcp-core</artifactId>
+			<version>${mcp.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.modelcontextprotocol.sdk</groupId>
+			<artifactId>mcp-json-jackson3</artifactId>
+			<version>${mcp.version}</version>
+		</dependency>
 		<dependency>
 			<groupId>org.commonmark</groupId>
 			<artifactId>commonmark</artifactId>
@@ -75,6 +87,15 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		<!-- OAuth for agents in chat apps (DEV.md step 34, T2): Mizoine is authorization server and resource server -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security-oauth2-authorization-server</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId>
 		</dependency>
 		<!-- OpenAPI annotations only; the description is generated in tests (see springdoc below) -->
 		<dependency>

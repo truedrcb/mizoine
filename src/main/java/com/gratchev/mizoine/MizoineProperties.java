@@ -2,6 +2,7 @@ package com.gratchev.mizoine;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
@@ -25,6 +26,9 @@ import jakarta.validation.constraints.Positive;
  * @param repositoriesDir folder with one {@code <name>.yaml} per repository ({@code mizoine.repositories-dir});
  *            default: the current directory
  * @param maxFileSize the largest file that can be written over HTTP ({@code mizoine.max-file-size}, D12)
+ * @param publicUrl the address users and chat apps reach Mizoine at, e.g. {@code https://mizoine.example.org}
+ *            ({@code mizoine.public-url}); needed for OAuth, because behind a proxy the request's host may be wrong
+ * @param oauth the one OAuth client for chat apps ({@code mizoine.oauth.*}, step 34); OAuth is off without it
  */
 @Validated
 @ConfigurationProperties("mizoine")
@@ -32,7 +36,9 @@ public record MizoineProperties(
 		@NotBlank(message = "set mizoine.users-file to the path of the users YAML file") String usersFile,
 		@Valid @DefaultValue LoginLimit loginLimit,
 		@NotBlank @DefaultValue(".") String repositoriesDir,
-		@NotNull @DefaultValue("100MB") DataSize maxFileSize) {
+		@NotNull @DefaultValue("100MB") DataSize maxFileSize,
+		String publicUrl,
+		@Valid @DefaultValue OAuth oauth) {
 
 	/** {@code mizoine.users-file}, relative to the working directory. */
 	public Path usersFilePath() {
@@ -42,6 +48,21 @@ public record MizoineProperties(
 	/** {@code mizoine.repositories-dir}, relative to the working directory. */
 	public Path repositoriesDirPath() {
 		return Path.of(repositoriesDir);
+	}
+
+	/** @return whether OAuth for chat apps is configured: a client and the public address */
+	public boolean oauthEnabled() {
+		return oauth.clientId() != null && !oauth.clientId().isBlank();
+	}
+
+	/**
+	 * D17: the one client a chat app is configured with ("Use your own OAuth client" in Claude).
+	 *
+	 * @param clientId e.g. {@code claude}; empty = OAuth off
+	 * @param clientSecret only its hash, {@code {bcrypt}...} (create it with {@code hash-password})
+	 * @param redirectUris where the chat app receives the code, e.g. {@code https://claude.ai/api/mcp/auth_callback}
+	 */
+	public record OAuth(String clientId, String clientSecret, @DefaultValue List<String> redirectUris) {
 	}
 
 	/**

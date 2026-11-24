@@ -122,6 +122,10 @@ public class RepositoryWriter {
 		/** Missing, hidden, outside the root, or not of the kind the URL names (folder or file, D5). */
 		record NotFound() implements DeleteResult {
 		}
+
+		/** The repository root or one of the user's granted folders: not deleted (step 32). Decided by access. */
+		record IsGrantedFolder() implements DeleteResult {
+		}
 	}
 
 	private final Lock lock = new ReentrantLock();

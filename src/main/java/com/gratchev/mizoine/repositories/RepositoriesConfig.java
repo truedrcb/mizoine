@@ -31,6 +31,11 @@ public class RepositoriesConfig {
 				username -> exists(users, username), properties.usersFilePath());
 	}
 
+	@Bean
+	RepositoryFiles repositoryFiles(final RepositoryRegistry registry, final RepositoryWriter writer) {
+		return new RepositoryFiles(registry, writer);
+	}
+
 	/** One instance: it allows one writer at a time (version check and move). */
 	@Bean
 	RepositoryWriter repositoryWriter() {

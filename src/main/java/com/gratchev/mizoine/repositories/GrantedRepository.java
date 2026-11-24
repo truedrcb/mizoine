@@ -1,6 +1,6 @@
 package com.gratchev.mizoine.repositories;
 
-import java.security.Principal;
+import java.util.Optional;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -11,13 +11,11 @@ import org.springframework.web.server.ResponseStatusException;
  */
 record GrantedRepository(RepositoryConfig config, RepositoryAccess access) {
 
-	static GrantedRepository find(final RepositoryRegistry registry, final String name, final Principal principal) {
-		final RepositoryConfig config = registry.find(name).orElseThrow(GrantedRepository::notFound);
-		final RepositoryAccess access = RepositoryAccess.of(config, principal.getName());
-		if (!access.hasAccess()) {
-			throw notFound();
-		}
-		return new GrantedRepository(config, access);
+	/** @return the repository, if the user has at least one grant in it */
+	static Optional<GrantedRepository> find(final RepositoryRegistry registry, final String name, final String user) {
+		return registry.find(name)
+				.map(config -> new GrantedRepository(config, RepositoryAccess.of(config, user)))
+				.filter(granted -> granted.access().hasAccess());
 	}
 
 	boolean hasProblems() {

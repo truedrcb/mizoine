@@ -55,7 +55,7 @@ class DocumentPageTest {
 			.file("tree/notes/a b.md", "# Space")
 			.file("tree/notes/images/diagram.png", new byte[] {(byte) 0x89, 'P', 'N', 'G'})
 			.file("tree/notes/latin1.md", "Gr\u00fc\u00dfe".getBytes(StandardCharsets.ISO_8859_1))
-			.file("tree/notes/big.md", "x".repeat((int) MarkdownPage.MAX_BYTES + 1))
+			.file("tree/notes/big.md", "x".repeat((int) TextFile.MAX_BYTES + 1))
 			.file("tree/notes/.hidden.md", "# Hidden")
 			.repository("tree", "path: tree\n" + TestRepositories.ARTEM_EVERYTHING);
 

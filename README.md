@@ -178,6 +178,41 @@ browser that loads and saves through the same file API.
 - Line endings and non-ASCII text are kept exactly.
 - Not logged in: "Log in" opens a new tab; your text stays, then press Save again.
 
+## Connect an AI agent (MCP)
+
+Agents (Claude, also on the phone, Claude Code, others) store and retrieve knowledge through the MCP endpoint
+`https://<host>/mcp`. Tools: `list_repositories`, `list_folder`, `read_file`, `write_file`, `create_folder`, `delete`.
+Files are given raw; the agent's writes are plain files that you review with `git diff` and commit.
+
+1. **An agent user** in `users.yaml` (password hash from `hash-password`), with grants only to its folders in
+   the repository file, e.g. `agent: [knowledge, inbox]`. It sees nothing else.
+2. **Claude Code** (or any client that can send a header) connects with HTTP Basic:
+   ```sh
+   claude mcp add --transport http mizoine https://<host>/mcp --header "Authorization: Basic $(printf 'agent:<password>' | base64)"
+   ```
+3. **Claude on the web and on the phone** (custom connector) needs OAuth. Mizoine is its own OAuth server with one
+   configured client:
+   - make a client secret, e.g. `openssl rand -base64 32`, and its hash with `java -jar mizoine.jar hash-password`;
+   - add to `application.yaml` (or as `--mizoine...` options), then restart:
+     ```yaml
+     mizoine:
+       public-url: https://mizoine.example.org       # the address Claude reaches Mizoine at
+       oauth:
+         client-id: claude
+         client-secret: "{bcrypt}$2a$12$..."       # the hash, never the secret itself
+         redirect-uris: https://claude.ai/api/mcp/auth_callback
+     ```
+     (If Claude's connector settings show a different callback URL, use that one.)
+   - on claude.ai: Settings → Connectors → add a custom connector with `https://mizoine.example.org/mcp`; under
+     the advanced settings enter the client ID `claude` and the secret itself; then **Connect**. Mizoine's login
+     page opens: log in as the agent user. The connector then also works in the Claude mobile app.
+
+Notes:
+- Access tokens last an hour and are renewed automatically. They are kept in memory: after a restart of Mizoine,
+  press Connect again.
+- Behind Cloudflare: its bot protection must not block the requests of Anthropic's servers to `/mcp`, `/oauth2/*`
+  and `/.well-known/*`. nginx needs nothing special (it passes the `Authorization` header).
+
 ## Development
 
 Test-driven, step by step: plan and status in [DEV.md](DEV.md), way of working in [CLAUDE.md](CLAUDE.md).

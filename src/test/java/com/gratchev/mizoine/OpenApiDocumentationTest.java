@@ -64,7 +64,14 @@ class OpenApiDocumentationTest {
 							+ "Every page needs a login: browsers use the login form, other clients HTTP Basic. "
 							+ "Public without login: /favicon.ico and GET /ui/**, the static files of the user "
 							+ "interface (logos etc.). Those under /ui/ are not listed as operations: "
-							+ "they are plain files, not API methods."),
+							+ "they are plain files, not API methods. "
+							+ "AI agents connect to the MCP endpoint /mcp (Model Context Protocol, Streamable HTTP, POST with "
+							+ "JSON-RPC): tools list_repositories, list_folder, read_file, write_file, create_folder, delete, "
+							+ "with the same grants as this API. It is not listed as an operation either. "
+							+ "With OAuth configured (mizoine.oauth.client-id), /mcp also takes Bearer tokens from Mizoine's own "
+							+ "OAuth server for chat apps: /.well-known/oauth-protected-resource/mcp (RFC 9728), "
+							+ "/.well-known/oauth-authorization-server, /oauth2/authorize and /oauth2/token (authorization code "
+							+ "with PKCE, one configured client); served by Spring Security, so not listed as operations."),
 			// relative: the same description fits every installation (e.g. behind nginx)
 			servers = @Server(url = "/", description = "This Mizoine server"),
 			security = @SecurityRequirement(name = BASIC_AUTH))
@@ -92,7 +99,11 @@ class OpenApiDocumentationTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.info.title").value("Mizoine"))
 				// served by a resource handler, which springdoc does not list as an operation
-				.andExpect(jsonPath("$.info.description").value(containsString("/ui/")));
+				.andExpect(jsonPath("$.info.description").value(containsString("/ui/")))
+				// the MCP endpoint for agents (step 33) is a servlet, not a controller, so not listed either
+				.andExpect(jsonPath("$.info.description").value(containsString("/mcp")))
+				// step 34: OAuth for chat apps, served by Spring Security's filters, not controllers
+				.andExpect(jsonPath("$.info.description").value(containsString("/.well-known/oauth-protected-resource")));
 	}
 
 	/** Method and path; springdoc writes {*path} as {path}. */

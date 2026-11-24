@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 import com.gratchev.mizoine.ApiTexts;
 import com.gratchev.mizoine.MizoineProperties;
@@ -44,14 +43,11 @@ class FileWriteController {
 	private static final String NOT_FOUND = "Unknown repository or path, no write access, or a hidden name — "
 			+ "deliberately the same answer";
 
-	private final RepositoryRegistry registry;
-	private final RepositoryWriter writer;
+	private final RepositoryFiles files;
 	private final long maxFileSize;
 
-	FileWriteController(final RepositoryRegistry registry, final RepositoryWriter writer,
-			final MizoineProperties properties) {
-		this.registry = registry;
-		this.writer = writer;
+	FileWriteController(final RepositoryFiles files, final MizoineProperties properties) {
+		this.files = files;
 		this.maxFileSize = properties.maxFileSize().toBytes();
 	}
 
@@ -87,25 +83,27 @@ class FileWriteController {
 			@RequestHeader(name = HttpHeaders.IF_NONE_MATCH, required = false)
 			@Parameter(description = "'*': create only") final String ifNoneMatch,
 			final Principal principal, final HttpServletRequest request, final InputStream body) throws IOException {
-		final GrantedRepository granted = writable(repository, principal);
-		final List<String> segments = RepositoryUrls.segments(path);
+		final Place place = new Place(principal.getName(), repository, RepositoryUrls.segments(path));
 		final boolean createOnly = "*".equals(ifNoneMatch);
 		if (RepositoryUrls.isFolder(path)) {
-			return createFolder(granted, segments, createOnly, hasBody(request, body));
+			return createFolder(place, createOnly, hasBody(request, body));
 		}
-		return writeFile(granted, segments, new Precondition(Optional.ofNullable(ifMatch), createOnly),
-				request.getContentLengthLong(), body);
+		return writeFile(place, new Precondition(Optional.ofNullable(ifMatch), createOnly), request.getContentLengthLong(), body);
 	}
 
-	private ResponseEntity<Void> writeFile(final GrantedRepository granted, final List<String> segments,
-			final Precondition precondition, final long contentLength, final InputStream body) {
-		checkWritable(granted, segments);
+	/** Who acts where: the user and the path below a repository. */
+	private record Place(String user, String repository, List<String> segments) {
+	}
+
+	private ResponseEntity<Void> writeFile(final Place place, final Precondition precondition, final long contentLength,
+			final InputStream body) {
+		files.checkWritable(place.user(), place.repository(), place.segments());
 		if (contentLength > maxFileSize) {
 			// known too large before reading anything
 			return status(HttpStatus.CONTENT_TOO_LARGE);
 		}
-		return switch (writer.write(granted.config().root(), segments, body, maxFileSize, precondition)) {
-			case Result.Created created -> ResponseEntity.created(location(granted, segments, false)).eTag(created.etag()).build();
+		return switch (files.write(place.user(), place.repository(), place.segments(), body, maxFileSize, precondition)) {
+			case Result.Created created -> ResponseEntity.created(location(place, false)).eTag(created.etag()).build();
 			case Result.Replaced replaced -> ResponseEntity.noContent().eTag(replaced.etag()).build();
 			case Result.PreconditionFailed failed -> status(HttpStatus.PRECONDITION_FAILED);
 			case Result.ParentMissing missing -> status(HttpStatus.CONFLICT);
@@ -136,34 +134,28 @@ class FileWriteController {
 			@RequestHeader(name = HttpHeaders.IF_MATCH, required = false)
 			@Parameter(description = "Files: the ETag the file must still have") final String ifMatch,
 			final Principal principal) {
-		final GrantedRepository granted = writable(repository, principal);
-		final List<String> segments = RepositoryUrls.segments(path);
-		if (granted.access().isGrantedFolder(segments)) {
-			return status(HttpStatus.CONFLICT);
-		}
-		checkWritable(granted, segments);
-		return switch (writer.delete(granted.config().root(), segments, RepositoryUrls.isFolder(path),
+		return switch (files.delete(principal.getName(), repository, RepositoryUrls.segments(path), RepositoryUrls.isFolder(path),
 				Optional.ofNullable(ifMatch))) {
 			case DeleteResult.Deleted deleted -> ResponseEntity.noContent().build();
 			case DeleteResult.NotEmpty notEmpty -> status(HttpStatus.CONFLICT);
+			case DeleteResult.IsGrantedFolder grantedFolder -> status(HttpStatus.CONFLICT);
 			case DeleteResult.PreconditionFailed failed -> status(HttpStatus.PRECONDITION_FAILED);
 			case DeleteResult.NotFound notFound -> throw GrantedRepository.notFound();
 		};
 	}
 
-	private ResponseEntity<Void> createFolder(final GrantedRepository granted, final List<String> segments,
-			final boolean createOnly, final boolean hasBody) {
-		if (segments.isEmpty()) {
+	private ResponseEntity<Void> createFolder(final Place place, final boolean createOnly, final boolean hasBody) {
+		if (place.segments().isEmpty()) {
 			// the repository root always exists and is not created
 			return status(HttpStatus.CONFLICT);
 		}
-		checkWritable(granted, segments);
+		files.checkWritable(place.user(), place.repository(), place.segments());
 		if (hasBody) {
 			// as WebDAV MKCOL: a folder has no content
 			return status(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
 		}
-		return switch (writer.createFolder(granted.config().root(), segments, createOnly)) {
-			case FolderResult.Created created -> ResponseEntity.created(location(granted, segments, true)).build();
+		return switch (files.createFolder(place.user(), place.repository(), place.segments(), createOnly)) {
+			case FolderResult.Created created -> ResponseEntity.created(location(place, true)).build();
 			case FolderResult.Exists exists -> ResponseEntity.noContent().build();
 			case FolderResult.PreconditionFailed failed -> status(HttpStatus.PRECONDITION_FAILED);
 			case FolderResult.ParentMissing missing -> status(HttpStatus.CONFLICT);
@@ -172,27 +164,12 @@ class FileWriteController {
 		};
 	}
 
-	private GrantedRepository writable(final String repository, final Principal principal) {
-		final GrantedRepository granted = GrantedRepository.find(registry, repository, principal);
-		if (granted.hasProblems()) {
-			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		return granted;
-	}
-
-	/** Only inside a granted folder, never hidden; everything else is the same 404 as unknown (D2). */
-	private static void checkWritable(final GrantedRepository granted, final List<String> segments) {
-		if (segments.isEmpty() || !granted.access().canWriteIn(segments.subList(0, segments.size() - 1))) {
-			throw GrantedRepository.notFound();
-		}
-	}
-
 	private static boolean hasBody(final HttpServletRequest request, final InputStream body) throws IOException {
 		return request.getContentLengthLong() > 0 || body.read() >= 0;
 	}
 
-	private static URI location(final GrantedRepository granted, final List<String> segments, final boolean folder) {
-		return URI.create(RepositoryUrls.url(granted.config().name(), segments, folder));
+	private static URI location(final Place place, final boolean folder) {
+		return URI.create(RepositoryUrls.url(place.repository(), place.segments(), folder));
 	}
 
 	private static ResponseEntity<Void> status(final HttpStatus status) {
