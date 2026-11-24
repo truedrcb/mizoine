@@ -190,6 +190,16 @@ class RepositoryAccessTest {
 	}
 
 	@Test
+	void entriesMayBeChangedInWritableFoldersOnly() {
+		final RepositoryAccess access = access(repository("guest", "projects/shared"), "guest");
+
+		assertThat(access.canChange(folder("projects/shared/plan.md"))).isTrue();
+		assertThat(access.canChange(folder("projects/shared"))).isFalse();
+		assertThat(access.canChange(ROOT)).isFalse();
+		assertThat(access.canChange(folder("private/plan.md"))).isFalse();
+	}
+
+	@Test
 	void theTopOfAGrantIsKnown() {
 		// such a folder cannot be deleted by the user: it would remove the grant's place (step 32)
 		final RepositoryAccess access = access(repository("guest", "projects/shared"), "guest");

@@ -206,4 +206,28 @@ class RepositoryPathsTest {
 		assertThat(RepositoryPaths.childFiles(root, segments("nothing"))).isEmpty();
 		assertThat(RepositoryPaths.childFiles(root, segments("a", "file.txt"))).isEmpty();
 	}
+
+	// where a path really leads: the grants are checked there too
+
+	@Test
+	void realSegmentsFollowEveryLinkAsFarAsThePathExists() throws IOException {
+		Files.createSymbolicLink(root.resolve("a/to-b"), root.resolve("a/b"));
+		Files.createSymbolicLink(root.resolve("a/to-file"), root.resolve("a/file.txt"));
+
+		assertThat(RepositoryPaths.realSegments(root, segments("a", "to-b", "new", "x.md"))).containsExactly("a", "b", "new", "x.md");
+		assertThat(RepositoryPaths.realSegments(root, segments("a", "to-b"))).containsExactly("a", "b");
+		assertThat(RepositoryPaths.realSegments(root, segments("a", "to-file"))).containsExactly("a", "file.txt");
+		assertThat(RepositoryPaths.realSegments(root, segments("missing", "x.md"))).containsExactly("missing", "x.md");
+		assertThat(RepositoryPaths.realSegments(root, segments())).isEmpty();
+	}
+
+	@Test
+	void realEntryKeepsALinkItself() throws IOException {
+		// delete and move act on the link, not on its target
+		Files.createSymbolicLink(root.resolve("a/to-b"), root.resolve("a/b"));
+
+		assertThat(RepositoryPaths.realEntry(root, segments("a", "to-b"))).containsExactly("a", "to-b");
+		assertThat(RepositoryPaths.realEntry(root, segments("a", "to-b", "x.md"))).containsExactly("a", "b", "x.md");
+		assertThat(RepositoryPaths.realEntry(root, segments())).isEmpty();
+	}
 }

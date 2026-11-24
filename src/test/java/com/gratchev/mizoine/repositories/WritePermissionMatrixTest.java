@@ -145,7 +145,7 @@ class WritePermissionMatrixTest {
 	@ValueSource(strings = {"private/new.md", "private/secret.md", "deep/new.md", "deep/above.md", "root.md", "new.md",
 			".git/config", ".git/new", "granted/.hidden/new.md", "granted/.hidden-file", "granted/.new.md",
 			"granted/link-out/new.md", "granted/link-out/o.md", "granted/link-file", "granted/link-private/secret.md",
-			"granted/../private/new.md", "../outside/new.md", "../tree.yaml", "granted/%2e%2e/private/new.md",
+			"granted/link-secret", "granted/../private/new.md", "../outside/new.md", "../tree.yaml", "granted/%2e%2e/private/new.md",
 			"granted/100%.md", "granted\\\\..\\\\private\\\\new.md", "granted/", "/"})
 	void noFileIsWrittenOutsideTheGrants(final String path) {
 		assertRefusedWithoutChange("write " + path, () -> write("tree", path));
@@ -205,6 +205,16 @@ class WritePermissionMatrixTest {
 	void nothingIsMovedOutOfOrIntoForbiddenPlaces(final String fromAndTo) {
 		final String[] parts = fromAndTo.split(">");
 		assertRefusedWithoutChange("move " + fromAndTo, () -> move(parts[0], parts[1]));
+	}
+
+	@Test
+	void aGrantedFolderReachedThroughALinkIsNeitherDeletedNorMoved() throws IOException {
+		// a grant inside a grant: its parent is writable, but the grant itself must stay (step 32)
+		Files.writeString(base.resolve("tree.yaml"), "path: tree\naccess:\n  guest: [granted, granted/empty]\n");
+		Files.createSymbolicLink(base.resolve("tree/granted/link-here"), base.resolve("tree/granted"));
+
+		assertRefusedWithoutChange("delete through a link", () -> delete("tree", "granted/link-here/empty/"));
+		assertRefusedWithoutChange("move through a link", () -> move("granted/link-here/empty/", "granted/moved/"));
 	}
 
 	// reading through a link: the same rule (found by this matrix: grants were checked on the requested path only)

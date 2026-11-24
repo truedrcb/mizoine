@@ -219,15 +219,15 @@ public class RepositoryWriter {
 	 */
 	public DeleteResult delete(final Path root, final List<String> segments, final boolean folder,
 			final Optional<String> ifMatch) {
-		final Optional<Path> parent = parentOf(root, segments);
-		final Optional<Path> visible = folder ? RepositoryPaths.resolveFolder(root, segments) : RepositoryPaths.resolveFile(root, segments);
-		if (parent.isEmpty() || visible.isEmpty()) {
+		final Optional<Path> entry = entry(root, segments, folder);
+		if (entry.isEmpty()) {
 			return new DeleteResult.NotFound();
 		}
-		final Path path = parent.get().resolve(segments.getLast());
+		final Path path = entry.get();
 		lock.lock();
 		try {
-			final Optional<DeleteResult> refused = folder ? refuseFolder(path) : refuseFile(visible.get(), ifMatch);
+			// the version of a link is that of its file
+			final Optional<DeleteResult> refused = folder ? refuseFolder(path) : refuseFile(path, ifMatch);
 			if (refused.isPresent()) {
 				return refused.get();
 			}

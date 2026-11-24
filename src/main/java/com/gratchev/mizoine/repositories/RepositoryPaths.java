@@ -76,6 +76,16 @@ public final class RepositoryPaths {
 		return segments;
 	}
 
+	/** Where the entry itself is: links are followed up to its folder, the entry (also a link) is kept. */
+	public static List<String> realEntry(final Path root, final List<String> segments) {
+		if (segments.isEmpty()) {
+			return segments;
+		}
+		final List<String> result = new ArrayList<>(realSegments(root, segments.subList(0, segments.size() - 1)));
+		result.add(segments.getLast());
+		return List.copyOf(result);
+	}
+
 	/** The root exists here: a path below it was just resolved. */
 	private static Path realRoot(final Path root) {
 		try {

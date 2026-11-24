@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-24): steps 0–34 and 37–42 done (772 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: everything but the live test from the phone done; planned: 36 (browser UI). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-24): steps 0–34 and 37–42 done (778 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: everything but the live test from the phone done; planned: 36 (browser UI). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -736,6 +736,24 @@ What Claude's "custom connector" (and other chat apps) need to log in.
       - Links to granted places keep working.
     - Untested branch: the `catch` in `RepositoryPaths.realRoot`. The root would have to vanish between resolving a path below it and resolving the root itself, a race.
     - CRAP of the changed methods ≤ 6, branch coverage 100 %.
+- *2026-11-24, review after commit 61d9852:*
+  - **Two more ways around the grants through links, found and fixed.**
+    - Writing to a link to a file wrote through to that file, while only the link's folder was checked: `granted/link-secret` → `private/secret.md` was overwritten.
+    - A granted folder reached through a link (`granted/link-here/empty/` with `link-here` → `granted`, with `granted/empty` also granted) could be deleted or moved; only the requested path was compared with the grants.
+  - **Fix: each operation checks the place it really touches.**
+    - Reading and writing follow every link: `RepositoryPaths.realSegments`.
+    - Deleting and moving act on the entry itself, a link stays a link: the new `RepositoryPaths.realEntry`.
+    - `RepositoryAccess.canChange(entry)` is the rule "the entry's folder is writable".
+    - `RepositoryFiles.holds(rule, requested, real)` applies a rule to both paths; the root and grant tops are recognized on both paths too.
+    - The pre-check before an upload or creating a folder (`checkWritable`) is the same as for writing, so HTTP and MCP answer alike.
+  - MCP: an `if_match` that is not text gave an internal error (`ClassCastException`); now the tool error "Not a text: if_match".
+  - Simplified:
+    - `RepositoryWriter.delete` uses `entry()`, as `move` does;
+    - `McpTools` builds the destination text with `where()`.
+  - Uncovered branches, unchanged, and why:
+    - MCP switch arms for results these tools cannot get (create-only, `If-Match` on delete);
+    - a move across file systems;
+    - disk-error `catch` blocks.
 
 
 ### 36. Browser UI for files  ☐

@@ -96,7 +96,7 @@ final class McpTools {
 		final String where = where(arguments);
 		final Result result = files.write(user, text(arguments, REPOSITORY), RepositoryFiles.segments(text(arguments, PATH)),
 				new ByteArrayInputStream(text(arguments, CONTENT).getBytes(StandardCharsets.UTF_8)), maxFileSize,
-				new Precondition(Optional.ofNullable((String) arguments.get(IF_MATCH)), false));
+				new Precondition(version(arguments), false));
 		return switch (result) {
 			case Result.Created created -> ok("Created " + where + ", version " + created.etag());
 			case Result.Replaced replaced -> ok("Replaced " + where + ", version " + replaced.etag());
@@ -140,10 +140,10 @@ final class McpTools {
 	private CallToolResult move(final String user, final Map<String, Object> arguments) {
 		final String from = text(arguments, FROM);
 		final String source = where(arguments);
-		final String destination = text(arguments, REPOSITORY) + "/" + text(arguments, TO).replaceFirst("^/", "");
+		final String destination = where(arguments, TO);
 		return switch (files.move(user, text(arguments, REPOSITORY), RepositoryFiles.segments(from),
 				RepositoryFiles.segments(text(arguments, TO)), RepositoryFiles.isFolder(from),
-				Optional.ofNullable((String) arguments.get(IF_MATCH)))) {
+				version(arguments))) {
 			case MoveResult.Moved moved -> ok("Moved " + source + " to " + destination);
 			case MoveResult.DestinationExists exists -> error("Not moved: " + destination + " exists. "
 					+ "Choose another name, or delete it first.");
@@ -203,10 +203,22 @@ final class McpTools {
 		return value;
 	}
 
+	/** The optional {@code if_match}: absent, or a version as text. */
+	private static Optional<String> version(final Map<String, Object> arguments) {
+		final Object value = arguments.get(IF_MATCH);
+		if (value != null && !(value instanceof String)) {
+			throw new IllegalArgumentException("Not a text: " + IF_MATCH);
+		}
+		return Optional.ofNullable((String) value);
+	}
+
 	/** The path the tool works on, as the agent wrote it: {@code path}, or for {@code move} its {@code from}. */
 	private static String where(final Map<String, Object> arguments) {
-		final String path = arguments.containsKey(FROM) ? text(arguments, FROM) : text(arguments, PATH);
-		return text(arguments, REPOSITORY) + "/" + path.replaceFirst("^/", "");
+		return where(arguments, arguments.containsKey(FROM) ? FROM : PATH);
+	}
+
+	private static String where(final Map<String, Object> arguments, final String path) {
+		return text(arguments, REPOSITORY) + "/" + text(arguments, path).replaceFirst("^/", "");
 	}
 
 	private String json(final Object value) {

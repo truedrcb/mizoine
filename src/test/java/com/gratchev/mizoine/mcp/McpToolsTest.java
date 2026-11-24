@@ -124,6 +124,14 @@ class McpToolsTest {
 		assertThat(TestMcp.text(call("read_file", Map.of("repository", "tree", "path", 42)))).isEqualTo("error: Missing argument: path");
 	}
 
+	@Test
+	void aVersionThatIsNoTextIsSaid() {
+		assertThat(TestMcp.text(call("write_file", Map.of("repository", "tree", "path", "inbox/n.md", "content", "x",
+				"if_match", 42)))).isEqualTo("error: Not a text: if_match");
+		assertThat(TestMcp.text(call("move", Map.of("repository", "tree", "from", "inbox/n.md", "to", "inbox/m.md",
+				"if_match", 42)))).isEqualTo("error: Not a text: if_match");
+	}
+
 	// step 42: read_file gives the version, so the agent can write back safely
 
 	@SuppressWarnings("unchecked")

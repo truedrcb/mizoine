@@ -4,6 +4,7 @@ import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import org.springframework.http.HttpStatus;
@@ -123,10 +124,11 @@ public class RepositoryFiles {
 	public DeleteResult delete(final String user, final String repository, final List<String> segments,
 			final boolean folder, final Optional<String> ifMatch) {
 		final GrantedRepository granted = usable(user, repository, segments);
-		if (granted.access().isGrantedFolder(segments)) {
+		final List<String> real = RepositoryPaths.realEntry(granted.config().root(), segments);
+		if (isGrantedFolder(granted, segments, real)) {
 			return new DeleteResult.IsGrantedFolder();
 		}
-		checkWritable(granted, repository, segments);
+		checkChangeable(granted, repository, segments, real);
 		return writer.delete(granted.config().root(), segments, folder, ifMatch);
 	}
 
@@ -139,11 +141,13 @@ public class RepositoryFiles {
 	public MoveResult move(final String user, final String repository, final List<String> from, final List<String> to,
 			final boolean folder, final Optional<String> ifMatch) {
 		final GrantedRepository granted = usable(user, repository, from);
-		if (granted.access().isGrantedFolder(from)) {
+		final Path root = granted.config().root();
+		final List<String> realFrom = RepositoryPaths.realEntry(root, from);
+		if (isGrantedFolder(granted, from, realFrom)) {
 			return new MoveResult.IsGrantedFolder();
 		}
-		checkWritable(granted, repository, from);
-		checkWritable(granted, repository, to);
+		checkChangeable(granted, repository, from, realFrom);
+		checkChangeable(granted, repository, to, RepositoryPaths.realEntry(root, to));
 		return writer.move(granted.config().root(), from, to, folder, ifMatch);
 	}
 
@@ -159,21 +163,33 @@ public class RepositoryFiles {
 	}
 
 	/*
-	 * The access rule for every operation: the grants hold for the requested path and for where it really leads.
-	 * Without the second check a link in a granted folder would lead to any folder of the repository.
+	 * The access rule for every operation: the grants hold for the requested path and for the place it really
+	 * touches. Without the second check a link in a granted folder would lead to any folder of the repository.
+	 * Reading and writing follow every link (a file is written through a link to it); deleting and moving act on
+	 * the entry itself, a link stays a link (RepositoryWriter).
 	 */
 
 	/** An existing folder the user may enter. */
 	static boolean mayEnter(final RepositoryConfig config, final RepositoryAccess access, final List<String> segments) {
-		return access.canEnter(segments) && RepositoryPaths.resolveFolder(config.root(), segments).isPresent()
-				&& access.canEnter(RepositoryPaths.realSegments(config.root(), segments));
+		return RepositoryPaths.resolveFolder(config.root(), segments).isPresent()
+				&& holds(access::canEnter, segments, RepositoryPaths.realSegments(config.root(), segments));
 	}
 
 	/** The real path of an existing file the user may read. */
 	static Optional<Path> readable(final RepositoryConfig config, final RepositoryAccess access, final List<String> segments) {
-		return Optional.of(segments).filter(access::canReadFile)
-				.filter(file -> access.canReadFile(RepositoryPaths.realSegments(config.root(), file)))
+		return Optional.of(segments)
+				.filter(file -> holds(access::canReadFile, file, RepositoryPaths.realSegments(config.root(), file)))
 				.flatMap(file -> RepositoryPaths.resolveFile(config.root(), file));
+	}
+
+	private static boolean holds(final Predicate<List<String>> rule, final List<String> requested, final List<String> real) {
+		return rule.test(requested) && rule.test(real);
+	}
+
+	/** The root or the top of a grant, also when reached through a link: never deleted or moved (step 32). */
+	private static boolean isGrantedFolder(final GrantedRepository granted, final List<String> requested,
+			final List<String> real) {
+		return granted.access().isGrantedFolder(requested) || granted.access().isGrantedFolder(real);
 	}
 
 	private static List<String> child(final List<String> segments, final String name) {
@@ -200,18 +216,14 @@ public class RepositoryFiles {
 	/** Only inside a granted folder, never hidden; everything else is the same "not found" (D2, D4). */
 	private GrantedRepository writable(final String user, final String repository, final List<String> segments) {
 		final GrantedRepository granted = usable(user, repository, segments);
-		checkWritable(granted, repository, segments);
+		checkChangeable(granted, repository, segments, RepositoryPaths.realSegments(granted.config().root(), segments));
 		return granted;
 	}
 
-	private static void checkWritable(final GrantedRepository granted, final String repository, final List<String> segments) {
-		if (segments.isEmpty() || !mayWriteIn(granted, segments.subList(0, segments.size() - 1))) {
-			throw new NotVisibleException(repository, segments);
+	private static void checkChangeable(final GrantedRepository granted, final String repository,
+			final List<String> requested, final List<String> real) {
+		if (!holds(granted.access()::canChange, requested, real)) {
+			throw new NotVisibleException(repository, requested);
 		}
-	}
-
-	private static boolean mayWriteIn(final GrantedRepository granted, final List<String> folder) {
-		return granted.access().canWriteIn(folder)
-				&& granted.access().canWriteIn(RepositoryPaths.realSegments(granted.config().root(), folder));
 	}
 }

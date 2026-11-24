@@ -91,6 +91,11 @@ public final class RepositoryAccess {
 				&& grants.stream().anyMatch(grant -> startsWith(folder, grant.segments()));
 	}
 
+	/** @param entry a file or folder to be created, replaced, moved or deleted: its folder must be writable */
+	public boolean canChange(final List<String> entry) {
+		return !entry.isEmpty() && canWriteIn(entry.subList(0, entry.size() - 1));
+	}
+
 	/** @return the folder is exactly one of the user's granted folders (the root for a whole-repository grant) */
 	public boolean isGrantedFolder(final List<String> folder) {
 		return grants.stream().anyMatch(grant -> grant.segments().equals(folder));
