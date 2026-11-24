@@ -2,7 +2,10 @@ package com.gratchev.mizoine.security;
 
 import static org.springframework.security.config.Customizer.withDefaults;
 
+import java.net.URI;
 import java.time.Clock;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
@@ -37,8 +40,7 @@ import jakarta.servlet.http.HttpServletRequest;
 public class SecurityConfig {
 
 	/** Only own resources, no plugins, no framing, forms post only to this server. */
-	public static final String CONTENT_SECURITY_POLICY =
-			"default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
+	public static final String CONTENT_SECURITY_POLICY = contentSecurityPolicy(List.of());
 	/** For repository files (step 28, D10): the same, and never scripts, even in an uploaded HTML or SVG file. */
 	public static final String FILE_CONTENT_SECURITY_POLICY = CONTENT_SECURITY_POLICY + "; sandbox";
 
@@ -84,9 +86,28 @@ public class SecurityConfig {
 				.httpBasic(withDefaults())
 				.logout(logout -> logout.permitAll())
 				.headers(headers -> headers
-						.contentSecurityPolicy(csp -> csp.policyDirectives(CONTENT_SECURITY_POLICY))
+						.contentSecurityPolicy(csp -> csp.policyDirectives(contentSecurityPolicy(properties.oauth().clients().stream()
+								.flatMap(client -> client.redirectUris().stream()).toList())))
 						.referrerPolicy(referrer -> referrer.policy(ReferrerPolicy.SAME_ORIGIN)))
 				.build();
+	}
+
+	/**
+	 * The policy of Mizoine's pages. Browsers apply {@code form-action} also to the redirects after a form is sent:
+	 * with OAuth, the login form leads on through the authorization endpoint to a chat app's callback, so the
+	 * callbacks' origins are allowed too (step 35: without them only a second Connect, already logged in, worked).
+	 *
+	 * @param callbacks the configured OAuth redirect URIs
+	 */
+	static String contentSecurityPolicy(final List<String> callbacks) {
+		final String origins = callbacks.stream()
+				.map(URI::create)
+				.map(uri -> " " + uri.getScheme() + "://" + uri.getRawAuthority())
+				.distinct()
+				.sorted()
+				.collect(Collectors.joining());
+		return "default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'" + origins
+				+ "; frame-ancestors 'none'";
 	}
 
 	/**

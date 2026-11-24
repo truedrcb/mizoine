@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-24): steps 0–34 and 37–42 done (778 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: everything but the live test from the phone done; planned: 36 (browser UI). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-24): steps 0–34 and 37–42 done (781 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -736,6 +736,12 @@ What Claude's "custom connector" (and other chat apps) need to log in.
       - Links to granted places keep working.
     - Untested branch: the `catch` in `RepositoryPaths.realRoot`. The root would have to vanish between resolving a path below it and resolving the root itself, a race.
     - CRAP of the changed methods ≤ 6, branch coverage 100 %.
+- *2026-11-24, live test:* the phone reaches Mizoine's MCP, but the first Connect failed. It only worked after logging in to the Mizoine UI first, in the desktop browser and again in the phone's browser.
+  - Cause: the pages' CSP `form-action 'self'`. Browsers apply it also to the redirects after a form is sent: login form → `/oauth2/authorize` → `https://claude.ai/api/mcp/auth_callback`, and the last step was blocked. Already logged in, the authorize step is a plain navigation without a form, which is why the workaround helped.
+  - The test's HTTP client does not enforce CSP, so `OAuthTest` passed.
+  - Fix: `form-action` also allows the origins of the configured `redirect-uris` (`SecurityConfig.contentSecurityPolicy`). Without OAuth the policy is unchanged.
+  - Tests: `OAuthTest.theLoginFormMayLeadOnToEachAppsCallback`, `ContentSecurityPolicyTest`.
+  - **Open: re-check live after deploying.** Remove the connector, add it again, and Connect without logging in to the UI first. Then tick the step.
 - *2026-11-24, review after commit 61d9852:*
   - **Two more ways around the grants through links, found and fixed.**
     - Writing to a link to a file wrote through to that file, while only the link's folder was checked: `granted/link-secret` → `private/secret.md` was overwritten.

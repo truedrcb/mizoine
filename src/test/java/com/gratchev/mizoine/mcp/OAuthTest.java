@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -151,6 +152,21 @@ class OAuthTest {
 	// the flow
 
 	/** @return the access token for {@code user}, after the whole authorization code flow with PKCE */
+	/**
+	 * Browsers apply the login page's form-action to every redirect after the form is sent: login → authorize → the
+	 * app's callback. With {@code 'self'} alone, the last step was blocked on the first Connect (found live, step 35).
+	 * The test's HTTP client does not enforce CSP, so the policy itself is checked.
+	 */
+	@Test
+	void theLoginFormMayLeadOnToEachAppsCallback() throws Exception {
+		final String policy = get(browser, "/login").headers().firstValue("Content-Security-Policy").orElseThrow();
+		final List<String> formAction = Stream.of(policy.split(";")).map(String::trim)
+				.filter(directive -> directive.startsWith("form-action ")).findFirst().map(directive -> List.of(directive.split(" ")))
+				.orElseThrow();
+
+		assertThat(formAction).contains("'self'", "https://claude.ai", "https://other.example");
+	}
+
 	private String connect(final String user) throws Exception {
 		return field(tokens(user, CLAUDE), "access_token");
 	}
