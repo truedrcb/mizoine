@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-23): steps 0–34 and 37–40 done (633 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: live test from the phone open; step 36 (browser UI) planned. Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-23): steps 0–34 and 37–40 done (639 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: live test from the phone open; step 36 (browser UI) planned. Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -702,6 +702,13 @@ What Claude's "custom connector" (and other chat apps) need to log in.
     - Refused: wrong client secret, unregistered redirect URI, missing PKCE verifier, forged token, user removed.
   - **Live** (jar with the settings as command-line options): metadata with the public address, 401 with `resource_metadata`, authorize → `/login`; no warnings.
 - *Decided with this step:* D17, D18, D19 as proposed.
+- *Option 1, 2026-11-24 (requested): several OAuth clients.*
+  - `mizoine.oauth.clients` is a list (`MizoineProperties.Client`: id, secret, redirect URIs); `OAuthConfig` registers each.
+  - Checked at startup, with messages naming the setting: each client needs an id, a bcrypt hash as secret (plain text refused) and at least one callback; ids unique.
+  - The single-client settings (`client-id`, …) are gone without a compatibility layer: they were never committed.
+  - **Tests:** `MizoinePropertiesTest` (binding, four invalid cases, a duplicate id); `OAuthTest` with two clients: the second app connects with its own client; one app's secret does not work for the other; one app's callback is not allowed for the other.
+  - **A runtime deprecation the compiler cannot see**, caught by the "starts without warning" tests: Hibernate Validator warns that `@Valid List<Client>` is deprecated; now `List<@Valid Client>`.
+  - **Red not seen** for the two-client tests (written after the change). Instead a manual mutation test: registering only the first client makes `eachConfiguredAppConnectsWithItsOwnClient` fail.
 
 
 ### 35. Connect Claude from the smartphone  ☐
@@ -879,6 +886,15 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
   - `RepositoryController` (folder listing, file download, Markdown page) is the largest class at about 260 lines, but each part is one `Target` case and short ("if the code is already clear and local, leave it");
   - `editor.js` and `page.js`: decisions in the tested module, the page file only shows them.
 - **Result:** 22 files changed, 185 lines added, 335 removed; 593 Java and 51 JavaScript tests green.
+- *Follow-up 2026-11-24 (requested): no deprecated APIs.*
+  - The compiler now reports deprecated and for-removal APIs as errors (`-Xlint:deprecation,removal -Werror` in `pom.xml`, main and test code), so none creep back in.
+  - **Main code:** `McpSchema.Tool.builder()` → `Tool.builder(name, inputSchema)`.
+  - **Test code:**
+    - `new CallToolRequest(…)` → `CallToolRequest.builder(name).arguments(…)`;
+    - `httpRequestCustomizer` → `addHttpRequestCustomizer`;
+    - Spring's `isPayloadTooLarge()` → `isContentTooLarge()` (HTTP 413's new name).
+  - **One MCP helper:** `McpEndpointTest` and `OAuthTest` each built their MCP client and tool calls; now one helper, `TestMcp`, also used by `McpToolsTest`.
+  - **After:** 633 Java tests green, highest CRAP 8.1, no unused imports.
 
 ## Glossary
 
@@ -938,7 +954,7 @@ Proposals; details in [docs/technology-decisions.md](docs/technology-decisions.m
 - **D15 — deleting folders:** **Decided 2026-11-19:** only empty folders; with content → 409, as the Solid Protocol. Not chosen: recursive delete, as WebDAV `DELETE` (one request removes a whole tree; Git keeps the history only of what was committed). If WebDAV is added later, its recursive `DELETE` needs a decision of its own.
 - References for the folder API: WebDAV ([RFC 4918](https://www.rfc-editor.org/rfc/rfc4918)) and the [Solid Protocol](https://solidproject.org/TR/protocol). Mizoine takes from each the part that matches D14 and D15. `PUT …/` instead of WebDAV's own `MKCOL` method: Spring MVC and Spring Security's firewall accept only the standard HTTP methods, and OpenAPI 3.1 cannot describe others. `MKCOL` can be added as an alias when WebDAV comes.
 - **D16 — MCP library:** **Decided 2026-11-23 (step 33):** the official MCP Java SDK 2.2.0 directly (`mcp-core`, `mcp-json-jackson3`), stateless servlet transport. Not chosen: Spring AI 2.1 (a framework for one endpoint).
-- **D17 — OAuth clients:** **Decided 2026-11-23 as proposed (step 34):** one client configured in Mizoine ("Use your own OAuth client" in Claude): least code, no open registration endpoint. Not chosen: dynamic client registration (any agent can register itself); "Claude's published identity" (client ID metadata documents).
+- **D17 — OAuth clients:** **Decided 2026-11-23, changed 2026-11-24 (option 1, requested):** one client per chat app, configured as a list `mizoine.oauth.clients` (id, secret hash, redirect URIs): each app can be shut out on its own, no secret is shared between vendors. No open registration. Before: exactly one client. Not chosen: dynamic client registration (any app registers itself; an open endpoint to protect).
 - **D18 — token storage:** **Decided 2026-11-23 as proposed (step 34):** in memory, so no database (BACKLOG principle 1); after a restart the connector logs in again. Not chosen: a token file.
 - **D19 — who logs in during "Connect":** **Decided 2026-11-23 as proposed (step 34):** the agent user itself (its password is entered once in the phone's browser). Not chosen: the human logs in and picks which agent user the connector acts as (more code: a consent page with a choice).
 - **T3.1 — text editor:** **Decided 2026-11-19:** CodeMirror 6, bundled once into `ui/vendor/` (best on the phone; Markdown, JSON, YAML packages). For the moment it is more than needed: the editor starts as a plain `<textarea>` (step 37), and CodeMirror 6 replaces it when highlighting is wanted (step 39). Not chosen: Ace; Monaco (not supported on mobile browsers).

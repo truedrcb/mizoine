@@ -126,7 +126,7 @@ final class McpTools {
 	private static SyncToolSpecification tool(final String name, final String description,
 			final Map<String, Object> schema, final BiFunction<String, Map<String, Object>, CallToolResult> call) {
 		return SyncToolSpecification.builder()
-				.tool(McpSchema.Tool.builder().name(name).description(description).inputSchema(schema).build())
+				.tool(McpSchema.Tool.builder(name, schema).description(description).build())
 				.callHandler((final McpTransportContext context, final CallToolRequest request) -> {
 					final Map<String, Object> arguments = request.arguments() == null ? Map.of() : request.arguments();
 					try {

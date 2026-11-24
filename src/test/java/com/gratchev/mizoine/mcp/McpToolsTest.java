@@ -20,9 +20,7 @@ import com.gratchev.mizoine.repositories.RepositoryWriter;
 import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpStatelessServerFeatures.SyncToolSpecification;
-import io.modelcontextprotocol.spec.McpSchema.CallToolRequest;
 import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
-import io.modelcontextprotocol.spec.McpSchema.TextContent;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -50,19 +48,15 @@ class McpToolsTest {
 
 	private CallToolResult call(final String tool, final Map<String, Object> arguments) {
 		return tools.stream().filter(spec -> spec.tool().name().equals(tool)).findFirst().orElseThrow()
-				.callHandler().apply(McpTransportContext.create(Map.of(McpTools.USER, "agent")), new CallToolRequest(tool, arguments));
-	}
-
-	private static String text(final CallToolResult result) {
-		return (result.isError() ? "error: " : "") + ((TextContent) result.content().getFirst()).text();
+				.callHandler().apply(McpTransportContext.create(Map.of(McpTools.USER, "agent")), TestMcp.request(tool, arguments));
 	}
 
 	private String call(final String tool, final String path) {
-		return text(call(tool, Map.of("repository", "tree", "path", path)));
+		return TestMcp.text(call(tool, Map.of("repository", "tree", "path", path)));
 	}
 
 	private String write(final String path, final String content) {
-		return text(call("write_file", Map.of("repository", "tree", "path", path, "content", content)));
+		return TestMcp.text(call("write_file", Map.of("repository", "tree", "path", path, "content", content)));
 	}
 
 	// write_file
@@ -124,7 +118,7 @@ class McpToolsTest {
 
 	@Test
 	void missingArgumentIsSaid() {
-		assertThat(text(call("read_file", Map.of("repository", "tree")))).isEqualTo("error: Missing argument: path");
-		assertThat(text(call("read_file", Map.of("repository", "tree", "path", 42)))).isEqualTo("error: Missing argument: path");
+		assertThat(TestMcp.text(call("read_file", Map.of("repository", "tree")))).isEqualTo("error: Missing argument: path");
+		assertThat(TestMcp.text(call("read_file", Map.of("repository", "tree", "path", 42)))).isEqualTo("error: Missing argument: path");
 	}
 }

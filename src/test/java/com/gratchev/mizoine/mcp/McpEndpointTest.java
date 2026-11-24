@@ -8,6 +8,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.io.IOException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import static com.gratchev.mizoine.mcp.TestMcp.call;
+import static com.gratchev.mizoine.mcp.TestMcp.text;
+
 import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
@@ -26,12 +29,9 @@ import com.gratchev.mizoine.TestHttp;
 import com.gratchev.mizoine.TestRepositories;
 import com.gratchev.mizoine.TestUsers;
 
-import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
-import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport;
 import io.modelcontextprotocol.spec.McpSchema;
 import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
-import io.modelcontextprotocol.spec.McpSchema.TextContent;
 
 /**
  * Step 33: {@code /mcp}, the MCP endpoint for AI agents, with the real MCP client against the real server.
@@ -66,26 +66,7 @@ class McpEndpointTest {
 	}
 
 	private McpSyncClient client(final String user) {
-		final HttpClientStreamableHttpTransport transport = HttpClientStreamableHttpTransport
-				.builder("http://127.0.0.1:" + port)
-				.endpoint("/mcp")
-				.httpRequestCustomizer((builder, method, uri, body, context) -> {
-					if (user != null) {
-						builder.header("Authorization", TestUsers.basicAuthHeader(user));
-					}
-				})
-				.build();
-		final McpSyncClient client = McpClient.sync(transport).build();
-		client.initialize();
-		return client;
-	}
-
-	private static String text(final CallToolResult result) {
-		return ((TextContent) result.content().getFirst()).text();
-	}
-
-	private static CallToolResult call(final McpSyncClient client, final String tool, final Map<String, Object> arguments) {
-		return client.callTool(new McpSchema.CallToolRequest(tool, arguments));
+		return TestMcp.connect("http://127.0.0.1:" + port, user == null ? null : TestUsers.basicAuthHeader(user));
 	}
 
 	// the tools
@@ -171,7 +152,7 @@ class McpEndpointTest {
 			final CallToolResult result = call(client, "read_file", Map.of("repository", "tree", "path", path));
 
 			assertThat(result.isError()).as(path).isTrue();
-			assertThat(text(result)).as(path).isEqualTo("Not found: tree/" + path);
+			assertThat(text(result)).as(path).isEqualTo("error: Not found: tree/" + path);
 		}
 	}
 

@@ -9,7 +9,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
@@ -48,9 +48,10 @@ import com.nimbusds.jose.proc.SecurityContext;
 
 /**
  * OAuth for agents in chat apps (step 34, T2): Mizoine is its own authorization server (Spring's) and accepts its
- * tokens at {@code /mcp}. Only when {@code mizoine.oauth.client-id} is set.
+ * tokens at {@code /mcp}. Only when OAuth clients are configured ({@code mizoine.oauth.clients}).
  * <ul>
- * <li>D17: one client from the configuration, no open registration; authorization code with PKCE, no consent page.</li>
+ * <li>D17: the clients from the configuration, one per chat app, no open registration; authorization code with
+ * PKCE, no consent page.</li>
  * <li>D19: the login page is Mizoine's own form; the agent user logs in, and the token stands for that user.</li>
  * <li>D18: the signing key and all authorizations live in memory: after a restart, chat apps log in again.</li>
  * <li>A token is meant for {@code <public-url>/mcp} only (audience), and stops working when its user is removed
@@ -58,7 +59,7 @@ import com.nimbusds.jose.proc.SecurityContext;
  * </ul>
  */
 @Configuration
-@ConditionalOnExpression("!'${mizoine.oauth.client-id:}'.isBlank()")
+@ConditionalOnProperty("mizoine.oauth.clients[0].id")
 class OAuthConfig {
 
 	/** The OAuth endpoints only; the rest of Mizoine is {@link SecurityConfig}'s chain. */
@@ -72,17 +73,23 @@ class OAuthConfig {
 		return http.build();
 	}
 
+	/** D17: the clients from the settings, one per chat app; no open registration. */
 	@Bean
 	RegisteredClientRepository registeredClients(final MizoineProperties properties) {
-		final MizoineProperties.OAuth oauth = properties.oauth();
-		final RegisteredClient client = RegisteredClient.withId(UUID.randomUUID().toString())
-				.clientId(oauth.clientId())
-				.clientSecret(oauth.clientSecret())
+		return new InMemoryRegisteredClientRepository(properties.oauth().clients().stream()
+				.map(OAuthConfig::registered)
+				.toList());
+	}
+
+	private static RegisteredClient registered(final MizoineProperties.Client client) {
+		return RegisteredClient.withId(UUID.randomUUID().toString())
+				.clientId(client.id())
+				.clientSecret(client.secret())
 				.clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
 				.clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)
 				.authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
 				.authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
-				.redirectUris(uris -> uris.addAll(oauth.redirectUris()))
+				.redirectUris(uris -> uris.addAll(client.redirectUris()))
 				.clientSettings(ClientSettings.builder().requireProofKey(true).requireAuthorizationConsent(false).build())
 				.tokenSettings(TokenSettings.builder()
 						.accessTokenTimeToLive(Duration.ofHours(1))
@@ -90,7 +97,6 @@ class OAuthConfig {
 						.reuseRefreshTokens(false)
 						.build())
 				.build();
-		return new InMemoryRegisteredClientRepository(client);
 	}
 
 	@Bean
@@ -129,7 +135,7 @@ class OAuthConfig {
 
 	static String publicUrl(final MizoineProperties properties) {
 		if (properties.publicUrl() == null || properties.publicUrl().isBlank()) {
-			throw new IllegalStateException("mizoine.oauth.client-id is set: set mizoine.public-url too, e.g. https://mizoine.example.org");
+			throw new IllegalStateException("mizoine.oauth.clients are set: set mizoine.public-url too, e.g. https://mizoine.example.org");
 		}
 		return properties.publicUrl().replaceFirst("/+$", "");
 	}

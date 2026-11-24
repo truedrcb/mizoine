@@ -17,6 +17,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -33,11 +34,7 @@ import com.gratchev.mizoine.TestRepositories;
 import com.gratchev.mizoine.TestUsers;
 import com.gratchev.mizoine.users.PasswordHashing;
 
-import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
-import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport;
-import io.modelcontextprotocol.spec.McpSchema;
-import io.modelcontextprotocol.spec.McpSchema.TextContent;
 
 /**
  * Step 34: what a chat app ("custom connector", e.g. Claude) does to connect: discovery, OAuth 2.1 authorization code
@@ -48,9 +45,12 @@ import io.modelcontextprotocol.spec.McpSchema.TextContent;
 class OAuthTest {
 
 	private static final String PUBLIC_URL = "https://mizoine.example";
-	private static final String CLIENT = "claude";
-	private static final String SECRET = "claude-secret";
-	private static final String CALLBACK = "https://claude.ai/api/mcp/auth_callback";
+	/** A chat app's OAuth client as configured in Mizoine: the app knows the secret, Mizoine its hash. */
+	private record App(String id, String secret, String callback) {
+	}
+
+	private static final App CLAUDE = new App("claude", "claude-secret", "https://claude.ai/api/mcp/auth_callback");
+	private static final App OTHER = new App("other", "other-secret", "https://other.example/oauth/callback");
 
 	private static final TestRepositories REPOSITORIES = TestRepositories.create()
 			.file("tree/knowledge/ideas.md", "# Ideen")
@@ -71,9 +71,14 @@ class OAuthTest {
 		REPOSITORIES.register(registry);
 		registry.add("mizoine.users-file", USERS::toString);
 		registry.add("mizoine.public-url", () -> PUBLIC_URL);
-		registry.add("mizoine.oauth.client-id", () -> CLIENT);
-		registry.add("mizoine.oauth.client-secret", () -> PasswordHashing.encoder().encode(SECRET));
-		registry.add("mizoine.oauth.redirect-uris", () -> CALLBACK);
+		final List<App> apps = List.of(CLAUDE, OTHER);
+		for (int index = 0; index < apps.size(); index++) {
+			final App app = apps.get(index);
+			final String client = "mizoine.oauth.clients[" + index + "].";
+			registry.add(client + "id", app::id);
+			registry.add(client + "secret", () -> PasswordHashing.encoder().encode(app.secret()));
+			registry.add(client + "redirect-uris", app::callback);
+		}
 	}
 
 	@AfterAll
@@ -147,7 +152,7 @@ class OAuthTest {
 
 	/** @return the access token for {@code user}, after the whole authorization code flow with PKCE */
 	private String connect(final String user) throws Exception {
-		return field(tokens(user), "access_token");
+		return field(tokens(user, CLAUDE), "access_token");
 	}
 
 	private static String field(final String json, final String name) {
@@ -157,14 +162,14 @@ class OAuthTest {
 	}
 
 	/** @return the token answer (JSON) for {@code user}, after the whole authorization code flow with PKCE */
-	private String tokens(final String user) throws Exception {
+	private String tokens(final String user, final App app) throws Exception {
 		final byte[] random = new byte[32];
 		new SecureRandom().nextBytes(random);
 		final String verifier = Base64.getUrlEncoder().withoutPadding().encodeToString(random);
 		final String challenge = Base64.getUrlEncoder().withoutPadding().encodeToString(
 				MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII)));
-		final String authorize = "/oauth2/authorize?" + form(Map.of("response_type", "code", "client_id", CLIENT,
-				"redirect_uri", CALLBACK, "state", "s1", "code_challenge", challenge, "code_challenge_method", "S256",
+		final String authorize = "/oauth2/authorize?" + form(Map.of("response_type", "code", "client_id", app.id(),
+				"redirect_uri", app.callback(), "state", "s1", "code_challenge", challenge, "code_challenge_method", "S256",
 				"resource", PUBLIC_URL + "/mcp"));
 
 		// the phone's browser: authorize → login page → log in as the agent user → back → code for the app
@@ -180,37 +185,31 @@ class OAuthTest {
 		final String back = loggedIn.headers().firstValue("Location").orElseThrow();
 		final HttpResponse<String> toCallback = get(browser, back.startsWith("http") ? back : url(back));
 		final String callback = toCallback.headers().firstValue("Location").orElseThrow();
-		assertThat(callback).startsWith(CALLBACK);
+		assertThat(callback).startsWith(app.callback());
 		assertThat(query(callback, "state")).isEqualTo("s1");
 
 		// the chat app's server: code + verifier → token
-		final HttpResponse<String> token = exchange(SECRET, Map.of("grant_type", "authorization_code",
-				"code", query(callback, "code"), "redirect_uri", CALLBACK, "code_verifier", verifier));
+		final HttpResponse<String> token = exchange(app.id(), app.secret(), Map.of("grant_type", "authorization_code",
+				"code", query(callback, "code"), "redirect_uri", app.callback(), "code_verifier", verifier));
 		assertThat(token.statusCode()).as(token.body()).isEqualTo(200);
 		return token.body();
 	}
 
-	private HttpResponse<String> exchange(final String secret, final Map<String, String> fields) throws Exception {
+	private HttpResponse<String> exchange(final String client, final String secret, final Map<String, String> fields)
+			throws Exception {
 		return app.send(HttpRequest.newBuilder(URI.create(url("/oauth2/token")))
 				.header("Authorization", "Basic " + Base64.getEncoder().encodeToString(
-						(CLIENT + ":" + secret).getBytes(StandardCharsets.UTF_8)))
+						(client + ":" + secret).getBytes(StandardCharsets.UTF_8)))
 				.header("Content-Type", "application/x-www-form-urlencoded")
 				.POST(HttpRequest.BodyPublishers.ofString(form(fields))).build(), HttpResponse.BodyHandlers.ofString());
 	}
 
 	private McpSyncClient mcp(final String token) {
-		final McpSyncClient client = McpClient.sync(HttpClientStreamableHttpTransport.builder(url(""))
-				.endpoint("/mcp")
-				.httpRequestCustomizer((builder, method, uri, body, context) -> builder.header("Authorization", "Bearer " + token))
-				.build()).build();
-		client.initialize();
-		return client;
+		return TestMcp.connect(url(""), "Bearer " + token);
 	}
 
 	private static String read(final McpSyncClient client, final String path) {
-		final McpSchema.CallToolResult result = client.callTool(new McpSchema.CallToolRequest("read_file",
-				Map.of("repository", "tree", "path", path)));
-		return (result.isError() ? "error: " : "") + ((TextContent) result.content().getFirst()).text();
+		return TestMcp.text(TestMcp.call(client, "read_file", Map.of("repository", "tree", "path", path)));
 	}
 
 	@Test
@@ -224,8 +223,8 @@ class OAuthTest {
 	/** Access tokens live an hour; chat apps renew them with the refresh token, without a new login. */
 	@Test
 	void theRefreshTokenGivesANewAccessToken() throws Exception {
-		final HttpResponse<String> renewed = exchange(SECRET, Map.of("grant_type", "refresh_token",
-				"refresh_token", field(tokens(GUEST), "refresh_token")));
+		final HttpResponse<String> renewed = exchange(CLAUDE.id(), CLAUDE.secret(), Map.of("grant_type", "refresh_token",
+				"refresh_token", field(tokens(GUEST, CLAUDE), "refresh_token")));
 
 		assertThat(renewed.statusCode()).as(renewed.body()).isEqualTo(200);
 		try (McpSyncClient client = mcp(field(renewed.body(), "access_token"))) {
@@ -233,18 +232,43 @@ class OAuthTest {
 		}
 	}
 
+	// several chat apps (option 1): each with its own client, secret and callback
+
+	@Test
+	void eachConfiguredAppConnectsWithItsOwnClient() throws Exception {
+		try (McpSyncClient client = mcp(field(tokens(GUEST, OTHER), "access_token"))) {
+			assertThat(read(client, "knowledge/ideas.md")).isEqualTo("# Ideen");
+		}
+	}
+
+	@Test
+	void oneAppsSecretDoesNotWorkForAnother() throws Exception {
+		assertThat(exchange(OTHER.id(), CLAUDE.secret(), Map.of("grant_type", "authorization_code", "code", "x",
+				"redirect_uri", OTHER.callback())).statusCode()).isEqualTo(401);
+	}
+
+	@Test
+	void oneAppsCallbackIsNotAllowedForAnother() throws Exception {
+		final HttpResponse<String> response = get(browser, "/oauth2/authorize?" + form(Map.of("response_type", "code",
+				"client_id", CLAUDE.id(), "redirect_uri", OTHER.callback(), "code_challenge", "abc",
+				"code_challenge_method", "S256")));
+
+		assertThat(response.statusCode()).isEqualTo(400);
+	}
+
 	// refusals
 
 	@Test
 	void wrongClientSecretGetsNoToken() throws Exception {
-		assertThat(exchange("wrong", Map.of("grant_type", "authorization_code", "code", "x", "redirect_uri", CALLBACK))
+		assertThat(exchange(CLAUDE.id(), "wrong", Map.of("grant_type", "authorization_code", "code", "x",
+				"redirect_uri", CLAUDE.callback()))
 				.statusCode()).isEqualTo(401);
 	}
 
 	@Test
 	void unregisteredRedirectUriIsRefused() throws Exception {
 		final HttpResponse<String> response = get(browser, "/oauth2/authorize?" + form(Map.of("response_type", "code",
-				"client_id", CLIENT, "redirect_uri", "https://evil.example/callback", "code_challenge", "abc",
+				"client_id", CLAUDE.id(), "redirect_uri", "https://evil.example/callback", "code_challenge", "abc",
 				"code_challenge_method", "S256")));
 
 		assertThat(response.statusCode()).isEqualTo(400);
@@ -252,7 +276,8 @@ class OAuthTest {
 
 	@Test
 	void codeWithoutPkceVerifierGetsNoToken() throws Exception {
-		assertThat(exchange(SECRET, Map.of("grant_type", "authorization_code", "code", "made-up", "redirect_uri", CALLBACK))
+		assertThat(exchange(CLAUDE.id(), CLAUDE.secret(), Map.of("grant_type", "authorization_code", "code", "made-up",
+				"redirect_uri", CLAUDE.callback()))
 				.statusCode()).isEqualTo(400);
 	}
 

@@ -16,7 +16,8 @@ class OAuthConfigTest {
 
 	private static MizoineProperties withPublicUrl(final String publicUrl) {
 		return new MizoineProperties("users.yaml", new MizoineProperties.LoginLimit(5, Duration.ofMinutes(5)), ".",
-				DataSize.ofMegabytes(100), publicUrl, new MizoineProperties.OAuth("claude", "{bcrypt}x", List.of()));
+				DataSize.ofMegabytes(100), publicUrl, new MizoineProperties.OAuth(
+						List.of(new MizoineProperties.Client("claude", "{bcrypt}x", List.of("https://claude.ai/cb")))));
 	}
 
 	@Test

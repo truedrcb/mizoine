@@ -68,10 +68,10 @@ class OpenApiDocumentationTest {
 							+ "AI agents connect to the MCP endpoint /mcp (Model Context Protocol, Streamable HTTP, POST with "
 							+ "JSON-RPC): tools list_repositories, list_folder, read_file, write_file, create_folder, delete, "
 							+ "with the same grants as this API. It is not listed as an operation either. "
-							+ "With OAuth configured (mizoine.oauth.client-id), /mcp also takes Bearer tokens from Mizoine's own "
+							+ "With OAuth configured (mizoine.oauth.clients), /mcp also takes Bearer tokens from Mizoine's own "
 							+ "OAuth server for chat apps: /.well-known/oauth-protected-resource/mcp (RFC 9728), "
 							+ "/.well-known/oauth-authorization-server, /oauth2/authorize and /oauth2/token (authorization code "
-							+ "with PKCE, one configured client); served by Spring Security, so not listed as operations."),
+							+ "with PKCE, one configured client per chat app); served by Spring Security, so not listed as operations."),
 			// relative: the same description fits every installation (e.g. behind nginx)
 			servers = @Server(url = "/", description = "This Mizoine server"),
 			security = @SecurityRequirement(name = BASIC_AUTH))

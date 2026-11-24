@@ -183,6 +183,18 @@
 				</executions>
 			</plugin>
 			<plugin>
+				<!-- Deprecated and for-removal APIs are build errors (main and test code): nothing deprecated creeps in. -->
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<showWarnings>true</showWarnings>
+					<compilerArgs>
+						<arg>-Xlint:deprecation,removal</arg>
+						<arg>-Werror</arg>
+					</compilerArgs>
+				</configuration>
+			</plugin>
+			<plugin>
 				<!-- JavaScript tests of the pages under /ui/ (src/test/js/), with Node's built-in runner: Node.js
 				     must be on the PATH; no npm packages. Skipped with -DskipTests like the Java tests. -->
 				<groupId>org.codehaus.mojo</groupId>

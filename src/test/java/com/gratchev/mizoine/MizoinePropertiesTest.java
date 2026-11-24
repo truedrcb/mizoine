@@ -93,4 +93,49 @@ class MizoinePropertiesTest {
 		runner.run(context -> assertThat(context).hasFailed()
 				.getFailure().rootCause().hasMessageContaining("mizoine.users-file"));
 	}
+
+	// step 34, option 1: several OAuth clients, one per chat app
+
+	private static final String HASH = "{bcrypt}$2a$04$0Lrt8DwJgJ44jVTKzCnmhu5LnOZEGAI2jdGylGLW/JgYQZ5r/oJ4m";
+
+	@Test
+	void noOAuthClientsByDefault() {
+		runner.withPropertyValues("mizoine.users-file=users.yaml")
+				.run(context -> assertThat(context.getBean(MizoineProperties.class).oauthEnabled()).isFalse());
+	}
+
+	@Test
+	void bindsSeveralOAuthClients() {
+		runner.withPropertyValues("mizoine.users-file=users.yaml",
+						"mizoine.oauth.clients[0].id=claude", "mizoine.oauth.clients[0].secret=" + HASH,
+						"mizoine.oauth.clients[0].redirect-uris=https://claude.ai/api/mcp/auth_callback",
+						"mizoine.oauth.clients[1].id=other", "mizoine.oauth.clients[1].secret=" + HASH,
+						"mizoine.oauth.clients[1].redirect-uris=https://other.example/a,https://other.example/b")
+				.run(context -> {
+					final MizoineProperties properties = context.getBean(MizoineProperties.class);
+					assertThat(properties.oauthEnabled()).isTrue();
+					assertThat(properties.oauth().clients()).extracting(MizoineProperties.Client::id)
+							.containsExactly("claude", "other");
+					assertThat(properties.oauth().clients().get(1).redirectUris())
+							.containsExactly("https://other.example/a", "https://other.example/b");
+				});
+	}
+
+	@Test
+	void invalidOAuthClientsStopTheStartNamingTheProblem() {
+		for (final String[] invalid : new String[][] {
+				{"mizoine.oauth.clients[0].secret=" + HASH, "mizoine.oauth.clients[0].redirect-uris=https://a.example/cb"},
+				{"mizoine.oauth.clients[0].id=claude", "mizoine.oauth.clients[0].redirect-uris=https://a.example/cb"},
+				{"mizoine.oauth.clients[0].id=claude", "mizoine.oauth.clients[0].secret=plain-text",
+						"mizoine.oauth.clients[0].redirect-uris=https://a.example/cb"},
+				{"mizoine.oauth.clients[0].id=claude", "mizoine.oauth.clients[0].secret=" + HASH},
+				{"mizoine.oauth.clients[0].id=claude", "mizoine.oauth.clients[0].secret=" + HASH,
+						"mizoine.oauth.clients[0].redirect-uris=https://a.example/cb",
+						"mizoine.oauth.clients[1].id=claude", "mizoine.oauth.clients[1].secret=" + HASH,
+						"mizoine.oauth.clients[1].redirect-uris=https://b.example/cb"}}) {
+			runner.withPropertyValues("mizoine.users-file=users.yaml").withPropertyValues(invalid)
+					.run(context -> assertThat(context).as(String.join(", ", invalid)).hasFailed()
+							.getFailure().rootCause().hasMessageContaining("mizoine.oauth"));
+		}
+	}
 }

@@ -159,7 +159,7 @@ class FileWriteTest {
 	@Test
 	void tooLargeIsRejectedAndNothingIsWritten() throws Exception {
 		mockMvc.perform(write("/tree/public/big.md", ARTEM, "x".repeat(1025)))
-				.andExpect(status().isPayloadTooLarge());
+				.andExpect(status().isContentTooLarge());
 
 		assertThat(REPOSITORIES.path("tree/public/big.md")).doesNotExist();
 	}

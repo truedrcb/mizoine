@@ -3,7 +3,7 @@ spring:
     name: mizoine
   autoconfigure:
     exclude:
-      # OAuth (step 34) is configured by Mizoine itself (OAuthConfig), only when mizoine.oauth.client-id is set.
+      # OAuth (step 34) is configured by Mizoine itself (OAuthConfig), only when mizoine.oauth.clients are set.
       # Spring Boot's own setup would create a signing key and token decoder on every start, OAuth or not.
       - org.springframework.boot.security.oauth2.server.authorization.autoconfigure.servlet.OAuth2AuthorizationServerAutoConfiguration
       - org.springframework.boot.security.oauth2.server.authorization.autoconfigure.servlet.OAuth2AuthorizationServerJwtAutoConfiguration

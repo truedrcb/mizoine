@@ -3,6 +3,7 @@ package com.gratchev.mizoine;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
@@ -10,8 +11,11 @@ import org.springframework.util.unit.DataSize;
 import org.springframework.validation.annotation.Validated;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 
 /**
@@ -28,7 +32,7 @@ import jakarta.validation.constraints.Positive;
  * @param maxFileSize the largest file that can be written over HTTP ({@code mizoine.max-file-size}, D12)
  * @param publicUrl the address users and chat apps reach Mizoine at, e.g. {@code https://mizoine.example.org}
  *            ({@code mizoine.public-url}); needed for OAuth, because behind a proxy the request's host may be wrong
- * @param oauth the one OAuth client for chat apps ({@code mizoine.oauth.*}, step 34); OAuth is off without it
+ * @param oauth the OAuth clients for chat apps ({@code mizoine.oauth.clients}, step 34); OAuth is off without any
  */
 @Validated
 @ConfigurationProperties("mizoine")
@@ -50,19 +54,34 @@ public record MizoineProperties(
 		return Path.of(repositoriesDir);
 	}
 
-	/** @return whether OAuth for chat apps is configured: a client and the public address */
+	/** @return whether OAuth for chat apps is configured: at least one client */
 	public boolean oauthEnabled() {
-		return oauth.clientId() != null && !oauth.clientId().isBlank();
+		return !oauth.clients().isEmpty();
+	}
+
+	/** D17 (option 1): one client per chat app, each with its own secret, so each can be shut out on its own. */
+	public record OAuth(@DefaultValue List<@Valid Client> clients) {
+
+		@AssertTrue(message = "the ids of mizoine.oauth.clients must be unique")
+		public boolean isEachIdOnce() {
+			return clients.stream().map(Client::id).filter(Objects::nonNull).distinct().count()
+					== clients.stream().map(Client::id).filter(Objects::nonNull).count();
+		}
 	}
 
 	/**
-	 * D17: the one client a chat app is configured with ("Use your own OAuth client" in Claude).
+	 * A chat app's OAuth client ("Use your own OAuth client" in Claude).
 	 *
-	 * @param clientId e.g. {@code claude}; empty = OAuth off
-	 * @param clientSecret only its hash, {@code {bcrypt}...} (create it with {@code hash-password})
+	 * @param id e.g. {@code claude}
+	 * @param secret only its hash, {@code {bcrypt}...} (create it with {@code hash-password}), never the secret itself
 	 * @param redirectUris where the chat app receives the code, e.g. {@code https://claude.ai/api/mcp/auth_callback}
 	 */
-	public record OAuth(String clientId, String clientSecret, @DefaultValue List<String> redirectUris) {
+	public record Client(
+			@NotBlank(message = "each of mizoine.oauth.clients needs an id") String id,
+			@NotBlank(message = "each of mizoine.oauth.clients needs a secret")
+			@Pattern(regexp = "^\\{bcrypt}.+", message = "mizoine.oauth.clients[].secret must be a bcrypt hash "
+					+ "({bcrypt}..., from hash-password), never the secret itself") String secret,
+			@NotEmpty(message = "each of mizoine.oauth.clients needs redirect-uris") List<String> redirectUris) {
 	}
 
 	/**
