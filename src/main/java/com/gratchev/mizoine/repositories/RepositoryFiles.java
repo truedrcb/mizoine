@@ -4,12 +4,16 @@ import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
+import com.gratchev.mizoine.files.FileVersion;
+
 import com.gratchev.mizoine.repositories.RepositoryWriter.DeleteResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.FolderResult;
+import com.gratchev.mizoine.repositories.RepositoryWriter.MoveResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.Precondition;
 import com.gratchev.mizoine.repositories.RepositoryWriter.Result;
 
@@ -75,7 +79,7 @@ public class RepositoryFiles {
 
 	public FolderListing listFolder(final String user, final String repository, final List<String> segments) {
 		final GrantedRepository granted = usable(user, repository, segments);
-		if (!granted.access().canEnter(segments) || RepositoryPaths.resolveFolder(granted.config().root(), segments).isEmpty()) {
+		if (!mayEnter(granted.config(), granted.access(), segments)) {
 			throw new NotVisibleException(repository, segments);
 		}
 		return listing(granted.config(), granted.access(), segments);
@@ -84,13 +88,22 @@ public class RepositoryFiles {
 	/** The real path of a file the user may read. */
 	public Path readableFile(final String user, final String repository, final List<String> segments) {
 		final GrantedRepository granted = usable(user, repository, segments);
-		return Optional.of(segments).filter(granted.access()::canReadFile)
-				.flatMap(file -> RepositoryPaths.resolveFile(granted.config().root(), file))
+		return readable(granted.config(), granted.access(), segments)
 				.orElseThrow(() -> new NotVisibleException(repository, segments));
 	}
 
-	public String readText(final String user, final String repository, final List<String> segments) {
-		return TextFile.read(readableFile(user, repository, segments))
+	/** A text file's content with the version it was read at (step 42): what an agent needs to write back safely. */
+	public record FileText(String content, String version) {
+	}
+
+	/**
+	 * The version is read before the content: if the file changes in between, the version is the older one, and a
+	 * write back with it is refused (412) instead of overwriting the change.
+	 */
+	public FileText readText(final String user, final String repository, final List<String> segments) {
+		final Path file = readableFile(user, repository, segments);
+		final String version = FileVersion.of(file).orElseThrow(() -> new NotVisibleException(repository, segments)).etag();
+		return TextFile.read(file).map(content -> new FileText(content, version))
 				.orElseThrow(() -> new NotTextException(repository, segments));
 	}
 
@@ -117,13 +130,54 @@ public class RepositoryFiles {
 		return writer.delete(granted.config().root(), segments, folder, ifMatch);
 	}
 
+	/**
+	 * Step 41: within one repository (D31); source and destination writable for the user (possibly two grants);
+	 * never the root or a granted folder; never overwrites (D30).
+	 *
+	 * @param folder the paths name a folder (end with '/'); the source must be of that kind
+	 */
+	public MoveResult move(final String user, final String repository, final List<String> from, final List<String> to,
+			final boolean folder, final Optional<String> ifMatch) {
+		final GrantedRepository granted = usable(user, repository, from);
+		if (granted.access().isGrantedFolder(from)) {
+			return new MoveResult.IsGrantedFolder();
+		}
+		checkWritable(granted, repository, from);
+		checkWritable(granted, repository, to);
+		return writer.move(granted.config().root(), from, to, folder, ifMatch);
+	}
+
 	/** The subfolders and files the user may see in a folder already checked. */
 	static FolderListing listing(final RepositoryConfig config, final RepositoryAccess access, final List<String> segments) {
 		final Path root = config.root();
 		final String path = segments.isEmpty() ? "/" : "/" + String.join("/", segments) + "/";
 		return new FolderListing(config.name(), path,
-				access.visibleChildren(segments, RepositoryPaths.childFolders(root, segments)),
-				access.visibleFiles(segments, RepositoryPaths.childFiles(root, segments)));
+				access.visibleChildren(segments, RepositoryPaths.childFolders(root, segments)).stream()
+						.filter(name -> mayEnter(config, access, child(segments, name))).toList(),
+				access.visibleFiles(segments, RepositoryPaths.childFiles(root, segments)).stream()
+						.filter(name -> readable(config, access, child(segments, name)).isPresent()).toList());
+	}
+
+	/*
+	 * The access rule for every operation: the grants hold for the requested path and for where it really leads.
+	 * Without the second check a link in a granted folder would lead to any folder of the repository.
+	 */
+
+	/** An existing folder the user may enter. */
+	static boolean mayEnter(final RepositoryConfig config, final RepositoryAccess access, final List<String> segments) {
+		return access.canEnter(segments) && RepositoryPaths.resolveFolder(config.root(), segments).isPresent()
+				&& access.canEnter(RepositoryPaths.realSegments(config.root(), segments));
+	}
+
+	/** The real path of an existing file the user may read. */
+	static Optional<Path> readable(final RepositoryConfig config, final RepositoryAccess access, final List<String> segments) {
+		return Optional.of(segments).filter(access::canReadFile)
+				.filter(file -> access.canReadFile(RepositoryPaths.realSegments(config.root(), file)))
+				.flatMap(file -> RepositoryPaths.resolveFile(config.root(), file));
+	}
+
+	private static List<String> child(final List<String> segments, final String name) {
+		return Stream.concat(segments.stream(), Stream.of(name)).toList();
 	}
 
 	private GrantedRepository usable(final String user, final String repository, final List<String> segments) {
@@ -151,8 +205,13 @@ public class RepositoryFiles {
 	}
 
 	private static void checkWritable(final GrantedRepository granted, final String repository, final List<String> segments) {
-		if (segments.isEmpty() || !granted.access().canWriteIn(segments.subList(0, segments.size() - 1))) {
+		if (segments.isEmpty() || !mayWriteIn(granted, segments.subList(0, segments.size() - 1))) {
 			throw new NotVisibleException(repository, segments);
 		}
+	}
+
+	private static boolean mayWriteIn(final GrantedRepository granted, final List<String> folder) {
+		return granted.access().canWriteIn(folder)
+				&& granted.access().canWriteIn(RepositoryPaths.realSegments(granted.config().root(), folder));
 	}
 }

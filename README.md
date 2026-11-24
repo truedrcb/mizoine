@@ -136,6 +136,8 @@ access:                        # username → folders the user may access, with 
 - Names: letters, digits, `.`, `_`, `-`; not starting with `.`; not a name the application uses itself
   (`login`, `logout`, `error`, `default-ui.css`, `favicon.ico`, `ui`).
 - Folders and files starting with `.` (such as `.git`) or containing `%` are never shown.
+- Symbolic links count where they lead: access needs a grant for the link's place and for its target. A link to
+  a folder outside the user's grants is neither shown nor followed, and a link out of the repository never is.
 
 The start page `/` lists the repositories you can access; `/<name>/` and its folders (`/<name>/projects/shared/`)
 list their subfolders and files. Folder URLs end with `/`. These pages are HTML by default and JSON when asked for
@@ -165,6 +167,8 @@ curl -u alice -T plan.md http://127.0.0.1:12013/notes/projects/plan.md        # 
 curl -u alice -X PUT http://127.0.0.1:12013/notes/projects/drafts/            # create a folder (URL ends with /)
 curl -u alice -X DELETE http://127.0.0.1:12013/notes/projects/plan.md         # delete a file
 curl -u alice -X DELETE http://127.0.0.1:12013/notes/projects/drafts/         # delete an empty folder
+curl -u alice -X POST -H 'Destination: /notes/archive/plan.md' \
+     http://127.0.0.1:12013/notes/projects/plan.md                            # move or rename
 ```
 
 - **Folders are created and deleted explicitly.** Writing into a missing folder gives 409, and a folder with
@@ -174,8 +178,12 @@ curl -u alice -X DELETE http://127.0.0.1:12013/notes/projects/drafts/         # 
   is unchanged since then (else 412); `-H 'If-None-Match: *'` creates only.
 - **Downloads are safe in the browser:** they are sent with `Content-Security-Policy: sandbox`. Types a browser
   could run (HTML, SVG, unknown) are downloaded instead of shown.
+- **Move and rename:** `POST` on the old URL with a `Destination` header naming the new path (encoded like a URL;
+  folders end with `/` in both). Same repository only; the destination's folder must exist; an existing
+  destination is never overwritten (412); a folder moves with everything in it, in one step. Links in other
+  files that point to the old place are not changed.
 - **CSRF:** clients that send credentials (`-u`, `Authorization`) need no CSRF token for `PUT` and `DELETE`;
-  the browser, logged in by the form, does.
+  the browser, logged in by the form, does. A move needs none either (forms cannot send `Destination`).
 
 ### Markdown in the browser
 
@@ -207,7 +215,9 @@ browser that loads and saves through the same file API.
 ## Connect an AI agent (MCP)
 
 Agents (Claude, also on the phone, Claude Code, others) store and retrieve knowledge through the MCP endpoint
-`https://<host>/mcp`. Tools: `list_repositories`, `list_folder`, `read_file`, `write_file`, `create_folder`, `delete`.
+`https://<host>/mcp`. Tools: `list_repositories`, `list_folder`, `read_file`, `write_file`, `create_folder`, `delete`,
+`move`. `read_file` also gives the file's version; with it, `write_file` and `move` change the file only if nobody
+else did in between.
 Files are given raw; the agent's writes are plain files that you review with `git diff` and commit.
 
 1. **An agent user** in `users.yaml` (password hash from `hash-password`), with grants only to its folders in
@@ -233,6 +243,17 @@ Files are given raw; the agent's writes are plain files that you review with `gi
    - on claude.ai: Settings → Connectors → add a custom connector with `https://mizoine.example.org/mcp`; under
      the advanced settings enter the client ID `claude` and the secret itself; then **Connect**. Mizoine's login
      page opens: log in as the agent user. The connector then also works in the Claude mobile app.
+
+Before pressing Connect, check from outside that the chat app can reach Mizoine (through Cloudflare and nginx):
+
+```sh
+curl https://mizoine.example.org/.well-known/oauth-protected-resource/mcp
+# {"resource":"https://mizoine.example.org/mcp","authorization_servers":["https://mizoine.example.org"],...}
+curl -i -X POST -H 'Content-Type: application/json' https://mizoine.example.org/mcp
+# HTTP/2 401 ... www-authenticate: Bearer resource_metadata="https://mizoine.example.org/.well-known/oauth-protected-resource/mcp"
+```
+
+Both must name the public address, not `localhost` or an internal one; otherwise check `mizoine.public-url`.
 
 Notes:
 - **Several chat apps:** one entry under `clients` each, with its own id, secret and callback URL (the app's

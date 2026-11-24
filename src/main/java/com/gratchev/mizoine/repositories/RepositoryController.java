@@ -195,15 +195,13 @@ class RepositoryController {
 		}
 		final List<String> segments = RepositoryUrls.segments(path);
 		final boolean folderUrl = RepositoryUrls.isFolder(path);
-		if (access.canEnter(segments) && RepositoryPaths.resolveFolder(config.root(), segments).isPresent()) {
+		if (RepositoryFiles.mayEnter(config, access, segments)) {
 			return folderUrl ? new Target.Folder(config, access, segments)
 					: new Target.Redirect(RepositoryUrls.url(config.name(), segments, true));
 		}
-		if (!folderUrl && access.canReadFile(segments)) {
-			return RepositoryPaths.resolveFile(config.root(), segments).map(file -> new Target.File(config, segments, file))
-					.orElseThrow(GrantedRepository::notFound);
-		}
-		throw GrantedRepository.notFound();
+		return RepositoryFiles.readable(config, access, segments).filter(file -> !folderUrl)
+				.map(file -> new Target.File(config, segments, file))
+				.orElseThrow(GrantedRepository::notFound);
 	}
 
 	/** Step 38, D22: a Markdown file is a readable page for a person's browser, the raw file for everyone else. */

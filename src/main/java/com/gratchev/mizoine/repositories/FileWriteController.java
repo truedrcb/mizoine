@@ -12,14 +12,17 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.gratchev.mizoine.ApiTexts;
 import com.gratchev.mizoine.MizoineProperties;
 import com.gratchev.mizoine.repositories.RepositoryWriter.DeleteResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.FolderResult;
+import com.gratchev.mizoine.repositories.RepositoryWriter.MoveResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.Precondition;
 import com.gratchev.mizoine.repositories.RepositoryWriter.Result;
 
@@ -40,6 +43,8 @@ class FileWriteController {
 
 	private static final String REPOSITORY = "repository";
 	private static final String PATH = "path";
+	/** WebDAV's header for the new place of a move (step 41). */
+	static final String DESTINATION = "Destination";
 	private static final String NOT_FOUND = "Unknown repository or path, no write access, or a hidden name — "
 			+ "deliberately the same answer";
 
@@ -141,6 +146,51 @@ class FileWriteController {
 			case DeleteResult.IsGrantedFolder grantedFolder -> status(HttpStatus.CONFLICT);
 			case DeleteResult.PreconditionFailed failed -> status(HttpStatus.PRECONDITION_FAILED);
 			case DeleteResult.NotFound notFound -> throw GrantedRepository.notFound();
+		};
+	}
+
+	@PostMapping("/{repository}/{*path}")
+	@Operation(summary = "Move or rename a file or a folder",
+			description = "The Destination header names the new place: a path on this server in the same repository, "
+					+ "e.g. /notes/archive/plan.md, encoded like a URL; folders end with '/' in both. WebDAV MOVE semantics "
+					+ "on POST. A folder moves with everything in it, in one atomic step. Never overwrites; the "
+					+ "destination's folder must exist. If-Match: <ETag> moves a file only if unchanged. Not the "
+					+ "repository root or a granted folder. API clients and the browser UI need no CSRF token for it "
+					+ "(a cross-site form cannot send a Destination header).")
+	@ApiResponse(responseCode = "201", description = "Moved; Location of the new place", content = @Content)
+	@ApiResponse(responseCode = "400", description = "No Destination, or not a path in this repository, or a folder URL "
+			+ "for a file (or the other way round)", content = @Content)
+	@ApiResponse(responseCode = "401", description = ApiTexts.NOT_LOGGED_IN, content = @Content)
+	@ApiResponse(responseCode = "403", description = "Browser session: POST without Destination (CSRF)", content = @Content)
+	@ApiResponse(responseCode = "404", description = NOT_FOUND + "; for the source or the destination", content = @Content)
+	@ApiResponse(responseCode = "409", description = "The destination's folder does not exist; a folder into itself; "
+			+ "the repository root or a granted folder; source and destination on different file systems",
+			content = @Content)
+	@ApiResponse(responseCode = "412", description = "The destination exists (never overwritten), or If-Match not met",
+			content = @Content)
+	@ApiResponse(responseCode = "500", description = "Repository configured wrongly", content = @Content)
+	ResponseEntity<Void> move(
+			@PathVariable(REPOSITORY) @Parameter(description = "Repository name") final String repository,
+			@PathVariable(PATH) @Parameter(description = "File; or folder, ending with '/'") final String path,
+			@RequestHeader(name = DESTINATION, required = false)
+			@Parameter(description = "New path on this server, e.g. /notes/archive/plan.md") final String destination,
+			@RequestHeader(name = HttpHeaders.IF_MATCH, required = false)
+			@Parameter(description = "Files: the ETag the file must still have") final String ifMatch,
+			final Principal principal) {
+		final boolean folder = RepositoryUrls.isFolder(path);
+		final List<String> to = RepositoryUrls.destination(destination, repository, folder)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST));
+		return switch (files.move(principal.getName(), repository, RepositoryUrls.segments(path), to, folder,
+				Optional.ofNullable(ifMatch))) {
+			case MoveResult.Moved moved -> ResponseEntity.created(location(new Place(principal.getName(), repository, to),
+					folder)).build();
+			case MoveResult.DestinationExists exists -> status(HttpStatus.PRECONDITION_FAILED);
+			case MoveResult.PreconditionFailed failed -> status(HttpStatus.PRECONDITION_FAILED);
+			case MoveResult.DestinationParentMissing missing -> status(HttpStatus.CONFLICT);
+			case MoveResult.IntoItself itself -> status(HttpStatus.CONFLICT);
+			case MoveResult.IsGrantedFolder grantedFolder -> status(HttpStatus.CONFLICT);
+			case MoveResult.NotAtomic notAtomic -> status(HttpStatus.CONFLICT);
+			case MoveResult.NotFound notFound -> throw GrantedRepository.notFound();
 		};
 	}
 

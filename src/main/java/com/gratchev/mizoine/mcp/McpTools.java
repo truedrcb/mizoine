@@ -11,6 +11,7 @@ import java.util.function.BiFunction;
 import com.gratchev.mizoine.repositories.RepositoryFiles;
 import com.gratchev.mizoine.repositories.RepositoryWriter.DeleteResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.FolderResult;
+import com.gratchev.mizoine.repositories.RepositoryWriter.MoveResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.Precondition;
 import com.gratchev.mizoine.repositories.RepositoryWriter.Result;
 
@@ -35,6 +36,8 @@ final class McpTools {
 	private static final String PATH = "path";
 	private static final String CONTENT = "content";
 	private static final String IF_MATCH = "if_match";
+	private static final String FROM = "from";
+	private static final String TO = "to";
 	private static final String REVIEW = " Files are plain files in a Git working folder: a human reviews them with git diff "
 			+ "and commits; nothing is versioned until then.";
 
@@ -53,16 +56,21 @@ final class McpTools {
 				tool("list_repositories", "List the repositories you have access to.", schema(), this::listRepositories),
 				tool("list_folder", "List the subfolders and files of a folder you may see. Path '/' is the repository root.",
 						schema(REPOSITORY, PATH), this::listFolder),
-				tool("read_file", "Read a text file (UTF-8, up to 2 MB) exactly as stored.", schema(REPOSITORY, PATH),
+				tool("read_file", "Read a text file (UTF-8, up to 2 MB) exactly as stored. The structured result also "
+						+ "has its version: pass it as if_match when writing the file back.", schema(REPOSITORY, PATH),
 						this::readFile),
 				tool("write_file", "Create or replace a text file with exactly this content. The folder must exist "
-						+ "(create_folder). With if_match (the version returned by an earlier write_file), the file is "
-						+ "written only if nobody changed it since." + REVIEW,
+						+ "(create_folder). With if_match (the version from read_file, or from an earlier write_file), the "
+						+ "file is written only if nobody changed it since: always pass it when changing a file you read." + REVIEW,
 						schema(REPOSITORY, PATH, CONTENT, IF_MATCH), this::writeFile),
 				tool("create_folder", "Create a folder; its parent folder must exist." + REVIEW, schema(REPOSITORY, PATH),
 						this::createFolder),
 				tool("delete", "Delete a file, or an empty folder (path ending with '/'). Folders with content are not "
-						+ "deleted." + REVIEW, schema(REPOSITORY, PATH), this::delete));
+						+ "deleted." + REVIEW, schema(REPOSITORY, PATH), this::delete),
+				tool("move", "Move or rename a file, or a folder with everything in it (paths ending with '/'), within the "
+						+ "repository. The destination's folder must exist; an existing destination is never overwritten. "
+						+ "With if_match (the version from read_file), a file is moved only if nobody changed it since."
+						+ REVIEW, schema(REPOSITORY, FROM, TO, IF_MATCH), this::move));
 	}
 
 	private CallToolResult listRepositories(final String user, final Map<String, Object> arguments) {
@@ -73,8 +81,15 @@ final class McpTools {
 		return ok(json(files.listFolder(user, text(arguments, REPOSITORY), RepositoryFiles.segments(text(arguments, PATH)))));
 	}
 
+	/** The text as content (for every client), and text with version as structured content (step 42). */
 	private CallToolResult readFile(final String user, final Map<String, Object> arguments) {
-		return ok(files.readText(user, text(arguments, REPOSITORY), RepositoryFiles.segments(text(arguments, PATH))));
+		final RepositoryFiles.FileText file = files.readText(user, text(arguments, REPOSITORY),
+				RepositoryFiles.segments(text(arguments, PATH)));
+		return CallToolResult.builder()
+				.addTextContent(file.content())
+				.structuredContent(Map.of("text", file.content(), "version", file.version()))
+				.isError(false)
+				.build();
 	}
 
 	private CallToolResult writeFile(final String user, final Map<String, Object> arguments) {
@@ -122,6 +137,27 @@ final class McpTools {
 		};
 	}
 
+	private CallToolResult move(final String user, final Map<String, Object> arguments) {
+		final String from = text(arguments, FROM);
+		final String source = where(arguments);
+		final String destination = text(arguments, REPOSITORY) + "/" + text(arguments, TO).replaceFirst("^/", "");
+		return switch (files.move(user, text(arguments, REPOSITORY), RepositoryFiles.segments(from),
+				RepositoryFiles.segments(text(arguments, TO)), RepositoryFiles.isFolder(from),
+				Optional.ofNullable((String) arguments.get(IF_MATCH)))) {
+			case MoveResult.Moved moved -> ok("Moved " + source + " to " + destination);
+			case MoveResult.DestinationExists exists -> error("Not moved: " + destination + " exists. "
+					+ "Choose another name, or delete it first.");
+			case MoveResult.DestinationParentMissing missing -> error("Not moved: the folder of " + destination
+					+ " does not exist. Create it with create_folder first.");
+			case MoveResult.IntoItself itself -> error("Not moved: a folder cannot move into itself.");
+			case MoveResult.PreconditionFailed failed -> error("Not moved: " + source + " was changed since that version. "
+					+ "Read it again first.");
+			case MoveResult.NotAtomic notAtomic -> error("Not moved: source and destination are on different file systems.");
+			case MoveResult.IsGrantedFolder grantedFolder -> error("Not moved: " + source + " is one of your granted folders.");
+			case MoveResult.NotFound notFound -> error("Not found: " + source);
+		};
+	}
+
 	/** A tool whose errors from {@link RepositoryFiles} (not found, misconfigured, not text) become tool errors. */
 	private static SyncToolSpecification tool(final String name, final String description,
 			final Map<String, Object> schema, final BiFunction<String, Map<String, Object>, CallToolResult> call) {
@@ -146,7 +182,9 @@ final class McpTools {
 			REPOSITORY, "Repository name, from list_repositories",
 			PATH, "Path below the repository root, e.g. knowledge/ideas.md; a folder ends with '/'",
 			CONTENT, "The complete new content of the file",
-			IF_MATCH, "Optional: the version from an earlier write_file; the file is written only if it still has it");
+			IF_MATCH, "Optional: the version from read_file or an earlier write_file; done only if the file still has it",
+			FROM, "Path of the file or folder to move, e.g. inbox/note.md; a folder ends with '/'",
+			TO, "Its new path, e.g. knowledge/note.md; the folder it goes into must exist");
 
 	/** JSON schema of the arguments; all but {@code if_match} are required. */
 	private static Map<String, Object> schema(final String... arguments) {
@@ -165,8 +203,10 @@ final class McpTools {
 		return value;
 	}
 
+	/** The path the tool works on, as the agent wrote it: {@code path}, or for {@code move} its {@code from}. */
 	private static String where(final Map<String, Object> arguments) {
-		return text(arguments, REPOSITORY) + "/" + text(arguments, PATH).replaceFirst("^/", "");
+		final String path = arguments.containsKey(FROM) ? text(arguments, FROM) : text(arguments, PATH);
+		return text(arguments, REPOSITORY) + "/" + path.replaceFirst("^/", "");
 	}
 
 	private String json(final Object value) {

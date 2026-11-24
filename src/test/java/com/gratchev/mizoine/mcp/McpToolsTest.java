@@ -40,7 +40,9 @@ class McpToolsTest {
 		Files.writeString(base.resolve("tree/inbox/full/kept.md"), "x");
 		Files.writeString(base.resolve("tree/inbox/note.md"), "old");
 		Files.write(base.resolve("tree/inbox/binary.bin"), new byte[] {(byte) 0xff, (byte) 0xfe});
-		Files.writeString(base.resolve("tree.yaml"), "path: tree\naccess:\n  agent: [inbox]\n");
+		Files.createDirectories(base.resolve("tree/knowledge"));
+		Files.createDirectories(base.resolve("tree/private"));
+		Files.writeString(base.resolve("tree.yaml"), "path: tree\naccess:\n  agent: [inbox, knowledge]\n");
 		final RepositoryFiles files = new RepositoryFiles(
 				new RepositoryRegistry(base, new RepositoryFileParser(), user -> true, null), new RepositoryWriter());
 		this.tools = new McpTools(files, LIMIT, new JacksonMcpJsonMapper(JsonMapper.builder().build())).all();
@@ -120,5 +122,83 @@ class McpToolsTest {
 	void missingArgumentIsSaid() {
 		assertThat(TestMcp.text(call("read_file", Map.of("repository", "tree")))).isEqualTo("error: Missing argument: path");
 		assertThat(TestMcp.text(call("read_file", Map.of("repository", "tree", "path", 42)))).isEqualTo("error: Missing argument: path");
+	}
+
+	// step 42: read_file gives the version, so the agent can write back safely
+
+	@SuppressWarnings("unchecked")
+	private static String version(final CallToolResult result) {
+		return (String) ((Map<String, Object>) result.structuredContent()).get("version");
+	}
+
+	@Test
+	void readGivesTextAndVersion() {
+		final CallToolResult read = call("read_file", Map.of("repository", "tree", "path", "inbox/note.md"));
+
+		assertThat(TestMcp.text(read)).isEqualTo("old");
+		assertThat(((Map<?, ?>) read.structuredContent()).get("text")).isEqualTo("old");
+		assertThat(version(read)).startsWith("\"");
+	}
+
+	@Test
+	void theVersionFromReadProtectsTheWriteBack() throws IOException {
+		final String version = version(call("read_file", Map.of("repository", "tree", "path", "inbox/note.md")));
+
+		assertThat(TestMcp.text(call("write_file", Map.of("repository", "tree", "path", "inbox/note.md", "content", "mine",
+				"if_match", version)))).startsWith("Replaced");
+
+		// someone else changes it in between: the same version no longer fits
+		Files.writeString(base.resolve("tree/inbox/note.md"), "theirs, longer");
+		assertThat(TestMcp.text(call("write_file", Map.of("repository", "tree", "path", "inbox/note.md", "content", "lost",
+				"if_match", version)))).startsWith("error: Not written: tree/inbox/note.md was changed");
+		assertThat(Files.readString(base.resolve("tree/inbox/note.md"))).isEqualTo("theirs, longer");
+	}
+
+	@Test
+	void writeTellsTheAgentToPassTheVersionFromRead() {
+		assertThat(tools.stream().filter(spec -> spec.tool().name().equals("write_file")).findFirst().orElseThrow()
+				.tool().description()).contains("version from read_file");
+	}
+
+	// step 41: move and rename
+
+	private String move(final String from, final String to) {
+		return TestMcp.text(call("move", Map.of("repository", "tree", "from", from, "to", to)));
+	}
+
+	@Test
+	void moveBetweenGrantedFoldersAndRename() throws IOException {
+		assertThat(move("inbox/note.md", "knowledge/note.md")).isEqualTo("Moved tree/inbox/note.md to tree/knowledge/note.md");
+		assertThat(Files.readString(base.resolve("tree/knowledge/note.md"))).isEqualTo("old");
+		assertThat(move("knowledge/note.md", "knowledge/renamed.md")).startsWith("Moved");
+		assertThat(move("inbox/full/", "knowledge/full/")).startsWith("Moved");
+		assertThat(base.resolve("tree/knowledge/full/kept.md")).exists();
+	}
+
+	@Test
+	void moveExplainsWhyNot() throws IOException {
+		Files.writeString(base.resolve("tree/knowledge/taken.md"), "x");
+
+		assertThat(move("inbox/note.md", "knowledge/taken.md")).isEqualTo("error: Not moved: tree/knowledge/taken.md exists. "
+				+ "Choose another name, or delete it first.");
+		assertThat(move("inbox/note.md", "knowledge/none/x.md")).isEqualTo("error: Not moved: the folder of "
+				+ "tree/knowledge/none/x.md does not exist. Create it with create_folder first.");
+		assertThat(move("inbox/full/", "inbox/full/deeper/")).isEqualTo("error: Not moved: a folder cannot move into itself.");
+		assertThat(move("inbox/", "knowledge/inbox/")).isEqualTo("error: Not moved: tree/inbox/ is one of your granted folders.");
+		assertThat(TestMcp.text(call("move", Map.of("repository", "tree", "from", "inbox/note.md", "to", "knowledge/x.md",
+				"if_match", "\"outdated\"")))).isEqualTo("error: Not moved: tree/inbox/note.md was changed since that version. "
+				+ "Read it again first.");
+		assertThat(base.resolve("tree/inbox/note.md")).exists();
+	}
+
+	@Test
+	void nothingMovesOutOfOrIntoFoldersTheAgentMayNotWrite() throws IOException {
+		Files.writeString(base.resolve("tree/private/secret.md"), "s");
+
+		assertThat(move("inbox/note.md", "private/note.md")).isEqualTo("error: Not found: tree/inbox/note.md");
+		assertThat(move("private/secret.md", "inbox/secret.md")).isEqualTo("error: Not found: tree/private/secret.md");
+		assertThat(move("inbox/note.md", "inbox/.hidden.md")).isEqualTo("error: Not found: tree/inbox/note.md");
+		assertThat(base.resolve("tree/inbox/note.md")).exists();
+		assertThat(base.resolve("tree/private/secret.md")).exists();
 	}
 }

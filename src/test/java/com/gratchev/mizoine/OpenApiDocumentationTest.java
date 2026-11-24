@@ -66,7 +66,7 @@ class OpenApiDocumentationTest {
 							+ "interface (logos etc.). Those under /ui/ are not listed as operations: "
 							+ "they are plain files, not API methods. "
 							+ "AI agents connect to the MCP endpoint /mcp (Model Context Protocol, Streamable HTTP, POST with "
-							+ "JSON-RPC): tools list_repositories, list_folder, read_file, write_file, create_folder, delete, "
+							+ "JSON-RPC): tools list_repositories, list_folder, read_file, write_file, create_folder, delete, move, "
 							+ "with the same grants as this API. It is not listed as an operation either. "
 							+ "With OAuth configured (mizoine.oauth.clients), /mcp also takes Bearer tokens from Mizoine's own "
 							+ "OAuth server for chat apps: /.well-known/oauth-protected-resource/mcp (RFC 9728), "
@@ -109,7 +109,7 @@ class OpenApiDocumentationTest {
 	/** Method and path; springdoc writes {*path} as {path}. */
 	@ParameterizedTest
 	@ValueSource(strings = {"get /", "get /{repository}", "get /{repository}/{path}", "put /{repository}/{path}",
-			"delete /{repository}/{path}"})
+			"delete /{repository}/{path}", "post /{repository}/{path}"})
 	void everyEndpointIsDocumented(final String endpoint) throws Exception {
 		final String[] methodAndPath = endpoint.split(" ");
 		mockMvc.perform(apiDocs(API_DOCS_PATH))

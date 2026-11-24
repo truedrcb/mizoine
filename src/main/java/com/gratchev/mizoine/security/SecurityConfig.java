@@ -97,7 +97,15 @@ public class SecurityConfig {
 	static boolean isApiClientWrite(final HttpServletRequest request) {
 		final String method = request.getMethod();
 		final boolean fileWrite = HttpMethod.PUT.matches(method) || HttpMethod.DELETE.matches(method);
-		return fileWrite && request.getHeader(HttpHeaders.AUTHORIZATION) != null || isMcpCall(request);
+		return fileWrite && request.getHeader(HttpHeaders.AUTHORIZATION) != null || isMcpCall(request) || isMove(request);
+	}
+
+	/**
+	 * A move (step 41) is a POST with a {@code Destination} header, which a cross-site form cannot send (custom
+	 * headers need CORS, which Mizoine does not allow). A POST without it stays CSRF-protected.
+	 */
+	private static boolean isMove(final HttpServletRequest request) {
+		return HttpMethod.POST.matches(request.getMethod()) && request.getHeader("Destination") != null;
 	}
 
 	/**

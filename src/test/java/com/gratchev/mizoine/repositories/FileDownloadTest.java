@@ -66,6 +66,8 @@ class FileDownloadTest {
 			.file("tree/.git/config", "git")
 			.file("outside.txt", "outside the root")
 			.link("tree/public/leak.txt", "outside.txt")
+			// a link inside guest's grant to a folder outside it, in the same repository
+			.link("tree/public/link-private", "tree/private")
 			.repository("tree", "path: tree\n" + "access:\n  artem: [\"/\"]\n  guest: [public]\n");
 
 	@DynamicPropertySource
@@ -202,6 +204,14 @@ class FileDownloadTest {
 		final int status = mockMvc.perform(file(url, GUEST)).andReturn().getResponse().getStatus();
 
 		assertThat(status).as(url).isIn(400, 404);
+	}
+
+	/** Security: the grants apply to where a link leads, not only to the requested path. */
+	@ParameterizedTest
+	@ValueSource(strings = {"/tree/public/link-private/plan.md", "/tree/public/link-private/"})
+	void nothingIsReadThroughALinkToAFolderOutsideTheGrants(final String url) throws Exception {
+		mockMvc.perform(file(url, GUEST)).andExpect(status().isNotFound());
+		mockMvc.perform(file(url, GUEST).accept(MediaType.APPLICATION_JSON)).andExpect(status().isNotFound());
 	}
 
 	@Test

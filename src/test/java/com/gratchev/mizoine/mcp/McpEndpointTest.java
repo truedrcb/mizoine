@@ -77,7 +77,7 @@ class McpEndpointTest {
 			final List<McpSchema.Tool> tools = client.listTools().tools();
 
 			assertThat(tools).extracting(McpSchema.Tool::name).containsExactlyInAnyOrder(
-					"list_repositories", "list_folder", "read_file", "write_file", "create_folder", "delete");
+					"list_repositories", "list_folder", "read_file", "write_file", "create_folder", "delete", "move");
 			assertThat(tools).allSatisfy(tool -> assertThat(tool.description()).isNotBlank());
 			assertThat(tools).filteredOn(tool -> tool.name().equals("write_file")).singleElement()
 					.satisfies(tool -> assertThat(tool.description()).contains("git"));
@@ -102,6 +102,9 @@ class McpEndpointTest {
 
 			assertThat(result.isError()).isNotEqualTo(Boolean.TRUE);
 			assertThat(text(result)).isEqualTo("# Ideen\r\nmehr ü\r\n");
+			// step 42: the version travels as structured content too
+			assertThat(result.structuredContent()).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+					.containsEntry("text", "# Ideen\r\nmehr ü\r\n").containsKey("version");
 		}
 	}
 
@@ -140,6 +143,18 @@ class McpEndpointTest {
 			assertThat(call(client, "delete", Map.of("repository", "tree", "path", "inbox/topic/")).isError())
 					.isNotEqualTo(Boolean.TRUE);
 			assertThat(REPOSITORIES.path("tree/inbox/topic")).doesNotExist();
+		}
+	}
+
+	@Test
+	void theAgentFilesANoteFromItsInbox() throws IOException {
+		try (McpSyncClient client = client(GUEST)) {
+			call(client, "write_file", Map.of("repository", "tree", "path", "inbox/to-file.md", "content", "# Wissen"));
+
+			assertThat(text(call(client, "move", Map.of("repository", "tree", "from", "inbox/to-file.md",
+					"to", "knowledge/filed.md")))).startsWith("Moved");
+			assertThat(Files.readString(REPOSITORIES.path("tree/knowledge/filed.md"))).isEqualTo("# Wissen");
+			assertThat(REPOSITORIES.path("tree/inbox/to-file.md")).doesNotExist();
 		}
 	}
 

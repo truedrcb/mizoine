@@ -20,6 +20,7 @@ import org.junit.jupiter.api.io.TempDir;
 import com.gratchev.mizoine.files.FileVersion;
 import com.gratchev.mizoine.repositories.RepositoryWriter.DeleteResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.FolderResult;
+import com.gratchev.mizoine.repositories.RepositoryWriter.MoveResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.Precondition;
 import com.gratchev.mizoine.repositories.RepositoryWriter.Result;
 
@@ -329,5 +330,86 @@ class RepositoryWriterTest {
 		assertThat(writer.delete(root, List.of(), true, Optional.empty())).isEqualTo(new DeleteResult.NotFound());
 		assertThat(root.resolve("a/.hidden")).exists();
 		assertThat(outside).exists();
+	}
+
+	// step 41: move and rename
+
+	private MoveResult move(final String from, final String to, final boolean folder, final Optional<String> ifMatch) {
+		return writer.move(root, List.of(from.split("/")), List.of(to.split("/")), folder, ifMatch);
+	}
+
+	@Test
+	void fileIsMovedAndRenamed() throws IOException {
+		Files.createDirectories(root.resolve("b"));
+
+		assertThat(move("a/old.md", "b/new.md", false, Optional.empty())).isEqualTo(new MoveResult.Moved());
+		assertThat(Files.readString(root.resolve("b/new.md"))).isEqualTo("old");
+		assertThat(root.resolve("a/old.md")).doesNotExist();
+	}
+
+	@Test
+	void renameInThePlace() {
+		assertThat(move("a/old.md", "a/renamed.md", false, Optional.empty())).isEqualTo(new MoveResult.Moved());
+		assertThat(root.resolve("a/renamed.md")).exists();
+	}
+
+	@Test
+	void folderMovesWithEverythingInIt() throws IOException {
+		Files.writeString(root.resolve("a/sub/.gitkeep"), "");
+		Files.writeString(root.resolve("a/sub/note.md"), "n");
+
+		assertThat(move("a/sub", "moved", true, Optional.empty())).isEqualTo(new MoveResult.Moved());
+		assertThat(root.resolve("moved/note.md")).exists();
+		assertThat(root.resolve("moved/.gitkeep")).exists();
+		assertThat(root.resolve("a/sub")).doesNotExist();
+	}
+
+	@Test
+	void anExistingDestinationIsNeverOverwritten() throws IOException {
+		Files.writeString(root.resolve("a/other.md"), "other");
+
+		assertThat(move("a/old.md", "a/other.md", false, Optional.empty())).isEqualTo(new MoveResult.DestinationExists());
+		assertThat(Files.readString(root.resolve("a/other.md"))).isEqualTo("other");
+		assertThat(Files.readString(root.resolve("a/old.md"))).isEqualTo("old");
+		assertThat(move("a/old.md", "a/sub", false, Optional.empty())).isEqualTo(new MoveResult.DestinationExists());
+	}
+
+	@Test
+	void theDestinationFolderMustExist() {
+		assertThat(move("a/old.md", "nowhere/x.md", false, Optional.empty())).isEqualTo(new MoveResult.DestinationParentMissing());
+		assertThat(root.resolve("a/old.md")).exists();
+	}
+
+	@Test
+	void aFolderCannotMoveIntoItself() {
+		assertThat(move("a", "a/sub/a", true, Optional.empty())).isEqualTo(new MoveResult.IntoItself());
+		assertThat(root.resolve("a/old.md")).exists();
+	}
+
+	@Test
+	void anOldVersionIsNotMoved() throws IOException {
+		assertThat(move("a/old.md", "a/new.md", false, Optional.of("\"outdated\""))).isEqualTo(new MoveResult.PreconditionFailed());
+		assertThat(move("a/old.md", "a/new.md", false, Optional.of("W/" + etagOf("a/old.md")))).isEqualTo(new MoveResult.Moved());
+	}
+
+	@Test
+	void aLinkMovesAsALink() throws IOException {
+		Files.createSymbolicLink(root.resolve("a/alias.md"), root.resolve("a/old.md"));
+
+		assertThat(move("a/alias.md", "a/alias2.md", false, Optional.empty())).isEqualTo(new MoveResult.Moved());
+		assertThat(Files.isSymbolicLink(root.resolve("a/alias2.md"))).isTrue();
+		assertThat(Files.readString(root.resolve("a/old.md"))).isEqualTo("old");
+	}
+
+	@Test
+	void kindMustMatchAndNothingHiddenMissingOrOutside() throws IOException {
+		assertThat(move("a/old.md", "a/x", true, Optional.empty())).isEqualTo(new MoveResult.NotFound());
+		assertThat(move("a/sub", "a/x", false, Optional.empty())).isEqualTo(new MoveResult.NotFound());
+		assertThat(move("a/missing.md", "a/x.md", false, Optional.empty())).isEqualTo(new MoveResult.NotFound());
+		assertThat(move("a/leak.txt", "a/x.txt", false, Optional.empty())).isEqualTo(new MoveResult.NotFound());
+		assertThat(move(".git", "git", true, Optional.empty())).isEqualTo(new MoveResult.NotFound());
+		assertThat(move("a/old.md", "a/.hidden.md", false, Optional.empty())).isEqualTo(new MoveResult.NotFound());
+		assertThat(move("a/old.md", "../outside.md", false, Optional.empty())).isEqualTo(new MoveResult.NotFound());
+		assertThat(namesIn("a")).containsExactly("leak.txt", "old.md", "sub");
 	}
 }

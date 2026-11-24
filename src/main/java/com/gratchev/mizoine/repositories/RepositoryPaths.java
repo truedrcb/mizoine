@@ -1,8 +1,10 @@
 package com.gratchev.mizoine.repositories;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
@@ -51,6 +53,35 @@ public final class RepositoryPaths {
 			return folder.flatMap(real -> safe(realRoot, real.resolve(segments.getLast()), Files::isRegularFile));
 		} catch (final IOException e) {
 			return Optional.empty();
+		}
+	}
+
+	/**
+	 * Where the segments really lead below the root: links are followed as far as the path exists, the rest is kept.
+	 * Access is checked on these segments too, so a link cannot lead around the grants.
+	 */
+	public static List<String> realSegments(final Path root, final List<String> segments) {
+		for (int length = segments.size(); length > 0; length--) {
+			final List<String> prefix = segments.subList(0, length);
+			final Optional<Path> real = resolveFolder(root, prefix).or(() -> resolveFile(root, prefix));
+			if (real.isPresent()) {
+				final List<String> result = new ArrayList<>();
+				for (final Path name : realRoot(root).relativize(real.get())) {
+					result.add(name.toString());
+				}
+				result.addAll(segments.subList(length, segments.size()));
+				return List.copyOf(result);
+			}
+		}
+		return segments;
+	}
+
+	/** The root exists here: a path below it was just resolved. */
+	private static Path realRoot(final Path root) {
+		try {
+			return root.toRealPath();
+		} catch (final IOException e) {
+			throw new UncheckedIOException(e);
 		}
 	}
 

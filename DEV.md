@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-24): steps 0–34 and 37–40 done (639 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: live test from the phone open; planned: 36 (browser UI), 41 (move and rename), 42 (versions for agents). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, D29–D32, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-24): steps 0–34 and 37–42 done (772 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: everything but the live test from the phone done; planned: 36 (browser UI). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -723,6 +723,19 @@ What Claude's "custom connector" (and other chat apps) need to log in.
 - nginx: `/mcp` without response buffering (streaming); `/.well-known/` passed through.
 - Check live with the real server behind Cloudflare: from the Claude app on the phone, store a note, read it back, and see it as a new file in `git status` on the server.
 - *2026-11-23:* the README section "Connect an AI agent (MCP)" is written (agent user, Claude Code with Basic, Claude on web and phone with OAuth, restart, Cloudflare). nginx needs nothing special for `/mcp`: the stateless endpoint answers with JSON, not a stream. **Open: the live test from the Claude app on the phone** against the real server behind Cloudflare.
+- *2026-11-24:*
+  - README: a check before Connect (the RFC 9728 metadata and the 401 of `/mcp` must name the public address).
+  - **Security review of the write operations**, asked for with this step.
+    - Tests added:
+      - `WritePermissionMatrixTest` (unit, through `RepositoryFiles`, the layer HTTP and MCP share). Write, create folder, delete and move in both directions are tried against every kind of forbidden place: above a grant, beside it, other repositories, the root, hidden names, `..`, absolute paths, and links out of the repository and to non-granted folders. Each case must be refused with nothing changed on disk (a snapshot of the whole temporary tree). A control test checks that everything inside the grants works.
+      - `UnsafeWriteUrlTest` (real server). PUT, DELETE and move with the encoded traversal forms of `UnsafeUrlTest`, in the URL and in the `Destination` header: each gives 400 or 404 and changes nothing.
+    - **Found and fixed: a symbolic link inside a granted folder that points to a non-granted folder of the same repository led around the grants.**
+      - It worked for reading, listing, writing, creating folders, deleting and moving there.
+      - Cause: the grants were checked on the requested path only, while the file system follows the link. `RepositoryPaths` only kept real paths inside the root and not hidden.
+      - Fix, one rule in one place: the grants must hold for the requested path *and* for where it really leads. `RepositoryPaths.realSegments` follows links as far as the path exists. `RepositoryFiles.mayEnter`, `readable` and `mayWriteIn` check both, and `RepositoryController` reuses them. Listings hide such links.
+      - Links to granted places keep working.
+    - Untested branch: the `catch` in `RepositoryPaths.realRoot`. The root would have to vanish between resolving a path below it and resolving the root itself, a race.
+    - CRAP of the changed methods ≤ 6, branch coverage 100 %.
 
 
 ### 36. Browser UI for files  ☐
@@ -899,7 +912,7 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
   - **One MCP helper:** `McpEndpointTest` and `OAuthTest` each built their MCP client and tool calls; now one helper, `TestMcp`, also used by `McpToolsTest`.
   - **After:** 633 Java tests green, highest CRAP 8.1, no unused imports.
 
-### 41. Move and rename files and folders  ☐
+### 41. Move and rename files and folders  ☑
 *Requested 2026-11-24:* move files or folders, for the HTTP file API and as an MCP tool. Renaming is a move within the same folder.
 
 **Behaviour (the same for HTTP and MCP, decided once in `RepositoryFiles` and `RepositoryWriter`):**
@@ -956,13 +969,42 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
    - `McpToolsTest`: every answer of `move`;
    - `McpEndpointTest`: the agent moves a note from `inbox` to `knowledge`.
 5. OpenAPI smoke test: `post /{repository}/{path}` has a summary.
+- *Done 2026-11-24 (ub-mode), after step 42, with findings:*
+  - **Writer:** `RepositoryWriter.move` with its own result type (`Moved`, `DestinationExists`, `DestinationParentMissing`, `IntoItself`, `PreconditionFailed`, `NotAtomic`, `NotFound`, `IsGrantedFolder`).
+    - One `Files.move(…, ATOMIC_MOVE)` under the writer's lock; a link moves as a link.
+    - "Is the file still at the client's version" is one helper now, for delete and move.
+  - **Grants:** `RepositoryFiles.move` checks the user's rights; HTTP and MCP use it alike.
+    - Source and destination must both be writable (also two different grants).
+    - Root and grant tops are refused.
+  - **HTTP:** `POST` + `Destination` (D29). `RepositoryUrls.destination` takes only an encoded path on this server, in the same repository, of the source's kind; else 400.
+    - CSRF: a `POST` with `Destination` is exempt, because a form cannot send that header.
+    - Without `Destination`, a `POST` stays CSRF-protected also with HTTP Basic (403 before 400): browsers send a cached Basic login with cross-site forms. The first version of the test expected 400 there; the test was wrong, not the rule.
+  - **MCP:** tool `move(repository, from, to, if_match?)` with answers that say what to do.
+  - **CRAP:** `RepositoryWriter.move` was at 10.0 (complexity 10, fully covered); split (`entry`, `isInside`). None at 10 or more.
+  - **Untested:**
+    - `NotAtomic` needs a second file system inside the repository;
+    - `FileAlreadyExistsException` at the move, and a file vanishing in `readText`, are races.
+  - **Tests:** `RepositoryWriterTest` (+9), `McpToolsTest` (+3), `McpEndpointTest` (the agent files a note from its inbox), `FileMoveTest` (17), OpenAPI smoke test for `post`.
+  - **Live** (jar):
+    - HTTP move to an encoded name → 201 with `Location`; the same again → 404;
+    - MCP `read_file` gives `{text, version}`; `move` moves;
+    - no warnings in the log.
 
-### 42. Versions for agents  ☐
+
+### 42. Versions for agents  ☑
 *Found while planning step 41:* `write_file` returns the file's version, but `read_file` does not. An agent that reads, changes and writes back cannot pass `if_match`, so it may silently overwrite a change made in between (by the user, the editor or another agent). The same holds for `move`.
 - `read_file` also returns the version, as `structuredContent` `{ "text": …, "version": … }` next to the plain text content, so older clients still get the text.
 - `list_folder` stays as it is (no versions: reading every file would be needed).
 - The `write_file` description: "pass the version from read_file as if_match".
 - **Red:** `McpToolsTest` + `McpEndpointTest`: `read_file` gives the version; `write_file` with it writes; after a change in between, the same version → refused.
+- *Done 2026-11-24 (ub-mode), before step 41 (it makes `move` safe too):*
+  - `RepositoryFiles.readText` returns `FileText(content, version)`. `read_file` gives the text as plain content (every client) and `{text, version}` as structured content.
+  - **The version is read before the content:** if the file changes in between, the agent holds new content with an old version, and its write back fails safely (412). The other order could pair old content with a new version and overwrite the change.
+  - Tool descriptions: `read_file` names the version; `write_file` says "always pass it when changing a file you read".
+  - **Tests** (Red first):
+    - `McpToolsTest`: text and version; the version protects the write back, and after a change in between it is refused; the description;
+    - `McpEndpointTest`: the structured content over the real protocol.
+
 
 ## Glossary
 
@@ -979,6 +1021,7 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
 | ETag | The version as HTTP header; `If-Match` with it protects against lost updates (D13). |
 | Target | What a URL below a repository leads to: problem page, redirect, folder or file (`RepositoryController.Target`). |
 | Agent | A user in `users.yaml` with grants to a few folders, used by an AI (BACKLOG §7). |
+| Move | A file or folder to a new path in the same repository, in one atomic step; never overwrites (D29–D31). |
 
 ---
 
@@ -1035,8 +1078,8 @@ Proposals; details in [docs/technology-decisions.md](docs/technology-decisions.m
 - **D25 — external pictures:** **Decided 2026-11-23 as proposed:** not shown (CSP allows only Mizoine's own files): no tracking, no mixed content. Not chosen: allow `https:` pictures (`img-src 'self' https:`).
 - **D27 — CSRF token for the static UI pages:** **Decided 2026-11-23 as proposed:** Spring Security's cookie token (`CookieCsrfTokenRepository`, readable by JavaScript), sent back in the `X-XSRF-TOKEN` header: the standard setup for pages without a server template. The session-bound default cannot reach a static file under `/ui/`. Not chosen: a small endpoint that returns the token (one more endpoint).
 - **D28 — the editor's URL:** **Decided 2026-11-23 as proposed:** `/ui/editor.html?file=/repository/path/file.md`, the file's path on the server as one parameter, so that the page needs no knowledge of repositories. Not chosen: two parameters (`repository`, `path`).
-- **D29 — HTTP form of a move:** *Proposed:* `POST` on the source URL with a `Destination` header (WebDAV `MOVE` semantics, standard methods only: Spring MVC, the firewall and OpenAPI 3.1 accept it; a `Destination` header cannot come from a cross-site form). Alternatives: WebDAV `MOVE` itself (needs firewall and Spring changes, not describable in OpenAPI 3.1; can be an alias later, like `MKCOL`); `POST` with a JSON body `{"to": …}` (own format).
-- **D30 — overwriting at the destination:** *Proposed:* never; an existing destination gives 412, the client deletes it first if wanted. Alternative: WebDAV's `Overwrite: T` (one request replaces a file or a whole folder tree).
-- **D31 — between repositories:** *Proposed:* no, same repository only (roots may be on different disks, then no atomic move; different access rules). Alternative: copy + delete across repositories, not atomic.
-- **D32 — links pointing to a moved file:** *Proposed:* not changed (plain files: Mizoine does not rewrite content it was not asked to write). Later, maybe a separate "find links to …" tool for agents.
+- **D29 — HTTP form of a move:** **Decided 2026-11-24 as proposed:** `POST` on the source URL with a `Destination` header (WebDAV `MOVE` semantics, standard methods only: Spring MVC, the firewall and OpenAPI 3.1 accept it; a `Destination` header cannot come from a cross-site form). Not chosen: WebDAV `MOVE` itself (needs firewall and Spring changes, not describable in OpenAPI 3.1; can be an alias later, like `MKCOL`); `POST` with a JSON body `{"to": …}` (own format).
+- **D30 — overwriting at the destination:** **Decided 2026-11-24 as proposed:** never; an existing destination gives 412, the client deletes it first if wanted. Not chosen: WebDAV's `Overwrite: T` (one request replaces a file or a whole folder tree).
+- **D31 — between repositories:** **Decided 2026-11-24 as proposed:** no, same repository only (roots may be on different disks, then no atomic move; different access rules). Not chosen: copy + delete across repositories, not atomic.
+- **D32 — links pointing to a moved file:** **Decided 2026-11-24 as proposed:** not changed (plain files: Mizoine does not rewrite content it was not asked to write). Later, maybe a separate "find links to …" tool for agents.
 - **Later, not planned yet:** copy, live Markdown preview in the editor, Obsidian `[[wiki links]]`, links relative to the repository root (`/…`), syntax highlighting of code blocks in the page, per-grant read-only permissions.

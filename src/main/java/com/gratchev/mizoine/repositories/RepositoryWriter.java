@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.DirectoryNotEmptyException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -128,6 +130,40 @@ public class RepositoryWriter {
 		}
 	}
 
+	/** Moving or renaming a file or folder (step 41): exactly one outcome. */
+	public sealed interface MoveResult {
+
+		record Moved() implements MoveResult {
+		}
+
+		/** Never overwritten (D30): the client deletes it first if wanted. */
+		record DestinationExists() implements MoveResult {
+		}
+
+		/** The destination's folder does not exist (D14: no implicit folders). */
+		record DestinationParentMissing() implements MoveResult {
+		}
+
+		record IntoItself() implements MoveResult {
+		}
+
+		/** {@code If-Match} on a file not met: changed since the client read it. */
+		record PreconditionFailed() implements MoveResult {
+		}
+
+		/** Source and destination are on different file systems (e.g. a mount inside the repository). */
+		record NotAtomic() implements MoveResult {
+		}
+
+		/** Source or destination missing, hidden, outside the root, or not of the kind the path names (D5). */
+		record NotFound() implements MoveResult {
+		}
+
+		/** The repository root or one of the user's granted folders: not moved. Decided by access. */
+		record IsGrantedFolder() implements MoveResult {
+		}
+	}
+
 	private final Lock lock = new ReentrantLock();
 
 	/**
@@ -213,8 +249,70 @@ public class RepositoryWriter {
 
 	/** D13: with {@code If-Match}, only the version the client knows is deleted. */
 	private static Optional<DeleteResult> refuseFile(final Path file, final Optional<String> ifMatch) {
-		return ifMatch.filter(expected -> !FileVersion.of(file).map(version -> version.isNamedBy(expected)).orElse(false))
-				.map(expected -> new DeleteResult.PreconditionFailed());
+		return ifMatch.filter(expected -> !isVersion(file, expected)).map(expected -> new DeleteResult.PreconditionFailed());
+	}
+
+	/**
+	 * Moves the entry itself in one atomic step; a symbolic link moves as a link. Never overwrites, never creates
+	 * folders. Grants are checked by the caller.
+	 *
+	 * @param folder the paths name a folder; the source must be of that kind
+	 * @param ifMatch for files: the version the file must still have
+	 */
+	public MoveResult move(final Path root, final List<String> from, final List<String> to, final boolean folder,
+			final Optional<String> ifMatch) {
+		final Optional<Path> source = entry(root, from, folder);
+		if (source.isEmpty()) {
+			return new MoveResult.NotFound();
+		}
+		if (folder && isInside(to, from)) {
+			return new MoveResult.IntoItself();
+		}
+		final Optional<Path> targetParent = parentOf(root, to);
+		if (targetParent.isEmpty()) {
+			return isMissingParent(root, to) ? new MoveResult.DestinationParentMissing() : new MoveResult.NotFound();
+		}
+		return moveAtomically(source.get(), targetParent.get().resolve(to.getLast()),
+				folder ? Optional.empty() : ifMatch.filter(expected -> !isVersion(source.get(), expected)));
+	}
+
+	/** @return the entry itself (a link stays a link) of a visible folder or file of that kind, or empty */
+	private static Optional<Path> entry(final Path root, final List<String> segments, final boolean folder) {
+		final Optional<Path> visible = folder ? RepositoryPaths.resolveFolder(root, segments) : RepositoryPaths.resolveFile(root, segments);
+		return visible.flatMap(real -> parentOf(root, segments)).map(parent -> parent.resolve(segments.getLast()));
+	}
+
+	/** @return {@code inner} lies below {@code outer} */
+	private static boolean isInside(final List<String> inner, final List<String> outer) {
+		return inner.size() > outer.size() && inner.subList(0, outer.size()).equals(outer);
+	}
+
+	/** @param staleVersion present if the client's version of the source file no longer fits */
+	private MoveResult moveAtomically(final Path source, final Path target, final Optional<String> staleVersion) {
+		lock.lock();
+		try {
+			if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+				return new MoveResult.DestinationExists();
+			}
+			if (staleVersion.isPresent()) {
+				return new MoveResult.PreconditionFailed();
+			}
+			Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
+			return new MoveResult.Moved();
+		} catch (final AtomicMoveNotSupportedException e) {
+			return new MoveResult.NotAtomic();
+		} catch (final FileAlreadyExistsException e) {
+			return new MoveResult.DestinationExists();
+		} catch (final IOException e) {
+			throw new UncheckedIOException(e);
+		} finally {
+			lock.unlock();
+		}
+	}
+
+	/** D13: whether a file is still at the version a client knows (its ETag, weak or strong). */
+	private static boolean isVersion(final Path file, final String expected) {
+		return FileVersion.of(file).map(version -> version.isNamedBy(expected)).orElse(false);
 	}
 
 	/** @return the real parent folder of a plain, non-empty path, or empty */
