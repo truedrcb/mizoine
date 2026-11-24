@@ -36,8 +36,34 @@ java -jar target/mizoine-*.jar --mizoine.users-file=users.yaml --mizoine.reposit
 case for services, cron jobs or containers), names like `Rücksendeportal.pdf` show as `R��cksendeportal.pdf`
 and cannot be opened. A JVM option does not help. In systemd: `Environment=LANG=C.UTF-8`.
 
-[docs/mizoine.sh](docs/mizoine.sh) is a start script that does this: copy it next to the jar, `users.yaml` and
-`repositories/`, then run `./mizoine.sh` (further settings are passed on, e.g. `./mizoine.sh --server.port=12014`).
+### Start and stop on a server
+
+[docs/mizoine.sh](docs/mizoine.sh) starts Mizoine in the background, with `LANG=C.UTF-8`. Copy it next to the jar,
+`users.yaml` and `repositories/`, then:
+
+```sh
+./mizoine.sh                         # or with settings: ./mizoine.sh --server.port=12014
+```
+
+- **Waits for the start:** it says "Mizoine started" only once the server is up. If Java stops at once (a wrong
+  setting, the port in use), it shows the end of the log instead.
+- **Files:** everything Mizoine prints goes to `mizoine.log`, its process ID to `mizoine.pid`.
+- **No double start:** a second `./mizoine.sh` while it runs refuses.
+- **It keeps running** after the terminal is closed.
+
+**Stop** Mizoine by its process ID:
+
+```sh
+kill $(cat mizoine.pid)              # ends gracefully: running requests are finished first
+```
+
+- If `mizoine.pid` is missing, find the process with `pgrep -af mizoine` and `kill <PID>`.
+- Only if it does not end within half a minute: `kill -9 <PID>`. A write in progress is lost, but never half
+  written (writes are atomic).
+- `mizoine.pid` may stay behind after a crash or a reboot; the next `./mizoine.sh` notices and replaces it.
+
+A reboot does not restart Mizoine. For that, run it as a systemd service (`ExecStart=java -jar …` with
+`Environment=LANG=C.UTF-8`) instead of this script.
 
 Open http://127.0.0.1:12013 and log in. `users.yaml` and `repositories/` are git-ignored; edits to them take
 effect without a restart.
