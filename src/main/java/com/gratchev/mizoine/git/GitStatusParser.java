@@ -1,6 +1,7 @@
 package com.gratchev.mizoine.git;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,29 +30,38 @@ final class GitStatusParser {
 
 	/** @throws GitException for records this format does not have */
 	static GitStatus parse(final String output) {
-		final String[] fields = output.split("\0");
 		final Branch branch = new Branch();
 		final List<Change> changes = new ArrayList<>();
-		for (int i = 0; i < fields.length; i++) {
-			final String record = fields[i];
+		final Iterator<String> records = List.of(output.split("\0")).iterator();
+		while (records.hasNext()) {
+			final String record = records.next();
 			if (record.startsWith("#")) {
 				branch.read(record);
-			} else if (record.startsWith("1 ")) {
-				final String[] parts = parts(record, ORDINARY);
-				changes.add(new Change(parts[ORDINARY - 1], Optional.empty(), kind(parts[1], 0), kind(parts[1], 1)));
-			} else if (record.startsWith("2 ") && i + 1 < fields.length) {
-				final String[] parts = parts(record, RENAMED);
-				i++;
-				changes.add(new Change(parts[RENAMED - 1], Optional.of(fields[i]), kind(parts[1], 0), kind(parts[1], 1)));
-			} else if (record.startsWith("u ")) {
-				changes.add(new Change(parts(record, UNMERGED)[UNMERGED - 1], Optional.empty(), Kind.CONFLICT, Kind.CONFLICT));
-			} else if (record.startsWith("? ")) {
-				changes.add(new Change(record.substring(2), Optional.empty(), Kind.UNCHANGED, Kind.UNTRACKED));
 			} else if (!record.isEmpty()) {
-				throw unexpected(record);
+				changes.add(change(record, records));
 			}
 		}
 		return branch.status(changes);
+	}
+
+	/** @param following the records after this one: a rename's old path is the next of them */
+	private static Change change(final String record, final Iterator<String> following) {
+		return switch (record.substring(0, Math.min(2, record.length()))) {
+			case "1 " -> {
+				final String[] parts = parts(record, ORDINARY);
+				yield new Change(parts[ORDINARY - 1], Optional.empty(), kind(parts[1], 0), kind(parts[1], 1));
+			}
+			case "2 " -> {
+				final String[] parts = parts(record, RENAMED);
+				if (!following.hasNext()) {
+					throw unexpected(record);
+				}
+				yield new Change(parts[RENAMED - 1], Optional.of(following.next()), kind(parts[1], 0), kind(parts[1], 1));
+			}
+			case "u " -> new Change(parts(record, UNMERGED)[UNMERGED - 1], Optional.empty(), Kind.CONFLICT, Kind.CONFLICT);
+			case "? " -> new Change(record.substring(2), Optional.empty(), Kind.UNCHANGED, Kind.UNTRACKED);
+			default -> throw unexpected(record);
+		};
 	}
 
 	/** The header lines ({@code # branch.…}); other headers ({@code # stash}) are skipped. */
@@ -74,10 +84,10 @@ final class GitStatusParser {
 			} else if (record.startsWith(UPSTREAM)) {
 				upstream = Optional.of(record.substring(UPSTREAM.length()));
 			} else if (record.startsWith(AHEAD_BEHIND)) {
-				// "+<ahead> -<behind>"
+				// "+<ahead> -<behind>"; parseInt takes the '+', the '-' is only the separator
 				final String[] counts = record.substring(AHEAD_BEHIND.length()).split(" ");
 				gone = false;
-				ahead = Integer.parseInt(counts[0].substring(1));
+				ahead = Integer.parseInt(counts[0]);
 				behind = Integer.parseInt(counts[1].substring(1));
 			}
 		}

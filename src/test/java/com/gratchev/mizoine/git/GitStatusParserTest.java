@@ -107,5 +107,8 @@ class GitStatusParserTest {
 				.isInstanceOf(GitException.class);
 		assertThatThrownBy(() -> GitStatusParser.parse(output("# branch.head main", "1 .M N...")))
 				.isInstanceOf(GitException.class);
+		// a rename without its old path
+		assertThatThrownBy(() -> GitStatusParser.parse("# branch.head main\0" + "2 R. N... " + HASHES + " R100 x.md"))
+				.isInstanceOf(GitException.class);
 	}
 }

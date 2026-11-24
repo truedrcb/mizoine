@@ -25,12 +25,14 @@ Act as an expert Java developer. Build with Java 25, Maven 3.9+ (`mvn`, no Maven
   - "Keep a Log": report the actions and their reasons at the end of a step.
   - "If an honest test is impractical, do not write a bad one" does not lift "No production code without a failing test": it covers only branches inside code that a failing test already requires (e.g. a `catch` for disk errors, a race). Name such untested branches and the reason in the step notes in DEV.md.
 - Its tools: crapper (CRAP < 10 per method), dryer (duplication ≥ 0.8 removed), mutator (survivors killed), Python, from github.com/unclebob, Java supported.
-  - Not installed yet: installing and running them needs the user's permission.
-  - Planned place: `~/.local/opt/ub-tools/{crapper,dryer,mutator}` (mutator needs crapper next to it).
+  - Installed 2026-11-25 in `~/.local/opt/ub-tools/{crapper,dryer,mutator}` (git clones; mutator needs crapper next to it). Each has its own `.venv`. This Ubuntu has no `pip`/`ensurepip`, so it was installed with PyPA's `pip.pyz` (`~/.local/opt/ub-tools/pip/`): `python3 -m venv --without-pip <tool>/.venv && <tool>/.venv/bin/python -I pip/pip.pyz install -e ./<tool>`.
   - Run from the project root, with coverage from `mvn verify` (`target/site/jacoco/jacoco.xml`, JaCoCo 0.8.16 for Java 25): `crapper --use-existing-coverage --changed`, `dryer --threshold 0.8 --changed`, `mutator --use-existing-coverage --changed`.
   - Mutation testing runs `mvn test` once per mutant: only on changed code (`--changed`).
+    - The whole suite per mutant takes hours. Use `--test-command "mvn -q test -Dtest=<the test classes of these files> -Dsurefire.failIfNoSpecifiedTests=false -Djacoco.skip=true"` per group of files, and `--max-workers 4`. This is conservative: a mutant that only another test class would catch shows up as a survivor, never as falsely killed.
+    - `--changed` misses some modified files: name the changed files explicitly.
+    - After editing code, run `mvn clean verify` again before `--use-existing-coverage`: stale line numbers show up as "uncovered".
   - Their snapshots go to `.metrics/` (git-ignored).
-- Until the tools run: JaCoCo's line and branch coverage of the changed code stands in; uncovered new lines get behaviour tests or a stated reason.
+- Uncovered new lines get behaviour tests or a stated reason (JaCoCo's line and branch coverage, besides the tools).
 
 ## API documentation (OpenAPI)
 - Every HTTP endpoint (HTML pages and JSON alike) is annotated for OpenAPI (springdoc): `@Tag` on the controller; `@Operation` with summary; `@Parameter` for path/query parameters; `@ApiResponse` for every status it can return (incl. 401, 404, 500) with media types.

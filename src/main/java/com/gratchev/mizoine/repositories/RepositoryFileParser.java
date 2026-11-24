@@ -43,14 +43,14 @@ public class RepositoryFileParser {
 				.filter(field -> !FIELDS.contains(field))
 				.forEach(field -> log.warn("Ignoring unknown field '{}' in repository file {}", field, file));
 
-		final Set<String> gitUsers = new HashSet<>();
-		final Map<String, List<FolderGrant>> grants = grants(root.get(ACCESS), file, gitUsers);
+		final Access access = access(root.get(ACCESS), file);
+		final Map<String, List<FolderGrant>> grants = access.folders();
 		if (grants.isEmpty()) {
 			log.warn("Repository file {} gives access to nobody", file);
 		}
 		final List<String> problems = new ArrayList<>();
 		final Path rootFolder = rootFolder(root.get(PATH), file, problems);
-		return new RepositoryConfig(name, rootFolder, grants, gitUsers, List.copyOf(problems));
+		return new RepositoryConfig(name, rootFolder, grants, access.git(), List.copyOf(problems));
 	}
 
 	private static String repositoryName(final Path file) {
@@ -68,40 +68,57 @@ public class RepositoryFileParser {
 		return YamlFiles.readTree(file, "Repository file", RepositoryFileException::new);
 	}
 
-	/** @param gitUsers collects the users with the grant {@code .git} */
-	private static Map<String, List<FolderGrant>> grants(final JsonNode access, final Path file, final Set<String> gitUsers) {
+	/**
+	 * What {@code access} grants.
+	 *
+	 * @param folders username → folder grants, for every user named
+	 * @param git the users with the grant {@code .git} (step 43)
+	 */
+	private record Access(Map<String, List<FolderGrant>> folders, Set<String> git) {
+	}
+
+	/** One user's list: its folders, and whether it has {@code .git}. */
+	private record UserAccess(List<FolderGrant> folders, boolean git) {
+	}
+
+	private static Access access(final JsonNode access, final Path file) {
 		if (access == null || access.isNull()) {
-			return Map.of();
+			return new Access(Map.of(), Set.of());
 		}
 		if (!access.isObject()) {
 			throw new RepositoryFileException("'" + ACCESS + "' in repository file " + file
 					+ " must map usernames to folder lists, e.g. 'artem: [\"/\"]'");
 		}
-		final Map<String, List<FolderGrant>> grants = new LinkedHashMap<>();
+		final Map<String, List<FolderGrant>> folders = new LinkedHashMap<>();
+		final Set<String> git = new HashSet<>();
 		for (final Map.Entry<String, JsonNode> entry : access.properties()) {
 			final String username = entry.getKey();
 			if (username.isBlank()) {
 				throw new RepositoryFileException("'" + ACCESS + "' in repository file " + file + " has an empty username");
 			}
-			grants.put(username, folders(username, entry.getValue(), file, gitUsers));
+			final UserAccess user = userAccess(username, entry.getValue(), file);
+			folders.put(username, user.folders());
+			if (user.git()) {
+				git.add(username);
+			}
 		}
-		return Collections.unmodifiableMap(grants);
+		return new Access(Collections.unmodifiableMap(folders), Set.copyOf(git));
 	}
 
-	private static List<FolderGrant> folders(final String username, final JsonNode folders, final Path file,
-			final Set<String> gitUsers) {
+	private static UserAccess userAccess(final String username, final JsonNode folders, final Path file) {
 		if (!folders.isArray()) {
 			throw new RepositoryFileException("Folders of user '" + username + "' in repository file " + file
 					+ " must be a list, e.g. [\"/\"] or [public, projects/shared]");
 		}
 		final List<FolderGrant> grants = new ArrayList<>();
+		boolean git = false;
 		for (final JsonNode folder : folders) {
 			if (!folder.isString()) {
 				throw new RepositoryFileException("Folders of user '" + username + "' in repository file " + file
 						+ " must be texts");
 			}
 			if (FolderGrant.isGit(folder.asString())) {
-				gitUsers.add(username);
+				git = true;
 				continue;
 			}
 			try {
@@ -110,7 +127,7 @@ public class RepositoryFileParser {
 				throw new RepositoryFileException("User '" + username + "' in repository file " + file + ": " + e.getMessage());
 			}
 		}
-		return List.copyOf(grants);
+		return new UserAccess(List.copyOf(grants), git);
 	}
 
 	private static Path rootFolder(final JsonNode path, final Path file, final List<String> problems) {

@@ -190,6 +190,15 @@ class RepositoryAccessTest {
 		assertThat(access.canWriteIn(folder("projects/shared/.git"))).isFalse();
 	}
 
+	@Test
+	void aFileWhosePathIsAGrantIsNotReadable() {
+		// the grant names a folder: a file of that name in the folder above is outside it
+		final RepositoryAccess access = access(repository("guest", "public"), "guest");
+
+		assertThat(access.canReadFile(folder("public"))).isFalse();
+		assertThat(access.canReadFile(folder("public/note.md"))).isTrue();
+	}
+
 	// Git access (step 43, D33)
 
 	@Test

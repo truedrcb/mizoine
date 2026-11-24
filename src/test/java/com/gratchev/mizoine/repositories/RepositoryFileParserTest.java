@@ -55,6 +55,7 @@ class RepositoryFileParserTest {
 		assertThat(config.grants().get("artem")).containsExactly(FolderGrant.WHOLE_REPOSITORY);
 		assertThat(config.grants().get("guest")).containsExactly(
 				FolderGrant.of("public"), FolderGrant.of("projects/shared"));
+		assertThat(config.gitUsers()).isEmpty();
 	}
 
 	@Test
@@ -100,17 +101,18 @@ class RepositoryFileParserTest {
 	@ParameterizedTest
 	@ValueSource(strings = {".git", "/.git", ".git/"})
 	void gitAtTheTopIsGitAccess(final String git) throws IOException {
-		final RepositoryConfig config = parser.parse(notes("path: %s\naccess:\n  editor: [public, \"%s\"]\n  git-only: [\"%s\"]\n"
-				.formatted(data, git, git)));
+		final RepositoryConfig config = parser.parse(notes(("path: %s\naccess:\n  editor: [public, \"%s\"]\n  git-only: [\"%s\"]\n"
+				+ "  guest: [public]\n").formatted(data, git, git)));
 
 		assertThat(config.gitUsers()).containsExactlyInAnyOrder("editor", "git-only");
 		assertThat(config.grants().get("editor")).containsExactly(FolderGrant.of("public"));
 		assertThat(config.grants().get("git-only")).isEmpty();
+		assertThat(config.grants().get("guest")).containsExactly(FolderGrant.of("public"));
 	}
 
 	@ParameterizedTest
 	@ValueSource(strings = {"..", "a/../../b", "a/..", "./a", "a/.git", ".git/objects", ".gitx", ".github", "a/.hidden",
-			"a\\\\b", "", "100%", "a/x%y"})
+			"a\\\\b", "\\\\a", "\\0a", "a\\0", "", "100%", "a/x%y"})
 	void unsafeOrHiddenFoldersMakeTheFileUnreadable(final String folder) throws IOException {
 		final Path file = notes("path: data\naccess:\n  guest: [\"" + folder + "\"]\n");
 

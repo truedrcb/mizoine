@@ -30,7 +30,7 @@ public record FolderGrant(List<String> segments) {
 		if (folder.indexOf('\\') >= 0 || folder.indexOf('\0') >= 0) {
 			throw new IllegalArgumentException("folder '" + folder + "' must use '/' as separator");
 		}
-		final List<String> segments = Arrays.stream(folder.split("/")).filter(segment -> !segment.isEmpty()).toList();
+		final List<String> segments = segments(folder);
 		for (final String segment : segments) {
 			if (FolderNames.isHidden(segment)) {
 				throw new IllegalArgumentException("folder '" + folder
@@ -45,7 +45,12 @@ public record FolderGrant(List<String> segments) {
 	 *         to the repository (step 43), not a folder
 	 */
 	public static boolean isGit(final String folder) {
-		return Arrays.stream(folder.split("/")).filter(segment -> !segment.isEmpty()).toList().equals(List.of(GIT));
+		return segments(folder).equals(List.of(GIT));
+	}
+
+	/** Leading, trailing and double slashes are ignored. */
+	private static List<String> segments(final String folder) {
+		return Arrays.stream(folder.split("/")).filter(segment -> !segment.isEmpty()).toList();
 	}
 
 	public boolean isWholeRepository() {

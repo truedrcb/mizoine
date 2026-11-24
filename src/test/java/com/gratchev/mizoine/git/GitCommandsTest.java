@@ -21,7 +21,7 @@ import com.gratchev.mizoine.git.GitStatus.Upstream;
 /** Step 44: running the git program safely (T4) and reading the status of real repositories. */
 class GitCommandsTest {
 
-	private static final long MEGABYTE = 1024 * 1024;
+	private static final int MEGABYTE = 1024 * 1024;
 
 	private final Path dir;
 	private final TestGit git;
@@ -159,6 +159,16 @@ class GitCommandsTest {
 
 		assertThatThrownBy(() -> commands.run(repository, List.of("-c", "alias.big=!head -c 3000000 /dev/zero", "big")))
 				.isInstanceOf(GitException.class).hasMessageContaining("output");
+	}
+
+	@Test
+	void outputUpToTheLimitIsKept() throws Exception {
+		final Path repository = git.repository(dir.resolve("repo"));
+		final GitCommands small = new GitCommands("git", Duration.ofSeconds(20), 1000, git.environment());
+
+		assertThat(small.run(repository, List.of("-c", "alias.just=!head -c 1000 /dev/zero", "just")).output()).hasSize(1000);
+		assertThatThrownBy(() -> small.run(repository, List.of("-c", "alias.over=!head -c 1001 /dev/zero", "over")))
+				.isInstanceOf(GitException.class);
 	}
 
 	@Test

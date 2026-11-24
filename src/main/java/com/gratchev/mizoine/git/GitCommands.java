@@ -1,6 +1,5 @@
 package com.gratchev.mizoine.git;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -11,6 +10,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import com.gratchev.mizoine.repositories.RepositoryWriter;
 
@@ -31,11 +35,10 @@ public class GitCommands {
 			"GIT_IMPLICIT_WORK_TREE", "GIT_GRAFT_FILE", "GIT_INDEX_FILE", "GIT_NO_REPLACE_OBJECTS", "GIT_REPLACE_REF_BASE",
 			"GIT_PREFIX", "GIT_SHALLOW_FILE", "GIT_COMMON_DIR");
 	private static final String SSH_COMMAND = "GIT_SSH_COMMAND";
-	private static final int BUFFER = 8192;
 
 	private final String executable;
 	private final Duration timeout;
-	private final long maxOutput;
+	private final int maxOutput;
 	private final Map<String, String> environment;
 
 	/**
@@ -43,7 +46,7 @@ public class GitCommands {
 	 * @param maxOutput bytes, for the output and for Git's messages each
 	 * @param inherited the environment to start from, usually the server's ({@link System#getenv()})
 	 */
-	public GitCommands(final String executable, final Duration timeout, final long maxOutput,
+	public GitCommands(final String executable, final Duration timeout, final int maxOutput,
 			final Map<String, String> inherited) {
 		this.executable = executable;
 		this.timeout = timeout;
@@ -97,40 +100,71 @@ public class GitCommands {
 	 * @throws GitException if Git cannot be started, or gives more output than the limit
 	 */
 	Result run(final Path root, final List<String> arguments) {
-		final List<String> command = new ArrayList<>(List.of(executable, "--literal-pathspecs", "-C", root.toString()));
-		command.addAll(arguments);
-		final ProcessBuilder builder = new ProcessBuilder(command);
-		builder.environment().clear();
-		builder.environment().putAll(environment);
-		final Process process;
-		try {
-			process = builder.start();
-		} catch (final IOException e) {
-			throw new GitException("Cannot run " + executable + ": " + e.getMessage(), e);
-		}
+		final Process process = start(root, arguments);
+		final long deadline = System.nanoTime() + timeout.toNanos();
 		try {
 			// nothing to answer: whatever Git or SSH would ask is not asked
 			process.getOutputStream().close();
-			final Collector output = Collector.start(process.getInputStream(), maxOutput, process);
-			final Collector errors = Collector.start(process.getErrorStream(), maxOutput, process);
-			final long deadline = System.nanoTime() + timeout.toNanos();
-			if (!process.waitFor(timeout) || !output.finishedBy(deadline) || !errors.finishedBy(deadline)) {
-				end(process);
-				throw new GitTimeoutException("Git did not finish within " + timeout.toSeconds() + " s: "
-						+ String.join(" ", arguments));
+			final Future<String> output = read(process.getInputStream(), process);
+			final Future<String> errors = read(process.getErrorStream(), process);
+			final String text = output.get(remaining(deadline), TimeUnit.NANOSECONDS);
+			final String messages = errors.get(remaining(deadline), TimeUnit.NANOSECONDS);
+			if (!process.waitFor(remaining(deadline), TimeUnit.NANOSECONDS)) {
+				throw new TimeoutException();
 			}
-			if (output.isTooLarge() || errors.isTooLarge()) {
-				throw new GitException("Git gave more output than " + maxOutput + " bytes: " + String.join(" ", arguments));
-			}
-			return new Result(process.exitValue(), output.text(), errors.text());
+			return new Result(process.exitValue(), text, messages);
+		} catch (final TimeoutException e) {
+			end(process);
+			throw new GitTimeoutException("Git did not finish within " + timeout.toSeconds() + " s: " + String.join(" ", arguments));
+		} catch (final ExecutionException e) {
+			end(process);
+			throw e.getCause() instanceof final GitException tooMuch ? tooMuch : cannotRun(e.getCause());
 		} catch (final IOException e) {
 			end(process);
-			throw new GitException("Cannot run " + executable + ": " + e.getMessage(), e);
+			throw cannotRun(e);
 		} catch (final InterruptedException e) {
 			end(process);
 			Thread.currentThread().interrupt();
 			throw new GitException("Interrupted while Git was running", e);
 		}
+	}
+
+	private Process start(final Path root, final List<String> arguments) {
+		final List<String> command = new ArrayList<>(List.of(executable, "--literal-pathspecs", "-C", root.toString()));
+		command.addAll(arguments);
+		final ProcessBuilder builder = new ProcessBuilder(command);
+		builder.environment().clear();
+		builder.environment().putAll(environment);
+		try {
+			return builder.start();
+		} catch (final IOException e) {
+			throw cannotRun(e);
+		}
+	}
+
+	/** One stream of Git, read in its own thread so that neither can block Git; past the limit, Git is ended. */
+	private Future<String> read(final InputStream stream, final Process process) {
+		final FutureTask<String> task = new FutureTask<>(() -> {
+			try (stream) {
+				final byte[] bytes = stream.readNBytes(maxOutput + 1);
+				if (bytes.length > maxOutput) {
+					end(process);
+					throw new GitException("Git gave more output than " + maxOutput + " bytes");
+				}
+				return new String(bytes, StandardCharsets.UTF_8);
+			}
+		});
+		Thread.ofVirtual().start(task);
+		return task;
+	}
+
+	/** Negative once the deadline has passed: then nothing waits any more. */
+	private static long remaining(final long deadline) {
+		return deadline - System.nanoTime();
+	}
+
+	private GitException cannotRun(final Throwable cause) {
+		return new GitException("Cannot run " + executable + ": " + cause.getMessage(), cause);
 	}
 
 	/** Git and everything it started (a shell, SSH): taken while Git still runs, so none is missed. */
@@ -151,62 +185,5 @@ public class GitCommands {
 			environment.put(SSH_COMMAND, "ssh -o BatchMode=yes");
 		}
 		return Map.copyOf(environment);
-	}
-
-	/** Reads one stream of Git in its own thread, so neither stream can block Git; past the limit, Git is ended. */
-	private static final class Collector implements Runnable {
-
-		private final InputStream stream;
-		private final long limit;
-		private final Process process;
-		private final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-		private Thread thread;
-		private volatile boolean tooLarge;
-		private volatile IOException failure;
-
-		private Collector(final InputStream stream, final long limit, final Process process) {
-			this.stream = stream;
-			this.limit = limit;
-			this.process = process;
-		}
-
-		static Collector start(final InputStream stream, final long limit, final Process process) {
-			final Collector collector = new Collector(stream, limit, process);
-			collector.thread = Thread.ofVirtual().start(collector);
-			return collector;
-		}
-
-		@Override
-		public void run() {
-			final byte[] buffer = new byte[BUFFER];
-			try (stream) {
-				for (int read = stream.read(buffer); read >= 0; read = stream.read(buffer)) {
-					if (bytes.size() + read > limit) {
-						tooLarge = true;
-						end(process);
-						return;
-					}
-					bytes.write(buffer, 0, read);
-				}
-			} catch (final IOException e) {
-				failure = e;
-			}
-		}
-
-		/** @return false if the stream is still open at the deadline (something Git started still writes) */
-		boolean finishedBy(final long deadline) throws InterruptedException {
-			return thread.join(Duration.ofNanos(Math.max(1, deadline - System.nanoTime())));
-		}
-
-		boolean isTooLarge() {
-			return tooLarge;
-		}
-
-		String text() throws IOException {
-			if (failure != null) {
-				throw failure;
-			}
-			return bytes.toString(StandardCharsets.UTF_8);
-		}
 	}
 }

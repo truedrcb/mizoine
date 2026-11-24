@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-24): steps 0–34 and 37–44 done (824 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 45–48 (Git in the browser; T4, D33–D38 decided). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-24): steps 0–34 and 37–44 done (829 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 45–48 (Git in the browser; T4, D33–D38 decided). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -1137,6 +1137,34 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
     - `status` when `rev-parse` succeeds but `status` fails (e.g. a damaged index);
     - `isTopOfWorkingTree` when the root vanishes between the two calls.
   - CRAP ≤ 9 (`GitStatusParser.parse`).
+- *2026-11-25, review and refactoring of steps 43–44 (behaviour pinned by the tests, all green before and after):*
+  - `GitCommands`:
+    - the stream reader with its mutable thread field and `volatile` flags is replaced by a `FutureTask` per stream (`readNBytes(limit + 1)`, run in a virtual thread);
+    - one deadline covers both streams and the exit;
+    - starting the process is a method of its own;
+    - `run`: CRAP 6.2 → 3.1.
+  - `GitStatusParser`: an iterator over the records instead of index arithmetic, so a rename takes its old path as "the next record"; one `switch` per record type. `parse` CRAP 9 → < 5. Pinned additionally: a rename without its old path is an error.
+  - `FolderGrant`: `of` and `isGit` split a path in one place.
+  - `RepositoryFileParser`: returns its result as records (`Access`, `UserAccess`) instead of filling a `Set` passed in.
+- *2026-11-25, the ub-mode tools installed and run for the first time (crapper, dryer, mutator; CLAUDE.md says how), on the files of steps 43–44:*
+  - **crapper:** worst `GitStatusParser.kind` 9.0. It is a one-to-one `switch` over Git's letters, kept as it is. Then `GitCommands.run` 7.7. crapper also counts `catch` and `switch` labels, so it is higher than the JaCoCo estimate used before.
+  - **dryer:** no candidates at 0.8.
+  - **mutator**, per group of files with their test classes:
+
+    | Files | Result |
+    |---|---|
+    | `git` package | 50 killed, 0 survived |
+    | `FolderGrant`, `RepositoryFileParser` | 61 killed, 0 survived |
+    | `RepositoryAccess`, `RepositoryFiles` | 42 + 34 killed (second run: only `RepositoryAccess` again), 1 survived (equivalent) |
+
+    - Survivors, and what was done:
+      - `GitStatusParser`: `substring(1)` before `parseInt` of "+2" was dead code (`parseInt` takes the '+'). Removed.
+      - `GitCommands.remaining`: `Math.max(0, …)` was not needed (`Future.get` and `waitFor` treat a negative wait as none). Removed.
+      - `GitCommands` output limit: exactly the limit was untested. New test `outputUpToTheLimitIsKept`.
+      - `FolderGrant.of`: a backslash or NUL *at the start* of a folder was untested. New cases in the parser test.
+      - **`RepositoryFileParser`: `git = false` → `true` survived.** Every user would have got Git access unnoticed: the Git test listed only users with `.git`. Now the test has a user without it, and the plain test checks `gitUsers` is empty.
+      - `RepositoryAccess.canReadFile`: a *file* whose path equals a grant (a file `public` next to the granted folder `public`) was untested. New test `aFileWhosePathIsAGrantIsNotReadable`.
+      - Left: `visibleChildren` `>` → `>=` (code from step 16) is an equivalent mutant. With equal sizes, a grant starting with the folder *is* the folder, handled by the branch above.
 
 ### 45. The Git page  ☐
 - `mizoine.git.timeout` (default 60 s) and the `GitCommands` bean, with the server's environment (moved from step 44).
