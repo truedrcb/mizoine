@@ -17,20 +17,28 @@ import java.util.List;
 public final class RepositoryAccess {
 
 	private final List<FolderGrant> grants;
+	/** The grant {@code .git} (step 43). */
+	private final boolean git;
 
-	private RepositoryAccess(final List<FolderGrant> grants) {
+	private RepositoryAccess(final List<FolderGrant> grants, final boolean git) {
 		this.grants = grants;
+		this.git = git;
 	}
 
 	/** @param username {@code null} for an anonymous user: no access */
 	public static RepositoryAccess of(final RepositoryConfig config, final String username) {
 		final List<FolderGrant> grants = username == null ? null : config.grants().get(username);
-		return new RepositoryAccess(grants == null ? List.of() : grants);
+		return new RepositoryAccess(grants == null ? List.of() : grants, username != null && config.gitUsers().contains(username));
 	}
 
-	/** @return the user has at least one grant in this repository */
+	/** @return the user has at least one grant in this repository, a folder or Git */
 	public boolean hasAccess() {
-		return !grants.isEmpty();
+		return !grants.isEmpty() || git;
+	}
+
+	/** @return the user may use the Git page of the repository: grant {@code .git} or {@code /} (step 43, D33) */
+	public boolean canUseGit() {
+		return git || isWholeRepository();
 	}
 
 	/** @return the user may access the whole repository (and so may see its configuration problems, D8) */
@@ -38,9 +46,13 @@ public final class RepositoryAccess {
 		return grants.stream().anyMatch(FolderGrant::isWholeRepository);
 	}
 
+	/** The root may also be entered with Git access alone: it is above the Git page, as above a grant (D4). */
 	public boolean canEnter(final List<String> folder) {
 		if (folder.stream().anyMatch(FolderNames::isHidden)) {
 			return false;
+		}
+		if (folder.isEmpty() && git) {
+			return true;
 		}
 		return grants.stream().anyMatch(grant -> startsWith(folder, grant.segments()) || startsWith(grant.segments(), folder));
 	}

@@ -128,6 +128,7 @@ path: /home/artem/notes        # root folder; relative paths start at this file'
 access:                        # username → folders the user may access, with everything below them
   artem: ["/"]                 # "/" = the whole repository
   guest: [public, projects/shared]
+  editor: [projects, .git]     # .git = Git access (below), not the .git folder
 ```
 
 - Files are read when a repository is requested, not at startup; edits take effect without a restart.
@@ -136,6 +137,10 @@ access:                        # username → folders the user may access, with 
 - Names: letters, digits, `.`, `_`, `-`; not starting with `.`; not a name the application uses itself
   (`login`, `logout`, `error`, `default-ui.css`, `favicon.ico`, `ui`).
 - Folders and files starting with `.` (such as `.git`) or containing `%` are never shown.
+- **Git access:** `.git` in a user's list (or `/`, which includes it) opens the repository's Git page
+  `/<name>/.git/`, linked from the repository's root. Git covers the whole repository: its status names every
+  changed file, also outside the user's folders, so give it only to users who may see all changes. The real
+  `.git` folder is never shown, read or written, for anybody. With `.git` alone, the root shows only the way to Git.
 - Symbolic links count where they lead: access needs a grant for the link's place and for its target. A link to
   a folder outside the user's grants is neither shown nor followed, and a link out of the repository never is.
 

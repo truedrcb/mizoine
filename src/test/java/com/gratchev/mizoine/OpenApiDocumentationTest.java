@@ -109,7 +109,7 @@ class OpenApiDocumentationTest {
 	/** Method and path; springdoc writes {*path} as {path}. */
 	@ParameterizedTest
 	@ValueSource(strings = {"get /", "get /{repository}", "get /{repository}/{path}", "put /{repository}/{path}",
-			"delete /{repository}/{path}", "post /{repository}/{path}"})
+			"delete /{repository}/{path}", "post /{repository}/{path}", "get /{repository}/.git/", "get /{repository}/.git"})
 	void everyEndpointIsDocumented(final String endpoint) throws Exception {
 		final String[] methodAndPath = endpoint.split(" ");
 		mockMvc.perform(apiDocs(API_DOCS_PATH))

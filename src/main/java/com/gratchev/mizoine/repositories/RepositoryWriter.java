@@ -38,7 +38,7 @@ import com.gratchev.mizoine.files.FileVersion;
 public class RepositoryWriter {
 
 	/** Starts with '.': hidden (D3), never listed or reachable over HTTP. */
-	private static final String TEMPORARY_PREFIX = ".mizoine-upload-";
+	public static final String TEMPORARY_PREFIX = ".mizoine-upload-";
 	private static final int BUFFER = 64 * 1024;
 
 	/** {@code If-Match} (an ETag) and/or {@code If-None-Match: *} (create only). */

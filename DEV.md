@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-24): steps 0–34 and 37–42 done (781 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 43–48 (Git in the browser, T4 and D33–D38 to decide). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-24): steps 0–34 and 37–44 done (824 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 45–48 (Git in the browser; T4, D33–D38 decided). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -1041,7 +1041,7 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
 - An independent layer: without a Git grant, or without `git` installed, nothing else changes.
 - Agents write, humans commit: the MCP tools stay without commit and push (BACKLOG §4).
 
-**HTTP (proposed, D35):**
+**HTTP (D35):**
 
 | Request | What |
 |---|---|
@@ -1062,7 +1062,7 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
 - **API clients:** JSON bodies, answered with the new status. JSON POSTs need no CSRF token, as for `/mcp`: cross-site forms cannot send JSON.
 - **Every other path under `.git`** (`/{repository}/.git/config`, …) is 404 for everyone, also with grant `/`. The real `.git` folder is never read or written as files (D3 stays).
 
-### 43. Git access in the repository file  ☐
+### 43. Git access in the repository file  ☑
 - A grant `.git` (only at the top, not `public/.git`) gives Git access to the repository. `/` includes it.
   - Every other hidden name in `access` is still rejected (D3).
   - Example: `access: {artem: ["/"], editor: [notes, .git]}`.
@@ -1079,7 +1079,21 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
   - `/{repository}/.git/config` is 404 also for artem;
   - `UnsafeUrlTest` still green.
 
-### 44. Running Git and reading its status  ☐
+- *Done 2026-11-24:*
+  - **Data shape:** the `.git` grant is not a folder. `RepositoryConfig.gitUsers` holds the users with an explicit `.git`; `FolderGrant.isGit` recognizes it once, in the parser (`.git`, `/.git`, `.git/`). The folder grants never contain it, so no folder rule can mistake it for a folder. `a/.git`, `.git/objects`, `.gitx` and `.github` stay rejected (D3).
+  - **Access:**
+    - `RepositoryAccess.canUseGit()` = `.git` or `/`.
+    - A user with `.git` alone has access to the repository (start page), and may enter the root, which shows nothing: the way to Git, as above a grant (D4).
+  - **Address:** `RepositoryFiles.gitRoot(user, repository)` decides, for HTTP and later for anything else. The Git page lives in its own package `git`: `GitController` serves `GET /{repository}/.git/` (HTML, for now only the heading and a link back; the status comes in step 45) and `GET /{repository}/.git` (redirect). Everything else under `.git/` still reaches the file URLs, where `.git` is hidden: 404 for everyone, also for `/`.
+  - The repository's root page links to `.git/` for users with Git access.
+  - Tests:
+    - `RepositoryFileParserTest`, `RepositoryAccessTest`;
+    - `GitPageTest`: page, redirect, 404 without Git access; the `.git` folder neither read nor written by GET, PUT or DELETE, also with `/`; the root link; Git access alone;
+    - the OpenAPI smoke test;
+    - `UnsafeUrlTest` unchanged and green.
+  - README: the grant in the repository file section.
+
+### 44. Running Git and reading its status  ☑
 - The data shape first (D36):
   - `GitStatus(branch, upstream, ahead, behind, List<Change>)`;
   - `Change(path, renamedFrom, staged, unstaged)`, with an enum `Kind` (modified, added, deleted, renamed, untracked, conflict).
@@ -1096,7 +1110,36 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
   - `GitCommands` on `@TempDir` repositories, with the test's Git cut off from the machine's settings (`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM`);
   - a time limit that ends a hanging command.
 
+- *Done 2026-11-24:*
+  - **Data shape:** `GitStatus(branch, hasCommits, upstream, changes)`, `Upstream(name, gone, ahead, behind)`, `Change(path, renamedFrom, staged, unstaged)`, `Kind`.
+    - `hasCommits` is needed in step 46: before the first commit, unstaging is `git rm --cached`.
+    - `gone`: the upstream is set, but its branch no longer exists.
+  - `GitStatusParser`, pure, reads porcelain v2 with `-z` (D36). A record it does not know is an error, not skipped.
+  - `GitCommands`, the only place that starts `git`:
+    - `git --literal-pathspecs -C <root> …`, arguments as a list, no shell;
+    - no input;
+    - the environment without the variables of `git rev-parse --local-env-vars` (`GIT_DIR`, `GIT_WORK_TREE`, …, which would point Git to another repository);
+    - `GIT_TERMINAL_PROMPT=0`;
+    - `GIT_SSH_COMMAND=ssh -o BatchMode=yes`, unless the server sets `GIT_SSH_COMMAND` or `GIT_SSH`. That also overrides a `core.sshCommand` setting; such a server sets `GIT_SSH_COMMAND` in its start script (README in step 48).
+    - Each output stream is read in its own virtual thread, so Git cannot block on a full pipe.
+    - Past the time or output limit, Git and everything it started (shell, SSH) are ended: `GitTimeoutException`, or `GitException`.
+  - `status(root)`:
+    - empty unless the root is the top of a working tree (`rev-parse --show-toplevel` = the real root, D34);
+    - leaves out Mizoine's temporary upload files (`RepositoryWriter.TEMPORARY_PREFIX`, now public).
+  - **Changed from the plan:** no lock with `RepositoryWriter` for the status. An upload copies into its temporary file *outside* the writer's lock, so a lock would not keep those files out of the status; filtering does. Reading the status changes no file. Whether pull (step 48) shares the writer's lock is decided there.
+  - **Moved to step 45:** the setting `mizoine.git.timeout` and the Spring bean. `GitCommands` takes the time limit, output limit and environment in its constructor; nothing uses it before the page does.
+  - Tests:
+    - `GitStatusParserTest` (pure, on recorded output): spaces, UTF-8, a newline in a name, rename, copy, type change, conflict, ahead / behind, gone upstream, detached HEAD, no commits, unknown records;
+    - `GitCommandsTest`, on real `@TempDir` repositories with Git cut off from this machine's settings (`TestGit`: own home, `GIT_CONFIG_NOSYSTEM`): not a repository, a subfolder, no commits, staged and unstaged changes, temporary files left out, a conflict after a merge, ahead and behind a bare remote, a detached HEAD, the time limit (an alias running `sleep 30` ends after 0.5 s), the output limit, Git not installed, literal paths, the environment.
+    - Proven by removing `--literal-pathspecs` and the temporary-file filter: one test failed each time.
+  - Untested branches, and why:
+    - in `GitCommands.run`, a failing read of Git's output and an interrupted thread;
+    - `status` when `rev-parse` succeeds but `status` fails (e.g. a damaged index);
+    - `isTopOfWorkingTree` when the root vanishes between the two calls.
+  - CRAP ≤ 9 (`GitStatusParser.parse`).
+
 ### 45. The Git page  ☐
+- `mizoine.git.timeout` (default 60 s) and the `GitCommands` bean, with the server's environment (moved from step 44).
 - `GET /{repository}/.git/`:
   - the branch, ahead / behind its upstream;
   - two lists, staged and not staged, each file with its kind;
@@ -1219,16 +1262,16 @@ Proposals; details in [docs/technology-decisions.md](docs/technology-decisions.m
 - **D30 — overwriting at the destination:** **Decided 2026-11-24 as proposed:** never; an existing destination gives 412, the client deletes it first if wanted. Not chosen: WebDAV's `Overwrite: T` (one request replaces a file or a whole folder tree).
 - **D31 — between repositories:** **Decided 2026-11-24 as proposed:** no, same repository only (roots may be on different disks, then no atomic move; different access rules). Not chosen: copy + delete across repositories, not atomic.
 - **D32 — links pointing to a moved file:** **Decided 2026-11-24 as proposed:** not changed (plain files: Mizoine does not rewrite content it was not asked to write). Later, maybe a separate "find links to …" tool for agents.
-### Git in the browser (steps 43–48) — to decide
+### Git in the browser (steps 43–48) — decided 2026-11-24
 Proposals; T4 in [docs/technology-decisions.md](docs/technology-decisions.md).
-- **T4 — how Mizoine runs Git:** *Proposed:* the `git` program on the server (as a human would), with a fixed argument list, no shell, a time limit. Not chosen: JGit, a Java library (no `git` needed, but its own behaviour, and SSH or credential setup separate from the server's).
-- **T4.4 — Git for agents (MCP):** *Proposed:* none for now (BACKLOG §4: a human reviews and commits). Possible later: a read-only `git_status`. Not chosen: commit and push as MCP tools.
-- **D33 — what Git access covers:** *Proposed:* the whole repository. The status shows all changed files, and a commit or push takes everything; filtering by file grants would look safe without being safe, since a push publishes all commits. Not chosen: status and staging limited to the user's file grants.
-- **D34 — which repositories:** *Proposed:* only those whose root is the top of a Git working tree; others say "not a Git repository". Not chosen: a repository in a subfolder of a Git working tree (its commit would take files outside the repository).
-- **D35 — the page:** *Proposed:* a server page with plain forms (like the folder page), JSON at the same URLs for API clients. Not chosen: a static page under `/ui/` with JavaScript, like the editor (needs D26 first).
-- **D36 — status format:** *Proposed:* `git status --porcelain=v2 --branch -z`, Git's stable machine format. Not chosen: the human-readable `git status` output (changes between Git versions and languages).
-- **D37 — pull and push:** *Proposed:* pull only fast-forward, push only the current branch to its upstream, never forced; everything else by hand on the server. Not chosen: merge or rebase from the browser (conflicts need a UI of their own).
-- **D38 — the commit's author:** *Proposed:* the Mizoine username, with an optional `email` per user in `users.yaml` (else `<username>@mizoine`); committer from the server's Git settings. Not chosen: always the server's identity (the history would not say who committed).
+- **T4 — how Mizoine runs Git:** **Decided 2026-11-24 as proposed:** the `git` program on the server (as a human would), with a fixed argument list, no shell, a time limit. Not chosen: JGit, a Java library (no `git` needed, but its own behaviour, and SSH or credential setup separate from the server's).
+- **T4.4 — Git for agents (MCP):** **Decided 2026-11-24 as proposed:** none for now (BACKLOG §4: a human reviews and commits). Possible later: a read-only `git_status`. Not chosen: commit and push as MCP tools.
+- **D33 — what Git access covers:** **Decided 2026-11-24 as proposed:** the whole repository. The status shows all changed files, and a commit or push takes everything; filtering by file grants would look safe without being safe, since a push publishes all commits. Not chosen: status and staging limited to the user's file grants.
+- **D34 — which repositories:** **Decided 2026-11-24 as proposed:** only those whose root is the top of a Git working tree; others say "not a Git repository". Not chosen: a repository in a subfolder of a Git working tree (its commit would take files outside the repository).
+- **D35 — the page:** **Decided 2026-11-24 as proposed:** a server page with plain forms (like the folder page), JSON at the same URLs for API clients. Not chosen: a static page under `/ui/` with JavaScript, like the editor (needs D26 first).
+- **D36 — status format:** **Decided 2026-11-24 as proposed:** `git status --porcelain=v2 --branch -z`, Git's stable machine format. Not chosen: the human-readable `git status` output (changes between Git versions and languages).
+- **D37 — pull and push:** **Decided 2026-11-24 as proposed:** pull only fast-forward, push only the current branch to its upstream, never forced; everything else by hand on the server. Not chosen: merge or rebase from the browser (conflicts need a UI of their own).
+- **D38 — the commit's author:** **Decided 2026-11-24 as proposed:** the Mizoine username, with an optional `email` per user in `users.yaml` (else `<username>@mizoine`); committer from the server's Git settings. Not chosen: always the server's identity (the history would not say who committed).
 - **Later, not planned yet:** a diff of a file (only for users who may read it), discard changes, branches, history.
 
 - **Later, not planned yet:** copy, live Markdown preview in the editor, Obsidian `[[wiki links]]`, links relative to the repository root (`/…`), syntax highlighting of code blocks in the page, per-grant read-only permissions.

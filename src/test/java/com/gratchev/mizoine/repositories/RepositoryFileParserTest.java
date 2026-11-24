@@ -96,8 +96,21 @@ class RepositoryFileParserTest {
 		assertThat(FolderGrant.of("public").isWholeRepository()).isFalse();
 	}
 
+	/** Step 43, D33: {@code .git} at the top is Git access, not a folder; D3 holds for every other hidden name. */
 	@ParameterizedTest
-	@ValueSource(strings = {"..", "a/../../b", "a/..", "./a", ".git", "a/.hidden", "a\\\\b", "", "100%", "a/x%y"})
+	@ValueSource(strings = {".git", "/.git", ".git/"})
+	void gitAtTheTopIsGitAccess(final String git) throws IOException {
+		final RepositoryConfig config = parser.parse(notes("path: %s\naccess:\n  editor: [public, \"%s\"]\n  git-only: [\"%s\"]\n"
+				.formatted(data, git, git)));
+
+		assertThat(config.gitUsers()).containsExactlyInAnyOrder("editor", "git-only");
+		assertThat(config.grants().get("editor")).containsExactly(FolderGrant.of("public"));
+		assertThat(config.grants().get("git-only")).isEmpty();
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {"..", "a/../../b", "a/..", "./a", "a/.git", ".git/objects", ".gitx", ".github", "a/.hidden",
+			"a\\\\b", "", "100%", "a/x%y"})
 	void unsafeOrHiddenFoldersMakeTheFileUnreadable(final String folder) throws IOException {
 		final Path file = notes("path: data\naccess:\n  guest: [\"" + folder + "\"]\n");
 

@@ -279,6 +279,61 @@ paths:
           description: "Not logged in (non-browser clients): HTTP Basic challenge"
         "404":
           description: Not a valid repository name
+  /{repository}/.git:
+    get:
+      tags:
+      - Git
+      summary: Git page without trailing slash
+      description: "Redirects to /{repository}/.git/ for users with Git access (D5)."
+      operationId: withoutTrailingSlash_1
+      parameters:
+      - name: repository
+        in: path
+        description: Repository name
+        required: true
+        schema:
+          type: string
+      responses:
+        "302":
+          description: "Redirect to /{repository}/.git/; or Browser not logged in:\
+            \ redirect to the login page"
+        "401":
+          description: "Not logged in (non-browser clients): HTTP Basic challenge"
+        "404":
+          description: "Unknown repository, or no Git access to it: deliberately the\
+            \ same answer"
+        "500":
+          description: Repository configured wrongly (e.g. missing root folder)
+  /{repository}/.git/:
+    get:
+      tags:
+      - Git
+      summary: Git page of a repository
+      description: "The page for Git in the browser: status, stage and unstage, commit,\
+        \ pull and push (steps 43–48). Only for users with Git access: grant '.git'\
+        \ or '/' in the repository file."
+      operationId: page
+      parameters:
+      - name: repository
+        in: path
+        description: Repository name
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: The Git page
+          content:
+            text/html: {}
+        "302":
+          description: "Browser not logged in: redirect to the login page"
+        "401":
+          description: "Not logged in (non-browser clients): HTTP Basic challenge"
+        "404":
+          description: "Unknown repository, or no Git access to it: deliberately the\
+            \ same answer"
+        "500":
+          description: Repository configured wrongly (e.g. missing root folder)
   /:
     get:
       tags:

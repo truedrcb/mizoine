@@ -7,6 +7,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
@@ -27,7 +28,7 @@ class RepositoryAccessTest {
 					.map(FolderGrant::of)
 					.toList());
 		}
-		return new RepositoryConfig("notes", Path.of("/data/notes"), grants, List.of());
+		return new RepositoryConfig("notes", Path.of("/data/notes"), grants, Set.of("editor", "git-only"), List.of());
 	}
 
 	private static RepositoryAccess access(final RepositoryConfig config, final String user) {
@@ -187,6 +188,33 @@ class RepositoryAccessTest {
 		assertThat(access.canWriteIn(ROOT)).isFalse();
 		assertThat(access.canWriteIn(folder("private"))).isFalse();
 		assertThat(access.canWriteIn(folder("projects/shared/.git"))).isFalse();
+	}
+
+	// Git access (step 43, D33)
+
+	@Test
+	void gitAccessComesWithTheWholeRepositoryOrItsOwnGrant() {
+		final RepositoryConfig config = repository("artem", "/", "editor", "public", "guest", "public", "git-only", "");
+
+		assertThat(access(config, "artem").canUseGit()).isTrue();
+		assertThat(access(config, "editor").canUseGit()).isTrue();
+		assertThat(access(config, "guest").canUseGit()).isFalse();
+		assertThat(access(config, "nobody").canUseGit()).isFalse();
+		assertThat(access(config, null).canUseGit()).isFalse();
+	}
+
+	@Test
+	void withGitAccessAloneOnlyTheWayToGitIsOpen() {
+		// like above a granted folder (D4): the root may be entered, it shows nothing
+		final RepositoryAccess access = access(repository("git-only", ""), "git-only");
+
+		assertThat(access.hasAccess()).isTrue();
+		assertThat(access.canEnter(ROOT)).isTrue();
+		assertThat(access.visibleChildren(ROOT, List.of("public", ".git"))).isEmpty();
+		assertThat(access.visibleFiles(ROOT, List.of("README.md"))).isEmpty();
+		assertThat(access.canEnter(folder("public"))).isFalse();
+		assertThat(access.canEnter(folder(".git"))).isFalse();
+		assertThat(access.canWriteIn(ROOT)).isFalse();
 	}
 
 	@Test

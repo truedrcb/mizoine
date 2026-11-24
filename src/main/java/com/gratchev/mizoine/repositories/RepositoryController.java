@@ -153,6 +153,8 @@ class RepositoryController {
 				model.addAttribute("links", links(listing.folders(), "/"));
 				model.addAttribute("fileLinks", links(listing.files(), ""));
 				model.addAttribute("root", folder.segments().isEmpty());
+				// step 43: the way to the Git page, from the repository's root
+				model.addAttribute("git", folder.segments().isEmpty() && folder.access().canUseGit());
 				yield "folder";
 			}
 		};

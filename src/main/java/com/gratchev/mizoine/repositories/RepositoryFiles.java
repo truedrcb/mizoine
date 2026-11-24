@@ -86,6 +86,18 @@ public class RepositoryFiles {
 		return listing(granted.config(), granted.access(), segments);
 	}
 
+	/**
+	 * Step 43, D33: the root of a repository whose Git page the user may use (grant {@code .git} or {@code /}).
+	 * Git always acts on the whole repository, so no path is checked here.
+	 */
+	public Path gitRoot(final String user, final String repository) {
+		final GrantedRepository granted = usable(user, repository, List.of(FolderGrant.GIT));
+		if (!granted.access().canUseGit()) {
+			throw new NotVisibleException(repository, List.of(FolderGrant.GIT));
+		}
+		return granted.config().root();
+	}
+
 	/** The real path of a file the user may read. */
 	public Path readableFile(final String user, final String repository, final List<String> segments) {
 		final GrantedRepository granted = usable(user, repository, segments);

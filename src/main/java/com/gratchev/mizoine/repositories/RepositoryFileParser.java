@@ -4,6 +4,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,13 +43,14 @@ public class RepositoryFileParser {
 				.filter(field -> !FIELDS.contains(field))
 				.forEach(field -> log.warn("Ignoring unknown field '{}' in repository file {}", field, file));
 
-		final Map<String, List<FolderGrant>> grants = grants(root.get(ACCESS), file);
+		final Set<String> gitUsers = new HashSet<>();
+		final Map<String, List<FolderGrant>> grants = grants(root.get(ACCESS), file, gitUsers);
 		if (grants.isEmpty()) {
 			log.warn("Repository file {} gives access to nobody", file);
 		}
 		final List<String> problems = new ArrayList<>();
 		final Path rootFolder = rootFolder(root.get(PATH), file, problems);
-		return new RepositoryConfig(name, rootFolder, grants, List.copyOf(problems));
+		return new RepositoryConfig(name, rootFolder, grants, gitUsers, List.copyOf(problems));
 	}
 
 	private static String repositoryName(final Path file) {
@@ -66,7 +68,8 @@ public class RepositoryFileParser {
 		return YamlFiles.readTree(file, "Repository file", RepositoryFileException::new);
 	}
 
-	private static Map<String, List<FolderGrant>> grants(final JsonNode access, final Path file) {
+	/** @param gitUsers collects the users with the grant {@code .git} */
+	private static Map<String, List<FolderGrant>> grants(final JsonNode access, final Path file, final Set<String> gitUsers) {
 		if (access == null || access.isNull()) {
 			return Map.of();
 		}
@@ -80,12 +83,13 @@ public class RepositoryFileParser {
 			if (username.isBlank()) {
 				throw new RepositoryFileException("'" + ACCESS + "' in repository file " + file + " has an empty username");
 			}
-			grants.put(username, folders(username, entry.getValue(), file));
+			grants.put(username, folders(username, entry.getValue(), file, gitUsers));
 		}
 		return Collections.unmodifiableMap(grants);
 	}
 
-	private static List<FolderGrant> folders(final String username, final JsonNode folders, final Path file) {
+	private static List<FolderGrant> folders(final String username, final JsonNode folders, final Path file,
+			final Set<String> gitUsers) {
 		if (!folders.isArray()) {
 			throw new RepositoryFileException("Folders of user '" + username + "' in repository file " + file
 					+ " must be a list, e.g. [\"/\"] or [public, projects/shared]");
@@ -95,6 +99,10 @@ public class RepositoryFileParser {
 			if (!folder.isString()) {
 				throw new RepositoryFileException("Folders of user '" + username + "' in repository file " + file
 						+ " must be texts");
+			}
+			if (FolderGrant.isGit(folder.asString())) {
+				gitUsers.add(username);
+				continue;
 			}
 			try {
 				grants.add(FolderGrant.of(folder.asString()));

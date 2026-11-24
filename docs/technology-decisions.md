@@ -316,7 +316,7 @@ Mizoine shows the Git status of a repository and stages, commits, pulls and push
 | Dependencies | `git` installed (it is, where the repositories are) | A larger jar, no program needed |
 | Risks | Arguments must never pass through a shell; time limits; output parsing | Fewer; but a second Git next to the one the human uses |
 
-**Recommendation: the `git` program.**
+**Decided 2026-11-24: the `git` program.**
 - BACKLOG: "the same thing can be done by hand", and here it literally is the same command.
 - Push and pull reuse the server's existing SSH keys or credential helpers, so Mizoine stores no Git passwords.
 - Output is parsed only in the machine format `--porcelain=v2 -z`.
@@ -331,4 +331,4 @@ Mizoine shows the Git status of a repository and stages, commits, pulls and push
 | T3 UI | **Decided:** Preact + htm or Lit, without build (D26: which one) | Plain JavaScript modules | SPA with a Node build |
 | T3.1 editor | **Decided:** CodeMirror 6, bundled once into `ui/vendor/`; a plain textarea until then | Ace (no build at all) | Monaco (no phone) |
 | T3.2 Markdown page | **Decided:** rendered on the server with commonmark-java, on the file's own URL by `Accept`; relative pictures and links; GitHub-style heading IDs | Live preview in the editor (browser) | Rendering only in the browser |
-| T4 Git | **Proposed:** the `git` program on the server, fixed arguments, porcelain v2 status, fast-forward pull, never forced push | JGit | Merge and conflicts in the browser |
+| T4 Git | **Decided:** the `git` program on the server, fixed arguments, porcelain v2 status, fast-forward pull, never forced push | JGit | Merge and conflicts in the browser |

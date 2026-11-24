@@ -10,6 +10,8 @@ import java.util.List;
 public record FolderGrant(List<String> segments) {
 
 	public static final FolderGrant WHOLE_REPOSITORY = new FolderGrant(List.of());
+	/** The name of the Git grant and of the Git page's address (step 43). */
+	public static final String GIT = ".git";
 
 	public FolderGrant {
 		segments = List.copyOf(segments);
@@ -36,6 +38,14 @@ public record FolderGrant(List<String> segments) {
 			}
 		}
 		return new FolderGrant(segments);
+	}
+
+	/**
+	 * @return the text is the grant {@code .git} at the top ({@code .git}, {@code /.git}, {@code .git/}): Git access
+	 *         to the repository (step 43), not a folder
+	 */
+	public static boolean isGit(final String folder) {
+		return Arrays.stream(folder.split("/")).filter(segment -> !segment.isEmpty()).toList().equals(List.of(GIT));
 	}
 
 	public boolean isWholeRepository() {
