@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-24): steps 0–34 and 37–42 done (781 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-24): steps 0–34 and 37–42 done (781 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 43–48 (Git in the browser, T4 and D33–D38 to decide). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -1030,6 +1030,117 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
     - `McpEndpointTest`: the structured content over the real protocol.
 
 
+## Git in the browser (planned 2026-11-24)
+*Requested 2026-11-24:* `/{repository}/.git/` is a reserved address for Git in the browser, not the real `.git` folder.
+- The page shows the Git status of the repository, with stage / unstage (all or single files), a commit message, commit, pull and push.
+- The same functions are an HTTP API. MCP is not needed (T4.4).
+- Git access is granted like a subfolder in the repository file: `/` includes it; `.git` grants only it.
+
+**Principles kept (BACKLOG):**
+- Plain files and Git stay the truth. Mizoine runs the same `git` commands a human would (T4: "the same thing can be done by hand"), and adds no state of its own.
+- An independent layer: without a Git grant, or without `git` installed, nothing else changes.
+- Agents write, humans commit: the MCP tools stay without commit and push (BACKLOG §4).
+
+**HTTP (proposed, D35):**
+
+| Request | What |
+|---|---|
+| `GET /{repository}/.git/` | The status: HTML page (D6 default) or JSON |
+| `POST /{repository}/.git/stage` | `paths` (one or more), or `all` |
+| `POST /{repository}/.git/unstage` | the same |
+| `POST /{repository}/.git/commit` | `message` |
+| `POST /{repository}/.git/pull` | fast-forward only (D37) |
+| `POST /{repository}/.git/push` | the current branch to its upstream, never forced (D37) |
+
+- **Answers:**
+  - 404 without Git access, the same as for anything else not visible (D2);
+  - 409 when Git refuses, with Git's message (nothing to commit, not fast-forward, push rejected, no upstream);
+  - 504 when the remote does not answer in time.
+- **Browser:**
+  - plain forms with the CSRF token;
+  - after an action, 303 back to the page, which shows the result (Post/Redirect/Get).
+- **API clients:** JSON bodies, answered with the new status. JSON POSTs need no CSRF token, as for `/mcp`: cross-site forms cannot send JSON.
+- **Every other path under `.git`** (`/{repository}/.git/config`, …) is 404 for everyone, also with grant `/`. The real `.git` folder is never read or written as files (D3 stays).
+
+### 43. Git access in the repository file  ☐
+- A grant `.git` (only at the top, not `public/.git`) gives Git access to the repository. `/` includes it.
+  - Every other hidden name in `access` is still rejected (D3).
+  - Example: `access: {artem: ["/"], editor: [notes, .git]}`.
+- `RepositoryAccess.canUseGit()`.
+- Git access covers the whole repository (D33). The status names every changed file, and a commit takes everything staged, also outside the user's file grants. A `.git` grant is therefore given only to someone who may see the whole repository's changes.
+- Routing: `/{repository}/.git/…` is matched before the file URLs and never reaches `RepositoryPaths`.
+  - Without Git access: 404.
+  - With access: the page (step 45).
+- The repository's folder page links to `.git/` for users with Git access.
+- Tests:
+  - parsing the grant (`.git` accepted; `a/.git`, `.gitx`, `.github` as hidden names rejected);
+  - `canUseGit`;
+  - 404 for guest;
+  - `/{repository}/.git/config` is 404 also for artem;
+  - `UnsafeUrlTest` still green.
+
+### 44. Running Git and reading its status  ☐
+- The data shape first (D36):
+  - `GitStatus(branch, upstream, ahead, behind, List<Change>)`;
+  - `Change(path, renamedFrom, staged, unstaged)`, with an enum `Kind` (modified, added, deleted, renamed, untracked, conflict).
+- Read from `git status --porcelain=v2 --branch -z --untracked-files=all`: the stable machine format; `-z` keeps any file name intact (spaces, UTF-8, newlines).
+- `GitCommands` runs the `git` program (T4):
+  - always `git -C <root> …`, with a fixed list of arguments and no shell;
+  - paths after `--`, with `--literal-pathspecs`;
+  - not interactive: `GIT_TERMINAL_PROMPT=0`, and SSH with `BatchMode=yes`;
+  - a time limit (`mizoine.git.timeout`, default 60 s), and Git's output kept to a limit.
+- Git runs only where the repository root is the top of a working tree (`git rev-parse --show-toplevel` = the real root). Otherwise the page says "not a Git repository", and actions give 409 (D34).
+- One at a time with Mizoine's own writes: Git commands run under `RepositoryWriter`'s lock. A pull changes files, and a commit reads the working tree. Changes outside Mizoine are handled by Git's own `index.lock`.
+- Tests:
+  - the parser, plain, on recorded `-z` output, including renames, conflicts, names with spaces and UTF-8, a detached HEAD and no upstream;
+  - `GitCommands` on `@TempDir` repositories, with the test's Git cut off from the machine's settings (`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM`);
+  - a time limit that ends a hanging command.
+
+### 45. The Git page  ☐
+- `GET /{repository}/.git/`:
+  - the branch, ahead / behind its upstream;
+  - two lists, staged and not staged, each file with its kind;
+  - the forms for the actions of steps 46–48.
+- JSON with `Accept: application/json` (D6).
+- A server page like the folder page (Thymeleaf, D35): it works without JavaScript and on the phone, under the strict CSP.
+- File names link to the file's page where the user may read it.
+- OpenAPI: `@Tag("Git")`, every status.
+- Tests: page and JSON for a temporary repository with changes; "not a Git repository".
+
+### 46. Stage and unstage  ☐
+- Stage: `git add -- <paths>`, or `git add --all`. Unstage: `git restore --staged -- <paths>`, or everything. Before the first commit, `git rm --cached`.
+- Paths must be in the current status. Others give 409, so the request cannot name any path in the working tree.
+- Tests:
+  - single files, all files;
+  - names with spaces and UTF-8;
+  - a path not in the status;
+  - a path with `..`;
+  - CSRF (a form without token: 403; JSON without token: allowed).
+
+### 47. Commit  ☐
+- `git commit -m <message>`; the message is not empty (else 400).
+- Nothing staged: 409.
+- Author: the Mizoine user (D38). Committer: the server's Git settings.
+- Hooks in the repository run as with a commit by hand. They are the owner's: users cannot write into `.git`.
+- Tests:
+  - the commit is in `git log` with the user as author;
+  - empty message;
+  - nothing staged;
+  - a failing `pre-commit` hook gives 409 with its message.
+
+### 48. Pull and push  ☐
+- Pull: `git pull --ff-only`. Diverged or conflicting: 409 with Git's message; resolved by hand on the server (D37).
+- Push: `git push` of the current branch to its upstream, never `--force`. Without upstream: 409.
+- Access to the remote: the server user's SSH key or credential helper. Mizoine stores no Git passwords.
+- Tests:
+  - with a local bare repository as remote: pull fast-forward, pull diverged, push, push rejected, no upstream;
+  - a remote that does not answer gives 504 (time limit).
+- README section "Git in the browser":
+  - the grants;
+  - what each button runs;
+  - credentials on the server;
+  - what stays by hand: merge, conflicts, branches.
+
 ## Glossary
 
 | Term | Meaning |
@@ -1046,6 +1157,8 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
 | Target | What a URL below a repository leads to: problem page, redirect, folder or file (`RepositoryController.Target`). |
 | Agent | A user in `users.yaml` with grants to a few folders, used by an AI (BACKLOG §7). |
 | Move | A file or folder to a new path in the same repository, in one atomic step; never overwrites (D29–D31). |
+| Git access | The grant `.git` (or `/`): the Git page and API of a repository, for the whole repository (D33). Never the `.git` folder as files. |
+| Git page | `/{repository}/.git/`: status, stage / unstage, commit, pull, push (steps 43–48). |
 
 ---
 
@@ -1106,4 +1219,16 @@ Proposals; details in [docs/technology-decisions.md](docs/technology-decisions.m
 - **D30 — overwriting at the destination:** **Decided 2026-11-24 as proposed:** never; an existing destination gives 412, the client deletes it first if wanted. Not chosen: WebDAV's `Overwrite: T` (one request replaces a file or a whole folder tree).
 - **D31 — between repositories:** **Decided 2026-11-24 as proposed:** no, same repository only (roots may be on different disks, then no atomic move; different access rules). Not chosen: copy + delete across repositories, not atomic.
 - **D32 — links pointing to a moved file:** **Decided 2026-11-24 as proposed:** not changed (plain files: Mizoine does not rewrite content it was not asked to write). Later, maybe a separate "find links to …" tool for agents.
+### Git in the browser (steps 43–48) — to decide
+Proposals; T4 in [docs/technology-decisions.md](docs/technology-decisions.md).
+- **T4 — how Mizoine runs Git:** *Proposed:* the `git` program on the server (as a human would), with a fixed argument list, no shell, a time limit. Not chosen: JGit, a Java library (no `git` needed, but its own behaviour, and SSH or credential setup separate from the server's).
+- **T4.4 — Git for agents (MCP):** *Proposed:* none for now (BACKLOG §4: a human reviews and commits). Possible later: a read-only `git_status`. Not chosen: commit and push as MCP tools.
+- **D33 — what Git access covers:** *Proposed:* the whole repository. The status shows all changed files, and a commit or push takes everything; filtering by file grants would look safe without being safe, since a push publishes all commits. Not chosen: status and staging limited to the user's file grants.
+- **D34 — which repositories:** *Proposed:* only those whose root is the top of a Git working tree; others say "not a Git repository". Not chosen: a repository in a subfolder of a Git working tree (its commit would take files outside the repository).
+- **D35 — the page:** *Proposed:* a server page with plain forms (like the folder page), JSON at the same URLs for API clients. Not chosen: a static page under `/ui/` with JavaScript, like the editor (needs D26 first).
+- **D36 — status format:** *Proposed:* `git status --porcelain=v2 --branch -z`, Git's stable machine format. Not chosen: the human-readable `git status` output (changes between Git versions and languages).
+- **D37 — pull and push:** *Proposed:* pull only fast-forward, push only the current branch to its upstream, never forced; everything else by hand on the server. Not chosen: merge or rebase from the browser (conflicts need a UI of their own).
+- **D38 — the commit's author:** *Proposed:* the Mizoine username, with an optional `email` per user in `users.yaml` (else `<username>@mizoine`); committer from the server's Git settings. Not chosen: always the server's identity (the history would not say who committed).
+- **Later, not planned yet:** a diff of a file (only for users who may read it), discard changes, branches, history.
+
 - **Later, not planned yet:** copy, live Markdown preview in the editor, Obsidian `[[wiki links]]`, links relative to the repository root (`/…`), syntax highlighting of code blocks in the page, per-grant read-only permissions.

@@ -1,4 +1,4 @@
-# Technology decisions: file API, AI connection, user interface
+# Technology decisions: file API, AI connection, user interface, Git
 
 *Written 2026-11-19 for planning DEV.md steps 28–39. Status: all decided 2026-11-19: T1 A (REST), T2 C (remote
 MCP), T3 D (small library without build), T3.1 CodeMirror 6 (later; a plain textarea first). T3.2 is a proposal. Facts about
@@ -304,6 +304,24 @@ resolves relative references by itself:
   External pictures (`https://…`) are therefore not shown (D25).
 - Large files are not rendered: above a limit (as in D21) the raw file is returned.
 
+## T4 — Running Git (Git in the browser, steps 43–48)
+
+Mizoine shows the Git status of a repository and stages, commits, pulls and pushes.
+
+| | `git` program on the server | JGit (Java library) |
+|---|---|---|
+| Behaviour | Exactly Git's, the version on the server; the same as by hand | Its own implementation; small differences (hooks, attributes, newer features) |
+| Settings, credentials | The server user's: `~/.gitconfig`, SSH key, credential helper | Its own setup for SSH (extra library) and passwords |
+| Hooks (`pre-commit`, …) | Run as usual | Partly supported |
+| Dependencies | `git` installed (it is, where the repositories are) | A larger jar, no program needed |
+| Risks | Arguments must never pass through a shell; time limits; output parsing | Fewer; but a second Git next to the one the human uses |
+
+**Recommendation: the `git` program.**
+- BACKLOG: "the same thing can be done by hand", and here it literally is the same command.
+- Push and pull reuse the server's existing SSH keys or credential helpers, so Mizoine stores no Git passwords.
+- Output is parsed only in the machine format `--porcelain=v2 -z`.
+- Arguments go as a list, never through a shell; paths after `--`, with `--literal-pathspecs`; not interactive; a time limit.
+
 ## Summary of recommendations
 
 | Decision | Recommended | Next option | Not now |
@@ -313,3 +331,4 @@ resolves relative references by itself:
 | T3 UI | **Decided:** Preact + htm or Lit, without build (D26: which one) | Plain JavaScript modules | SPA with a Node build |
 | T3.1 editor | **Decided:** CodeMirror 6, bundled once into `ui/vendor/`; a plain textarea until then | Ace (no build at all) | Monaco (no phone) |
 | T3.2 Markdown page | **Decided:** rendered on the server with commonmark-java, on the file's own URL by `Accept`; relative pictures and links; GitHub-style heading IDs | Live preview in the editor (browser) | Rendering only in the browser |
+| T4 Git | **Proposed:** the `git` program on the server, fixed arguments, porcelain v2 status, fast-forward pull, never forced push | JGit | Merge and conflicts in the browser |
