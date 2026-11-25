@@ -1,4 +1,4 @@
-# Technology decisions: file API, AI connection, user interface, Git
+# Technology decisions: file API, AI connection, user interface, Git, search
 
 *Written 2026-11-19 for planning DEV.md steps 28–39. Status: all decided 2026-11-19: T1 A (REST), T2 C (remote
 MCP), T3 D (small library without build), T3.1 CodeMirror 6 (later; a plain textarea first). T3.2 is a proposal. Facts about
@@ -322,6 +322,26 @@ Mizoine shows the Git status of a repository and stages, commits, pulls and push
 - Output is parsed only in the machine format `--porcelain=v2 -z`.
 - Arguments go as a list, never through a shell; paths after `--`, with `--literal-pathspecs`; not interactive; a time limit.
 
+## T5 — Search engine (Search, steps 55–60)
+
+Search in the documents: German spellings (`Ä` = `AE` = `A`, `ß` = `ss`), synonyms, ranked results, looser when nothing is found, quick once indexed, only what the user may read, also for agents.
+
+| | Apache Lucene (embedded) | Meilisearch / Typesense | OpenSearch / Elasticsearch | SQLite FTS5 |
+|---|---|---|---|---|
+| Runs as | A library in Mizoine's jar | A second server | A second, large server (Lucene inside) | A library and a database file |
+| German `ä`/`ae`, `ß` | `GermanNormalizationFilter` | Partly (normalization, no `ae`) | Yes (Lucene's filters) | No |
+| Stemming, synonyms | Yes, English, German, French, Russian and about 30 more; synonym files | Synonyms by API; no stemming in Meilisearch | Yes | Only English (porter) |
+| Ranking, fuzzy | BM25; fuzzy queries | Very good typo tolerance | BM25; fuzzy | BM25; no fuzzy |
+| Permissions per folder | Filter in the query | Filter attributes, sent with each search | Filter in the query | Filter in SQL |
+| Keeping in sync | In the same process as the writes | Every change sent over HTTP | Every change sent over HTTP | In the same process |
+
+**Decided 2026-11-25: Apache Lucene 10.5, embedded.** No second server: the installation is complicated enough.
+- Simple to run: no second program to install, start, secure and keep in sync. The index is a folder that can be deleted and rebuilt.
+- The language features asked for come with it: German normalization, accent folding, stemming for English, German, French and Russian; synonyms can follow later (D52).
+- BM25 ranking, fuzzy queries and highlighted snippets come with it too.
+- Fast: an index of tens of thousands of notes answers in milliseconds; indexing takes longer, in the background.
+- Later, without changing the engine: vector fields for semantic search (D55). Changes by hand are not watched: the index state shows the dates, an update runs on request (D49).
+
 ## Summary of recommendations
 
 | Decision | Recommended | Next option | Not now |
@@ -332,3 +352,4 @@ Mizoine shows the Git status of a repository and stages, commits, pulls and push
 | T3.1 editor | **Decided:** CodeMirror 6, bundled once into `ui/vendor/`; a plain textarea until then | Ace (no build at all) | Monaco (no phone) |
 | T3.2 Markdown page | **Decided:** rendered on the server with commonmark-java, on the file's own URL by `Accept`; relative pictures and links; GitHub-style heading IDs | Live preview in the editor (browser) | Rendering only in the browser |
 | T4 Git | **Decided:** the `git` program on the server, fixed arguments, porcelain v2 status, fast-forward pull, never forced push | JGit | Merge and conflicts in the browser |
+| T5 search | **Decided:** Apache Lucene 10.5, embedded; German normalization, stemming (synonyms later); filtered by the user's grants | Meilisearch next to Mizoine | OpenSearch / Elasticsearch, SQLite FTS5 |

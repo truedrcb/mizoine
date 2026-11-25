@@ -63,6 +63,23 @@ Rules:
 - Automation must be "transparent": the same thing can be done by hand.
 - Display is only a view, not storage.
 
+### Every object has an address (URL)
+
+- **All documents can be referenced by URL.** Every document, file and folder, and every view of one (its page,
+  the editor, the Git page of a repository), has its own URL. Nothing is reachable only by clicking through the
+  application.
+- **A URL can be saved anywhere and opened directly.** A link kept elsewhere (another note, an email, a
+  bookmark, a chat) opens the object itself in the browser, without navigating to it first. Without a login, the
+  login comes first and then leads straight to that object.
+- **URLs are stable, like permalinks.** The URL follows the file's place in the repository, so it stays the same
+  as long as the file is not moved or renamed. It does not depend on the session, the order of clicks, or state
+  kept in the browser or on the server. Moving a file changes its URL, also when done without the tool (principle
+  4); stable names (see automatic naming in section 4) keep links from breaking.
+- **Several documents open at the same time, in parallel browser windows or tabs.** Each window works on its own
+  object, independently of the others: nothing in one window changes or depends on what another shows. Two
+  windows (or two people) changing the same file do not overwrite each other unknowingly: a save made after
+  someone else's is refused, and the newer version is shown.
+
 ---
 
 ## 4. Important functional requirements

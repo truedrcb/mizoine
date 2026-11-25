@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-25): steps 0–34 and 37–48 done (907 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-25): steps 0–34 and 37–48 done (907 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 49–54 (stable URLs, postponed), 55–60 (search; T5 and D47–D63 decided, D52 and D55 postponed), 61–65 (folder tags and statuses; D64–D71 decided, D72 postponed). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -1324,6 +1324,321 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
     - The page shows Git's messages and paths escaped (`th:text`); redirects use the repository name only after the access check.
     - Git access reveals every changed path and Git's messages for the whole repository: as decided (D33).
 
+## Stable URLs (planned 2026-11-25)
+**Postponed 2026-11-25:** steps 49–54 and D39–D46 wait; to be taken up later. The plan below stays as a draft.
+*Requested 2026-11-25* (BACKLOG §3, "Every object has an address"): a URL saved elsewhere must lead to the object, like a permalink, also after the object was moved or renamed.
+
+**Today:** the URL is the object's path. It stays valid until the file or folder is moved or renamed, by Mizoine or by hand. Already true and kept:
+- every file, folder and view has its own URL;
+- after a login the browser lands on the URL asked for;
+- several windows work independently; a save over someone else's change is refused (D13, D20).
+
+**The idea: the ID is part of the name** (D39). Names may start with a short ID, as in the old Mizoine: `ab3k9 Meeting notes.md`, `ab3k9-budget/`. The ID moves with the object, also when it is moved by hand or in another tool. A permalink names only the ID; Mizoine finds the object by it.
+
+```
+/notes/.id/ab3k9          → 302 → /notes/projects/2026/ab3k9 Meeting notes.md
+/notes/.id/ab3k9?raw      → 302 → /notes/projects/2026/ab3k9 Meeting notes.md?raw
+/notes/.id/ab3k9#costs    → the browser keeps #costs after the redirect
+```
+
+**Principles kept (BACKLOG):**
+- Plain files stay the truth: the ID is visible in the name, readable and typeable by hand. No index file, no database (D45).
+- Changes without the tool: moving a file by hand keeps its permalink, as long as the ID stays in the name.
+- An independent layer: names without an ID work as before; nothing has to be renamed.
+- Access as everywhere: an ID outside the user's grants is "not found" (D2).
+
+### 49. IDs in names  ☐
+- A value type `ShortId`: 5 characters `0-9a-z`, minutes since 2017-01-01 00:00 UTC in base 36, sortable as text (D40, the old Mizoine's `ShortIdGenerator`, compatible with its data).
+- `ShortId.of(name)`: the ID of a file or folder name, if it starts with one followed by the end of the name, `.`, a space, `-` or `_` (D41). `ab3k9 Notes.md` and `ab3k9.md` have one; `ab3k9x.md` and `Notes ab3k9.md` have none.
+- `ShortId.next(time, used)`: the ID of this minute, else the next free one.
+- Plain unit tests: format and parse, sort order, the name rule, the edge of the range, clashes.
+
+### 50. Permalink: `/{repository}/.id/{id}`  ☐
+- `GET` (and `HEAD`) finds the files and folders in the repository whose name has this ID, among those the user may read: granted, not hidden, symbolic links by the same real-path rules as reading (D42).
+  - one → 302 to its current URL (folders with `/`), the query string kept (D44);
+  - none, or only outside the user's grants → 404, the same as anything not visible (D2);
+  - several → 300 with the list of their URLs, HTML or JSON (D43).
+- `.id` is a hidden name, so no real file or folder can take this address (as `.git`, D3). Every other path under `.id` is 404.
+- Tests:
+  - found at the top, deep in folders, a folder with an ID;
+  - after a move by Mizoine and after a move by hand (`Files.move` in the test): the same permalink;
+  - outside the grants, in a hidden folder, behind a link out of the grants: 404;
+  - query kept; not logged in → login → the object.
+- OpenAPI: `@Operation` with summary, 302, 300, 401, 404, 500.
+- README: a section "Links that last".
+
+### 51. Showing the permalink  ☐
+- The document page and the folder page show "Permalink" for a name with an ID, linking to `/{repository}/.id/{id}`.
+- The folder listing in JSON gives each entry with an ID its permalink.
+- Nothing is shown for names without an ID.
+
+### 52. The editor with a permalink  ☐
+- `/ui/editor.html?file=/notes/.id/ab3k9` loads through the redirect. It saves to the path the redirect led to; the address bar keeps the permalink, so a bookmark of the editor lasts too.
+- If the file was moved while open: Save says so (412 or 404 at the old path); Reload finds it again by its ID.
+- JavaScript tests (`node --test`) for the URL handling.
+
+### 53. New IDs  ☐
+- `GET /{repository}/.id/` (JSON or text): a new ID, the current minute or the next one not used in the repository. Not reserved: the name made with it is the reservation (D45).
+- MCP tool `new_id`, so that agents name new notes with IDs. Its description says how a name with an ID looks.
+- README: how to name a file with an ID by hand: take a new ID from Mizoine, put it at the start of the name.
+
+### 54. Old paths after a move (Git history)  ☐
+- For a path that is not found, in a repository with Git (D34): look in the committed history for a rename of that path (`git log -M --diff-filter=R --name-status`), follow the chain to today's path. If it exists and the user may read it: 302 there; else 404 as before (D46).
+- So even links to names without an ID survive a move, once the move is committed.
+- Only renames Git detects (similar content); uncommitted moves are not known yet.
+- Tests on real repositories (as `GitCommandsTest`): one rename, a chain of two, a rename into a folder without grant (404), a deleted file (404).
+
+## Search (planned 2026-11-25)
+*Requested 2026-11-25:* search in the documents, for the browser and for agents (MCP).
+- As simple as possible.
+- Language-aware: synonyms (*postponed 2026-11-25, D52: planned later*); spellings that mean the same letter, e.g. German `Ä`, `A`, `AE`.
+- Ranked: the most similar results first.
+- *Added 2026-11-25:* email addresses and file names with their extension are found as written, and by their parts (D63).
+- *Added 2026-11-25:* only text and names are indexed. PDFs, pictures and emails get a Markdown file beside them from the import layer (BACKLOG §4), which is then indexed as text (D50).
+- Looser (fuzzy) when the strict search finds nothing.
+- Indexing may take time; searching must be quick.
+- Secure: only documents the searching user may read, also over MCP.
+- ~~A permission like Git access, by its technical path: `.search`.~~ *Changed 2026-11-25 (D47):* no permission of its own. Whoever may read a file may find it.
+
+**Engine (T5, decided 2026-11-25):** Apache Lucene, embedded in Mizoine (10.5.1, 2026-08), not a search server next to it: the installation stays one jar. It covers:
+- German normalization: `ä`/`ae`/`a` → `a`, `ß` → `ss` (`GermanNormalizationFilter`);
+- accents folded (`é` → `e`);
+- stemming for English, German, French and Russian (others optional);
+- synonyms, for later (D52);
+- BM25 ranking, fuzzy queries, highlighted snippets.
+
+**Principles kept (BACKLOG):**
+- Plain files stay the truth. The index is derived only: it lives outside the repositories, can be deleted at any time, and is rebuilt from the files.
+- Changes without the tool are seen: the index state shows the dates of the newest file and the last commit beside the index's own, and the user decides when to update the index (D49).
+- An independent layer: with search switched off, nothing else changes.
+- Import of PDF, email and the like stays a separate layer (BACKLOG §4): its Markdown output is indexed like any file.
+
+**HTTP and MCP:**
+
+| Request | What |
+|---|---|
+| `GET /{repository}/.search?q=…` | Results in one repository: HTML page (D6 default) or JSON |
+| `GET /.search?q=…` | Results in every repository the user may read in (search box on the start page) |
+| MCP tool `search` | `query`, optional `repository` and `limit`; the agent's own grants |
+| `GET /{repository}/.search/index` | The index's state: `not-indexed`, `needs-reindexing`, `reindexing`, `indexed`, `failed`, with its dates (step 60) |
+| `GET /.search/index` | The states of all repositories the user may search |
+| `POST /{repository}/.search/reindex` | Build the repository's index anew from its files, in the background (step 60) |
+
+- A result: repository, path and URL (later also the permalink, once stable URLs exist: steps 49–54, postponed), title, a snippet with the found words marked, and whether it was found strictly or by similar spelling.
+- Every user who may read something in a repository may search it; the results are only what that user may read (D47). A repository the user cannot see is 404, as everywhere (D2). Every other path under `.search` is 404.
+- `.search` is a technical address only, never a grant: like `.id`, a dot name cannot be a real file or folder (D3).
+
+### 55. Text analysis  ☐
+- Lucene `core`, `analysis-common`, `queryparser`, `highlighter` (10.5.x).
+- One analyzer per field (D51):
+  - `exact`: words, lower case, and every spelling of a letter folded to one:
+    - German: `ä`/`ae` → `a`, `ö`/`oe` → `o`, `ü`/`ue` → `u`, `ß` → `ss`;
+    - French and other Latin letters: accents folded (`é`, `è`, `ê` → `e`, `ç` → `c`, `œ` → `oe`); elision removed (`l'école` → `école`, `qu'il` → `il`);
+    - Russian: `ё` → `е`;
+  - one stemmed field per language (D51), each on top of `exact`: `en` (English), `de` (German light), `fr` (French light), `ru` (Russian light). Each stemmer changes only words of its own alphabet and endings, so a mixed note is found in each of its languages;
+  - `tokens` (D63): every word as written between spaces, with punctuation at its ends removed (`(siehe bericht-2026.pdf).` → `bericht-2026.pdf`), lower case, German normalization: email addresses, URLs and file names stay whole. Their parts come from the fields above (`artem@example.org` → `artem`, `example.org`);
+  - `name`: the file or folder name, whole and in parts: `Bericht 2026-11.pdf` → `bericht 2026-11.pdf`, `bericht`, `2026`, `11`, `pdf`; also split at `-`, `_`, `.` and camelCase (`MeetingNotes` → `meeting`, `notes`), with the same German normalization.
+
+  A query searches all of them; a whole match (`tokens`, whole name) ranks above parts, `exact` above stemmed.
+- Languages: `mizoine.search.languages` (default `en,de,fr,ru`). Others that Lucene has a stemmer for (e.g. `es`, `it`, `nl`, `uk`, `pl`) can be added; a changed list makes the indexes `needs-reindexing`, as a changed analysis does (D58).
+- Synonyms: not in these steps, postponed (D52). Lucene can apply them at search time later (`SynonymGraphFilter`), without changing the index.
+- `ANALYSIS_VERSION`, a constant: raised with every change of fields or analyzers, so that existing indexes say `needs-reindexing` (D58). A test compares the tokens of fixed sample texts (English, German, French, Russian, mixed) with expected tokens kept in the test: it fails when the analysis changes, as a reminder to raise the version and update the expected tokens together.
+- Plain unit tests, no Spring:
+  - `Äpfel` = `Aepfel` = `Apfel` = `apfel`; `Straße` = `Strasse`; `Café` = `Cafe`;
+  - `Häuser` finds `Haus` (stemming);
+  - `ue` after a vowel stays (`Feuer` is not `Fer`);
+  - French: `l'école` is found by `ecole` and `écoles`; `Noël` by `noel`; `cœur` by `coeur`;
+  - Russian: `ёлка` = `елка`; `книги` finds `книга`; capital Cyrillic letters (`Москва` = `москва`);
+  - `mizoine.search.languages=en,de` leaves Russian words unstemmed, and the index of another language list says `needs-reindexing`;
+  - `artem@example.org` is found by the whole address, by `example.org` and by `artem`; a URL by itself and by its host;
+  - `bericht-2026.pdf` is found by `bericht-2026.pdf`, `bericht` and `pdf`; `Übersicht.md` by `uebersicht.md`;
+  - `MeetingNotes.md` by `meeting notes`.
+
+### 56. The index  ☐
+- **What (D50):**
+  - text files (UTF-8, no NUL bytes, up to 2 MB, as D21): file name, path, title (a Markdown file's first heading, else the name) and content;
+  - all other files (PDF, pictures, email files, …): name and path only. Their text comes from the import layer (BACKLOG §4) as a Markdown file beside them, indexed like any text file; the search result is that Markdown file, which links to its source;
+  - folders: name and path, so that a folder can be found by its name.
+  - Hidden names never; links are not followed (D54).
+- **Where (D48, D60):** one index per repository, in `mizoine.search.index-dir` (default `search-index` in the directory Mizoine starts from), e.g. `search-index/notes/lucene10-a1/`; never inside a repository.
+- **Nothing heavy on its own (D61):**
+  - at startup, Mizoine only opens each repository's index and checks its format: milliseconds, no file is read;
+  - Mizoine's own writes, deletes and moves update an indexed index at once;
+  - changes by hand, by Git or by another tool: no timer, no rescan of its own (D49). The index state shows the dates to compare (step 60); an update or a reindexing runs when the user asks for it;
+  - an update (only the changed files) or a full reindexing runs only when asked for (step 60).
+- `mizoine.search.enabled` (default `true`): `false` builds no index and answers 404 for search.
+- **The state of an index (D59),** per repository:
+
+  | State | Meaning | Search |
+  |---|---|---|
+  | `not-indexed` | No index yet: first start, a new repository | 503 with the state |
+  | `needs-reindexing` | Made by another Lucene major or analysis version (`reason: format`), or cannot be read (`reason: damaged`) | On the old index if it can still be read, the answer says so; else 503 |
+  | `reindexing` | A reindexing runs: files done and total | On the old index if there is one, the answer says so; else 503 with `Retry-After` |
+  | `indexed` | Current format. Whether it covers the latest changes, the dates tell (step 60) | Normal |
+  | `failed` | The last reindexing failed (e.g. disk full), with the reason | On the old index if there is one; else 503 |
+
+  - Every search answer carries the state, so a client can tell that results may be incomplete.
+  - At startup, one log line per repository whose state is not `indexed`, naming the request that fixes it.
+- **Versions and upgrades (D58):** an index is used only where Mizoine can be sure to read it. Nothing has to be deleted by hand after an upgrade.
+  - Each index lives in a folder named after its format, e.g. `lucene10-a1`:
+    - `lucene10`: the Lucene major version;
+    - `a1`: Mizoine's own analysis version, a constant raised whenever the fields or analyzers change (step 55).
+  - The commit data inside the index records the same two values, and Lucene's own version, as a check.
+  - **`needs-reindexing`** when:
+    - only a folder of another format exists (an upgrade of Lucene's major version, a changed analysis);
+    - Lucene cannot open it (`IndexFormatTooOldException`, `IndexFormatTooNewException`, `CorruptIndexException`, missing files);
+    - its commit data does not match its folder name.
+  - An old index of the same Lucene major (only the analysis changed) still answers until the reindexing is done (D57). One of another major is never opened.
+  - A reindexing builds the new format's folder beside the old one. When it is complete, search switches to it and the other folders are deleted. Going back to an older Mizoine finds no index of its format: `needs-reindexing`; it never reads a newer one.
+  - A minor Lucene upgrade (10.5 → 10.6) keeps the index: Lucene reads indexes of its own major version, and the analysis version says whether Mizoine's fields changed.
+  - The `lucene-backward-codecs` jar is not used: reindexing is simpler than converting, and the files are the truth.
+- State and upgrade tests (no real old Lucene index needed):
+  - no index → `not-indexed`, search 503;
+  - a folder of another analysis version → `needs-reindexing` (`format`), search on it says so;
+  - an index whose commit data says another version → `needs-reindexing`;
+  - garbage files in the index folder (a damaged or foreign index) → Mizoine starts, logs it, `needs-reindexing` (`damaged`);
+  - startup reads no file of the repository (a test counts the files opened);
+  - nothing changes the index on its own: a file changed by hand is not found until an update; the state's newest-file date shows the change.
+- Tests with `@TempDir`:
+  - a change by hand is found after an update request;
+  - Mizoine's write is found at once;
+  - delete and move;
+  - a deleted index becomes `not-indexed`;
+  - a binary file is found by its name only, a folder by its name.
+
+### 57. Searching, ranked and filtered  ☐
+- **Query (D53):** words, `"a phrase"`, `-without`, `prefix*` (Lucene's simple query syntax, no field or regex syntax). At most 200 characters.
+- **Order:** BM25. A match in the name or title ranks above one in the content; `exact` above stemmed.
+- **Strict, then loose (D53):**
+  1. all words;
+  2. if none: any of the words;
+  3. if still none: similar spelling (edit distance 1 for words of 4–7 letters, 2 from 8 letters).
+
+  The result says which.
+- **Permissions (D54):**
+  - the query itself is limited to the folders the user may read, so neither results nor their number reveal anything else;
+  - each result is checked again with the same rules as reading (`RepositoryFiles`) before it is shown;
+  - grants that change apply at once: the filter is built per search, not stored in the index.
+- **Snippets:** up to 3 passages per result with the found words marked; only from results the user may read.
+- Paging: `limit` (default 20, at most 100) and `offset`.
+- Tests: a security matrix:
+  - another user's folder, a repository without any grant, a hidden folder, a grant removed while running, a link out of the grants: never in the results, nor in their number;
+  - ranking (title above content); the three levels of strictness; the query length limit.
+
+### 58. Search page and API  ☐
+- `GET /{repository}/.search?q=…` and `GET /.search?q=…`: HTML (a search box, the results with title, path and snippet, links to the documents) or JSON.
+- A search box on the start page (all repositories) and on each folder page (this repository).
+- The search terms are part of the URL, so a search can be bookmarked and opened in several windows (BACKLOG §3).
+- OpenAPI: `@Operation`, parameters `q`, `limit`, `offset`; 200, 400 (empty or too long query), 401, 404, 500.
+- README: a section "Search": who finds what, the query syntax, German spellings, the languages, the settings, and the index state: after installing or upgrading, reindex where the state says so; deleting `search-index/` is always safe.
+
+### 59. Search for agents (MCP)  ☐
+- MCP tool `search(query, repository?, limit?)`: the same search, as the agent user. Results: path, title, snippet; then `read_file` reads the document.
+- Its description tells the agent the query syntax and that results are limited to its folders.
+- Tests: an agent with `[knowledge, inbox]` finds only in those folders; a repository it has no grant in answers as unknown.
+
+### 60. Index state and reindexing on request  ☐
+- `GET /{repository}/.search/index` (JSON or HTML): the state (D59): `not-indexed`, `needs-reindexing` (with `reason`), `reindexing` (files done and total), `indexed`, `failed` (with the reason). With the dates the user needs to judge whether the index is current (D49):
+  - `indexedAt`: when the last full reindexing finished;
+  - `updatedAt`: the last change of the index (Mizoine's own write, or an update request);
+  - `newestFile`: the newest modification time of a file in the folders the user may read, from the file system, read when asked (names and times only, no content);
+  - `lastCommit`: the date of the last Git commit, for users with Git access (D33), where the repository is a Git working tree.
+
+  So "the newest file is younger than `updatedAt`" means: changes are not in the index yet.
+  - For everyone who may search the repository: the state and whether a reindexing is running.
+  - Only for users with the whole repository (`/`): the number of indexed files and the files that could not be read (names only), since these speak of the whole repository.
+- `GET /.search/index`: the states and dates of all repositories the user may search, e.g. for a script after an upgrade.
+- `POST /{repository}/.search/update`: indexes only what changed since the index's own record: new, changed (by version: size + modification time) and deleted files. Quicker than a reindexing; for an `indexed` index after changes by hand or a pull. Same rules as the reindexing below (who, background, 202, not twice); for any other state 409 "needs reindexing".
+- `POST /{repository}/.search/reindex`: the index is built anew from all the repository's files, beside the old one (D58). For a first index, after an upgrade, for a damaged index, or after many changes by hand.
+  - Only for users with the whole repository (`/`, D56); others 404, as for anything not visible (D2).
+  - Runs in the background: 202 Accepted at once, with the state `reindexing`. Requested again while it runs: 202, the running one counts; it is not started twice.
+  - Searching keeps working on the old index meanwhile, if there is one (D57).
+  - JSON POST, no CSRF token needed (as the Git actions); the body may be empty.
+- No MCP tool: agents do not update or reindex.
+- OpenAPI: 200, 401, 404, 500 for the state; 202, 401, 404, 500 for the reindexing; 202, 401, 404, 409, 500 for the update.
+- Tests:
+  - the states in order: `not-indexed` → `reindexing` → `indexed`; a failing reindexing (index folder not writable) → `failed`, the old index still answers;
+  - a file changed by hand: `newestFile` is later than `updatedAt`; after an update it is found and `updatedAt` moves on;
+  - an update removes a deleted file and finds a new one, without reading unchanged files;
+  - `lastCommit` only for users with Git access;
+  - `newestFile` of a user with folder grants only counts those folders;
+  - a second request while running starts nothing new;
+  - search during reindexing answers from the old index and says so;
+  - a user with folder grants only: the state without counts; reindexing 404;
+  - a form POST without token is refused (CSRF).
+- README: the state, update and reindexing with curl; after installing and after an upgrade: check the state, reindex where it says so; after changes by hand or a pull: compare the dates, update.
+
+## Tags and statuses (planned 2026-11-25)
+*Requested 2026-11-25:* folders and files can be tagged; the tags are shown with their attributes and in search results, can be searched, and can be read and edited over the HTTP API and MCP.
+*Changed 2026-11-25:* **folders only for now**, in a technical file `.tags` inside the folder. Tags of files are postponed; favourite for later: a sidecar file beside the file, `my_doc.md.tags`, maybe a hybrid (D72).
+
+**The `.tags` file (D64, D65):** the folder's own tags, in the folder itself, so that the tags move with the folder, also when it is moved by hand.
+
+```
+# projects/mizoine/.tags
+project  status:active
+prio:high
+```
+
+- Plain text: tags separated by spaces, commas or line breaks; a leading `#` is allowed and ignored (`#project` = `project`). Mizoine writes one tag per line. The same format can serve the sidecar files later (`my_doc.md.tags`).
+- A tag (D66): letters of any alphabet, digits, `-`, `_`, `/` (e.g. `project/mizoine`), at most one `:`; no spaces; at most 50 characters and 30 tags per folder; case kept, compared without case.
+- **Statuses are tags `key:value` (D67, decided):** `status:open`, `prio:high`; at most one value per key, so setting `status:done` replaces `status:open`. No fixed values.
+- `.tags` is a hidden name (D3): never listed, read or written as a file over the API; Mizoine reads and writes it for the tags only. Git versions it like any file; edited by hand, it counts (BACKLOG principle 4).
+
+**Principles kept (BACKLOG):**
+- Plain files: a few words in a text file inside the folder; no database.
+- An independent layer: without `.tags` nothing changes; a `.tags` that cannot be read is logged and counts as no tags, never an error page.
+- Access as everywhere (D68, decided):
+  - whoever may read in the folder sees its tags; whoever may write in it may change them;
+  - a folder shown only on the way to a grant (D4) shows no tags; the root's tags need the whole repository (`/`) to change.
+
+**HTTP and MCP (D69, decided):**
+
+| Request | What |
+|---|---|
+| `GET /{repository}/{folder}/?tags` | The folder's tags, JSON, with an `ETag` |
+| `PUT /{repository}/{folder}/?tags` | Replace them: a JSON list; `If-Match` honoured (D13) |
+| Folder listing (JSON and page) | The folder's own tags, and each visible subfolder's |
+| `GET /{repository}/.tags/` | The vocabulary: the tags in use among the folders the user may read, with counts, from the search index (step 65) |
+| MCP | `list_folder` with the tags; new tools `set_tags`, `list_tags` |
+
+- `?tags` on a file: 400 "Tags are for folders" until file tags come (D72).
+
+### 61. Tags: the model and the `.tags` file  ☐
+- `Tag` (a value type, checked once where it comes in; case kept, compared without case) and `Tags` (a set; one value per key for `key:value`).
+- `TagsFile`: reads and writes a folder's `.tags` in the plain format above; written atomically under the writer's lock, like any write (step 30). Comment lines are not part of the format: Mizoine writes only the tags.
+- Plain unit tests: spaces, commas, line breaks and `#` read alike; invalid tags (too long, two `:`, empty) refused with a message; `status:done` replaces `status:open`; `Projekt` = `projekt`; an unreadable file counts as no tags and is logged.
+
+### 62. Reading folder tags  ☐
+- The folder listing (JSON and page) gives the folder's own tags and each visible subfolder's.
+- `GET /{repository}/{folder}/?tags`: `{"tags": [...]}` with an `ETag` (the version of the `.tags` file).
+- Tests: the permission matrix (read grant: visible; folder on the way to a grant (D4): no tags; not visible: 404); `GET …/.tags` stays 404 as a file; `?tags` on a file is 400.
+- OpenAPI for the new answers.
+
+### 63. Editing folder tags  ☐
+- `PUT /{repository}/{folder}/?tags` with a JSON list replaces the tags; an empty list deletes the `.tags` file. With `If-Match` only if the file is unchanged (412 otherwise).
+  - Only where the user may write in the folder; otherwise the same answer as a file write there.
+  - CSRF as for file writes: the browser's session needs the token, HTTP Basic clients do not (D11).
+  - Invalid tags: 400 with the reason.
+- Moving a folder needs nothing: `.tags` is inside it.
+- **Deleting (D70):** a folder that holds only `.tags` counts as empty: deleting it removes the `.tags` too. Any other content, also hidden, still blocks the delete (D15).
+- Tests: replace, remove, `If-Match`, a read-only place (above a grant) refused, the root needs `/`, a folder with only `.tags` deleted, a folder with `.tags` and a file not, a moved folder keeps its tags, two concurrent edits (one 412).
+- README: a section "Tags".
+
+### 64. Tags for agents (MCP)  ☐
+- `list_folder` returns the folder's and its subfolders' tags.
+- `set_tags(repository, path, tags, if_match?)`: replaces a folder's tags.
+- `list_tags(repository)`: the vocabulary of step 65, so that an agent keeps to your tags instead of inventing new ones; the descriptions say so.
+- Tests: an agent sees and sets tags only in its folders.
+
+### 65. Searching by tags, and the vocabulary  ☐
+Builds on steps 55–60: the search index knows the tags, so the vocabulary is one of its answers (D71).
+- A field `tag` for folders in the index (normalized like `exact`, step 55). Mizoine's own tag edits update the index at once; a `.tags` edited by hand is taken up by the next update (D49): the update compares the versions of `.tags` files too.
+- Query: `#project` or `#status:open` finds folders with that tag (hashtag form; D53 stays: no other field syntax). A plain word also matches tags, ranked like a match in the name. API parameter `tag=` (repeatable) to filter; MCP `search` gets `tags`.
+- Results show the folders' tags.
+- `GET /{repository}/.tags/` (JSON or page): every tag in use among the folders the user may read, with counts, `key:value` tags grouped by key (all statuses together); each tag links to its search. The same in `list_tags`. With no usable index: 503 with the index state, as search (D59).
+- Tests: `#status:open` finds only open folders; tags of folders a user may not read are neither found nor counted; a tag edit is found at once; a hand edit after an update.
+
 ## Glossary
 
 | Term | Meaning |
@@ -1343,6 +1658,12 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
 | Git access | The grant `.git` (or `/`): the Git page and API of a repository, for the whole repository (D33). Never the `.git` folder as files. |
 | Git page | `/{repository}/.git/`: status, stage / unstage, commit, pull, push (steps 43–48). |
 | Git action | Stage, unstage, commit, pull or push from the Git page or its JSON API (`GitActions`): starts from the status, so it names only files of the status; done, or refused with the reason. |
+| Short ID | 5 characters `0-9a-z` at the start of a file or folder name, followed by the end, `.`, a space, `-` or `_` (steps 49–54, D39–D41). |
+| Permalink | `/{repository}/.id/{id}`: leads to the object with this short ID, wherever it is now (step 50). |
+| Search index | Lucene's index of one repository's files, outside the repositories; derived from the files, may be deleted, built anew on request (D48, D60). |
+| Index state | `not-indexed`, `needs-reindexing`, `reindexing`, `indexed` or `failed`, with the dates of the index, the newest file and the last commit (D49, D59). |
+| Tag | A word given to a folder, kept in its `.tags` file (D64–D66); `key:value` tags such as `status:open` hold one value per key (D67). Tags of files: later (D72). |
+| `.tags` | The hidden plain-text file of a folder with the folder's own tags (D64, D65). |
 
 ---
 
@@ -1414,5 +1735,52 @@ Proposals; T4 in [docs/technology-decisions.md](docs/technology-decisions.md).
 - **D37 — pull and push:** **Decided 2026-11-24 as proposed:** pull only fast-forward, push only the current branch to its upstream, never forced; everything else by hand on the server. Not chosen: merge or rebase from the browser (conflicts need a UI of their own).
 - **D38 — the commit's author:** **Decided 2026-11-24 as proposed:** the Mizoine username, with an optional `email` per user in `users.yaml` (else `<username>@mizoine`); committer from the server's Git settings. Not chosen: always the server's identity (the history would not say who committed).
 - **Later, not planned yet:** a diff of a file (only for users who may read it), discard changes, branches, history.
+
+### Stable URLs (steps 49–54) — postponed 2026-11-25 (proposals kept as a draft)
+- **D39 — where the identity lives:** *Proposed:* in the name, as a short ID at its start: visible, moves with the file in every tool, works for every file type. Not chosen: an `id:` in Markdown front matter (only Markdown, every file must be read to find one); an index file of IDs (a second truth that goes stale when files are moved by hand); Git history alone (only committed moves, see D46).
+- **D40 — the ID's form:** *Proposed:* the old Mizoine's short ID (5 characters `0-9a-z`, minutes since 2017-01-01 UTC, sortable): short to type, IDs of old data stay valid. Not chosen: a readable date-time `2026-11-25-1432` (15 characters, also sortable); a random ID (not sortable).
+- **D41 — which names have an ID:** *Proposed:* 5 ID characters at the start, followed by the end of the name, `.`, a space, `-` or `_`. Not chosen: an ID anywhere in the name (more false matches); a fixed separator only.
+- **D42 — the address:** *Proposed:* `/{repository}/.id/{id}`: a dot name is never a real file or folder (D3), so it cannot clash, like `.git`. Not chosen: `/{repository}/@{id}` (a real folder could be named `@…`); one address for all repositories, `/.id/{id}` (IDs are unique per repository only, and the repository name tells where to search).
+- **D43 — several objects with one ID:** *Proposed:* 300 with the list (HTML or JSON); the user chooses. Not chosen: the first found (which one depends on the file system's order); an error.
+- **D44 — the redirect:** *Proposed:* 302, the query string kept. Not chosen: 301 (browsers keep it forever, but the target moves); answering with the object itself on the permalink (relative links in a Markdown page and in folder pages need the real path).
+- **D45 — finding an ID:** *Proposed:* search the folders on each request, no index (plain files, nothing to go stale); an index only if a real repository proves too slow, and then rebuilt from the files. New IDs are not reserved.
+- **D46 — old paths from Git history:** *Proposed:* yes, as its own step (54) after the ID steps, independent of them: it serves links to names without an ID. Only committed renames.
+- **Not planned:** stable URLs across a renamed repository (its name is the first part of every URL: keep repository names stable); rewriting links in other files after a move (D32 stays).
+
+### Search (steps 55–60) — decided 2026-11-25
+Details of T5 in [docs/technology-decisions.md](docs/technology-decisions.md).
+- **T5 — search engine:** **Decided 2026-11-25:** Apache Lucene 10.5, embedded (the installation is complicated enough; no second server): one jar, no second program to run and keep in sync. German normalization, stemming, synonyms, BM25, fuzzy queries and snippets are built in. Not chosen:
+  - Meilisearch or Typesense: very good typo tolerance, but a second server, and each file change must be sent to it;
+  - OpenSearch or Elasticsearch: Lucene inside a large server;
+  - SQLite FTS5: simple, but no German normalization or stemming, no fuzzy search.
+- **D47 — who may search:** **Decided 2026-11-25:** everyone, with no grant of its own; the results are only what the user may read. Searching reveals nothing that reading does not. Not chosen: a grant `.search`, like `.git` (first requested, then dropped: no protection, one more thing to configure).
+- **D48 — where the index lives:** **Decided 2026-11-25 as proposed:** outside the repositories, `mizoine.search.index-dir` (default `search-index` in the start directory). It is derived, may be deleted, and is built anew on request (D61). Not chosen: `.mizoine/` inside each repository (would show up in Git status, and in backups of the repository).
+- **D49 — noticing changes by hand:** **Decided 2026-11-25:** nothing runs by timer. The index state shows its own dates (`indexedAt`, `updatedAt`) beside the newest file's date (file system) and the last commit's (Git); the user decides, and asks for an update (changed files only) or a reindexing. Mizoine's own writes still update the index at once. Not chosen: a rescan every 5 minutes (work on its own, also when nothing changed); Java's `WatchService` (misses events on some file systems, e.g. network drives, WSL).
+- **D50 — what is indexed:** **Decided 2026-11-25:** the content of text files up to 2 MB, and the names and paths of all files and folders. PDF, JPEG, EML and the like are extracted by the import layer into a Markdown file beside them, which is then indexed as text. Not chosen: text extraction inside the index (Apache Tika: large, and the extracted text would be visible only to search, not as a file).
+- **D51 — languages:** **Decided 2026-11-25:** English, German, French and Russian (`mizoine.search.languages`, default `en,de,fr,ru`; others optional, from Lucene's stemmers). One shared normalized field (German spellings, accents, French elision, `ё` = `е`) and one stemmed field per language, all searched at once. Not chosen: detecting the language of each document (more complex, often wrong for short or mixed notes); a language setting per repository; transliteration between alphabets (`Москва` = `Moskva`: needs ICU, a large library; can come later).
+- **D52 — synonyms:** **Postponed 2026-11-25:** not in steps 55–60; to be planned later. Ideas kept for then: an optional plain file of your own (Solr format, e.g. from OpenThesaurus), applied at search time, so editing it needs no reindexing.
+- **D53 — strict and loose:** **Decided 2026-11-25 as proposed:** all words, then any word, then similar spelling; only when the stricter level finds nothing; the result says which level. Simple query syntax only. Not chosen: always fuzzy (too many weak results); full Lucene syntax (fields, regex: heavy queries).
+- **D54 — permissions:** **Decided 2026-11-25 as proposed:** filtered inside the query (the user's readable folders) and every result checked again before it is shown. The index stores files at their path in the repository and does not follow symbolic links. Not chosen: one index per user (grants change while running).
+- **D55 — semantic search (by meaning, with embeddings):** **Postponed 2026-11-25:** not in steps 55–60; to be planned later. Notes for then: Lucene can do it (vector fields) without changing the engine, but it needs an embedding model: in the jar (large) or an external AI service (documents would leave the server).
+- **D56 — who may reindex:** **Decided 2026-11-25 as proposed:** users with the whole repository (`/`), as for the details of a broken repository file (D8): a rebuild costs the server time, and only they see the whole repository anyway. Not chosen: everyone who may read (anyone could keep the server busy); a separate admin role (none exists yet).
+- **D57 — searching during a reindexing:** **Decided 2026-11-25 as proposed:** on the old index, if there is one that can be read, until the new one is complete, then switched at once; the answer says the index is being rebuilt. Not chosen: no results while it runs.
+- **D58 — index after an upgrade:** **Decided 2026-11-25 as proposed:** one folder per index format (Lucene major + Mizoine's analysis version). A missing, unreadable or mismatching index is `needs-reindexing`, not rebuilt on its own; reindexing builds the new folder beside the old one, the others are deleted after success. Not chosen: `lucene-backward-codecs` and Lucene's `IndexUpgrader` (only one major version back, and no help when Mizoine's own analysis changed); asking the administrator to delete the index by hand.
+- **D59 — the index state:** **Decided 2026-11-25 as proposed:** `not-indexed`, `needs-reindexing` (reason `format` or `damaged`), `reindexing`, `indexed`, `failed`, with the dates of D49; in its own request and in every search answer. Mizoine does not claim "up to date": the dates tell (D49). Search without a usable index: 503 with the state, not an empty result (which would read as "nothing found").
+- **D60 — one index per repository:** **Decided 2026-11-25 as proposed:** yes: the state, the format and the reindexing belong to one repository; reindexing one leaves the others alone; a removed repository's index is simply its folder. Not chosen: one index for all repositories (one format, one reindexing for everything).
+- **D61 — what runs on its own:** **Decided 2026-11-25 as proposed:** only cheap things: the format check at startup and Mizoine's own writes. An update or a full reindexing only on request (requested 2026-11-25: no big startup, no timer). Not chosen: reindexing automatically at startup or after an upgrade; a setting to switch that on (can be added later).
+- **D62 — update and reindexing:** **Decided 2026-11-25 as proposed:** both on request: an update indexes only new, changed and deleted files (by version), a reindexing builds everything anew beside the old index. Not chosen: reindexing only (slow after a small change by hand); an update after each pull through Mizoine (couples the Git and search layers).
+- **D63 — email addresses and file names:** **Decided 2026-11-25 as proposed:** two more fields: `tokens` keeps every word whole as written between spaces, punctuation at its ends removed, so email addresses, URLs and file names stay whole (simpler and more predictable than Lucene's `UAX29URLEmailTokenizer`, which knows emails and URLs but not file names); `name` holds each file and folder name whole and in its parts (stem, extension, `-` `_` `.`, camelCase). A whole match ranks first. A query word with `@` or `.` is searched whole and in its parts. Not chosen: a field syntax such as `ext:pdf` (D53: no fields); can come later as a filter parameter (`type=pdf`).
+- **Later, needs its own plan — dates:** finding dates written in different ways (`25.11.2026`, `2026-11-25`, `25. November 2026`, `Nov 25`), ranges ("November 2026"), and the dates a file has: its modification time, the date in its short ID (steps 49–54), the date of its last commit. Needs: which formats and languages, where a date comes from, how a range is asked for.
+
+### Tags and statuses (steps 61–65) — decided 2026-11-25
+- **D64 — where tags live:** **Decided 2026-11-25:** folders only for now, in the folder's own `.tags` file; it moves with the folder, also by hand. Tags of files: postponed (D72). Not chosen: one tags file per repository; tags in Markdown front matter (D71).
+- **D65 — the file's format:** **Decided 2026-11-25 as proposed:** plain text, tags separated by spaces, commas or line breaks, an optional leading `#`; Mizoine writes one per line. The simplest a human can type, and fit for the sidecar files later. Not chosen: YAML (a list needs brackets or dashes; nothing else to say in it now that it holds only the folder's tags).
+- **D66 — what a tag may be:** **Decided 2026-11-25 as proposed:** letters of any alphabet, digits, `-`, `_`, `/`, one `:` (D67); no spaces; at most 50 characters and 30 tags per folder; case kept as written, compared without case. Not chosen: tags with spaces (need quoting in queries and in `#…`).
+- **D67 — statuses:** **Decided 2026-11-25 as proposed:** tags `key:value`, at most one value per key: `status:done` replaces `status:open`. No fixed values.
+- **D68 — who sees and changes tags:** **Decided 2026-11-25 as proposed:** see with read access in the folder, change with write access in it; folders shown only on the way to a grant (D4) show none.
+- **D69 — the API's form:** **Decided 2026-11-25 as proposed:** `?tags` on the folder's URL (`GET`, `PUT`, `ETag` / `If-Match`); `/{repository}/.tags/` for the vocabulary, from the search index (D71).
+- **D70 — deleting a tagged folder:** **Decided 2026-11-25 as proposed:** a folder that holds only `.tags` counts as empty, and its `.tags` is deleted with it; otherwise tagging a folder would make it undeletable through Mizoine. Any other content still blocks the delete (D15). Moving needs nothing: `.tags` is inside.
+- **D71 — the vocabulary:** **Decided 2026-11-25 as proposed:** from the search index (step 65): it has every tag anyway, counted per user's readable folders in milliseconds. Without a usable index, 503 with the state, as search. Not chosen: reading all `.tags` files on each request (a walk of the whole repository); a list of allowed tags (a configuration of its own). Markdown front matter `tags:` (Obsidian) is not read; possible later as a read-only source.
+- **D72 — tags of files:** **Postponed 2026-11-25:** to plan later. Favourite: a sidecar file beside the file, `my_doc.md.tags`, in the same format as `.tags` (D65); maybe a hybrid. To think through then: how a sidecar moves and is deleted with its file (by Mizoine, and by hand), how it shows in folder listings and Git, and whether front matter counts too.
 
 - **Later, not planned yet:** copy, live Markdown preview in the editor, Obsidian `[[wiki links]]`, links relative to the repository root (`/…`), syntax highlighting of code blocks in the page, per-grant read-only permissions.

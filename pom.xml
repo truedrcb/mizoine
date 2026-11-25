@@ -13,7 +13,7 @@
 
 	<groupId>com.gratchev.mizoine</groupId>
 	<artifactId>mizoine</artifactId>
-	<version>1.0.0-SNAPSHOT</version>
+	<version>1.0.0</version>
 	<name>mizoine</name>
 	<description>Personal knowledge base and file storage on plain files and Git</description>
 
