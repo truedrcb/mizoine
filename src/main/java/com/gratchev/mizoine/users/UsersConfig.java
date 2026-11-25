@@ -17,7 +17,7 @@ import com.gratchev.mizoine.MizoineProperties;
 public class UsersConfig {
 
 	@Bean
-	UserDetailsService userDetailsService(final MizoineProperties properties) {
+	FileUserDetailsService userDetailsService(final MizoineProperties properties) {
 		return new FileUserDetailsService(properties.usersFilePath(), new UsersFileParser());
 	}
 

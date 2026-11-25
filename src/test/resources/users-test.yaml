@@ -2,5 +2,6 @@
 users:
   - username: artem
     password: "{bcrypt}$2a$04$0Lrt8DwJgJ44jVTKzCnmhu5LnOZEGAI2jdGylGLW/JgYQZ5r/oJ4m"
+    email: artem@example.org
   - username: guest
     password: "{bcrypt}$2a$04$gErjw5GH5tGA5QFqNBbDS.cfGqRdaFw1fgnE1C.jBHcH063E.5YSW"

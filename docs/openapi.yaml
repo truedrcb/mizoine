@@ -256,6 +256,243 @@ paths:
           description: If-Match not met; nothing deleted
         "500":
           description: Repository configured wrongly
+  /{repository}/.git/unstage:
+    post:
+      tags:
+      - Git
+      summary: Unstage changes
+      description: "Takes staged files out of the next commit (git restore --staged);\
+        \ their changes stay in the working tree. A renamed file is unstaged with\
+        \ its old name. Either 'paths' (one or more, as the status names them) or\
+        \ 'all': true."
+      operationId: gitUnstage
+      parameters:
+      - name: repository
+        in: path
+        description: Repository name
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SelectionRequest"
+        required: true
+      responses:
+        "200":
+          description: Unstaged; the new status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitStatus"
+        "400":
+          description: "Either 'paths' (one or more, as the status names them) or\
+            \ 'all': true"
+        "401":
+          description: "Not logged in (non-browser clients): HTTP Basic challenge"
+        "404":
+          description: "Unknown repository, or no Git access to it: deliberately the\
+            \ same answer"
+        "409":
+          description: "Not done: not a Git repository, a file not among the changes,\
+            \ nothing to do, or Git refused; the message says why"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refusal"
+        "500":
+          description: Repository configured wrongly (e.g. missing root folder); or
+            Git failed
+  /{repository}/.git/stage:
+    post:
+      tags:
+      - Git
+      summary: Stage changes
+      description: "Stages changed, new or deleted files for the next commit (git\
+        \ add). Only files of the current status can be named; conflicts are resolved\
+        \ by hand on the server. Either 'paths' (one or more, as the status names\
+        \ them) or 'all': true."
+      operationId: gitStage
+      parameters:
+      - name: repository
+        in: path
+        description: Repository name
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SelectionRequest"
+        required: true
+      responses:
+        "200":
+          description: Staged; the new status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitStatus"
+        "400":
+          description: "Either 'paths' (one or more, as the status names them) or\
+            \ 'all': true"
+        "401":
+          description: "Not logged in (non-browser clients): HTTP Basic challenge"
+        "404":
+          description: "Unknown repository, or no Git access to it: deliberately the\
+            \ same answer"
+        "409":
+          description: "Not done: not a Git repository, a file not among the changes,\
+            \ nothing to do, or Git refused; the message says why"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refusal"
+        "500":
+          description: Repository configured wrongly (e.g. missing root folder); or
+            Git failed
+  /{repository}/.git/push:
+    post:
+      tags:
+      - Git
+      summary: Push to the upstream
+      description: "Pushes the current branch to its upstream branch only, never forced:\
+        \ a push that is behind is rejected (pull first). The remote is reached with\
+        \ the server's own Git credentials. Send Content-Type: application/json; the\
+        \ body may be empty."
+      operationId: gitPush
+      parameters:
+      - name: repository
+        in: path
+        description: Repository name
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Pushed; the new status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitStatus"
+        "401":
+          description: "Not logged in (non-browser clients): HTTP Basic challenge"
+        "404":
+          description: "Unknown repository, or no Git access to it: deliberately the\
+            \ same answer"
+        "409":
+          description: "Not done: not a Git repository, a file not among the changes,\
+            \ nothing to do, or Git refused; the message says why (e.g. no upstream,\
+            \ rejected)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refusal"
+        "500":
+          description: Repository configured wrongly (e.g. missing root folder); or
+            Git failed
+        "504":
+          description: The remote did not answer within the time limit; Git was ended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refusal"
+  /{repository}/.git/pull:
+    post:
+      tags:
+      - Git
+      summary: Pull from the upstream
+      description: "Fast-forwards the current branch to its upstream (git pull --ff-only),\
+        \ never a merge or a rebase: a branch that has diverged is refused, to be\
+        \ resolved by hand on the server. Mizoine's own file writes wait while it\
+        \ runs. The remote is reached with the server's own Git credentials. Send\
+        \ Content-Type: application/json; the body may be empty."
+      operationId: gitPull
+      parameters:
+      - name: repository
+        in: path
+        description: Repository name
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Pulled; the new status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitStatus"
+        "401":
+          description: "Not logged in (non-browser clients): HTTP Basic challenge"
+        "404":
+          description: "Unknown repository, or no Git access to it: deliberately the\
+            \ same answer"
+        "409":
+          description: "Not done: not a Git repository, a file not among the changes,\
+            \ nothing to do, or Git refused; the message says why (e.g. no upstream,\
+            \ diverged)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refusal"
+        "500":
+          description: Repository configured wrongly (e.g. missing root folder); or
+            Git failed
+        "504":
+          description: The remote did not answer within the time limit; Git was ended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refusal"
+  /{repository}/.git/commit:
+    post:
+      tags:
+      - Git
+      summary: Commit the staged changes
+      description: "Commits what is staged (git commit), with the logged-in user as\
+        \ author (name, and the email from the users file, else <name>@mizoine); the\
+        \ committer is the server's own Git identity. The repository's hooks run as\
+        \ with a commit by hand."
+      operationId: gitCommit
+      parameters:
+      - name: repository
+        in: path
+        description: Repository name
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommitRequest"
+        required: true
+      responses:
+        "200":
+          description: Committed; the new status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitStatus"
+        "400":
+          description: No message
+        "401":
+          description: "Not logged in (non-browser clients): HTTP Basic challenge"
+        "404":
+          description: "Unknown repository, or no Git access to it: deliberately the\
+            \ same answer"
+        "409":
+          description: "Not done: not a Git repository, a file not among the changes,\
+            \ nothing to do, or Git refused; the message says why (e.g. nothing staged,\
+            \ a hook refused)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refusal"
+        "500":
+          description: Repository configured wrongly (e.g. missing root folder); or
+            Git failed
   /{repository}:
     get:
       tags:
@@ -374,47 +611,17 @@ paths:
           description: Neither text/html nor application/json accepted
 components:
   schemas:
-    FolderListing:
+    SelectionRequest:
       type: object
-      description: The subfolders and files of a folder that the user may see
       properties:
-        repository:
-          type: string
-          description: Repository name
-        path:
-          type: string
-          description: "The folder, from the repository root, with leading and trailing\
-            \ '/' ('/' = the root)"
-        folders:
+        paths:
           type: array
-          description: "Names of the visible subfolders, sorted"
+          description: "Paths as the status names them, from the repository root"
           items:
             type: string
-        files:
-          type: array
-          description: "Names of the visible files, sorted; none in folders above\
-            \ a granted folder"
-          items:
-            type: string
-    RepositoryProblem:
-      type: object
-      description: A repository that is configured wrongly
-      properties:
-        repository:
-          type: string
-          description: Repository name
-        error:
-          type: string
-          description: Always 'repository not available'
-        file:
-          type: string
-          description: The repository file to fix; only for users with access to the
-            whole repository
-        problems:
-          type: array
-          description: What is wrong; only for users with access to the whole repository
-          items:
-            type: string
+        all:
+          type: boolean
+          description: "true: every file of the list instead"
     Change:
       type: object
       properties:
@@ -494,6 +701,59 @@ components:
           type: integer
           format: int32
           description: "Commits in the upstream that are not here: pull first"
+    Refusal:
+      type: object
+      properties:
+        message:
+          type: string
+          description: "Why, often in Git's own words"
+    CommitRequest:
+      type: object
+      properties:
+        message:
+          type: string
+          description: The commit message; not empty
+    FolderListing:
+      type: object
+      description: The subfolders and files of a folder that the user may see
+      properties:
+        repository:
+          type: string
+          description: Repository name
+        path:
+          type: string
+          description: "The folder, from the repository root, with leading and trailing\
+            \ '/' ('/' = the root)"
+        folders:
+          type: array
+          description: "Names of the visible subfolders, sorted"
+          items:
+            type: string
+        files:
+          type: array
+          description: "Names of the visible files, sorted; none in folders above\
+            \ a granted folder"
+          items:
+            type: string
+    RepositoryProblem:
+      type: object
+      description: A repository that is configured wrongly
+      properties:
+        repository:
+          type: string
+          description: Repository name
+        error:
+          type: string
+          description: Always 'repository not available'
+        file:
+          type: string
+          description: The repository file to fix; only for users with access to the
+            whole repository
+        problems:
+          type: array
+          description: What is wrong; only for users with access to the whole repository
+          items:
+            type: string
     Repository:
       type: object
       properties:

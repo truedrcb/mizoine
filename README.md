@@ -225,17 +225,45 @@ browser that loads and saves through the same file API.
 
 `/<name>/.git/` (the **Git** link on the repository's root page), for users with Git access (`.git` or `/` in
 the repository file): the branch, ahead / behind its upstream, and the changed files, staged and not staged, as
-`git status` shows them. File names link to their pages where you may read them. JSON with
-`-H 'Accept: application/json'`. Staging, commit, pull and push are planned next ([DEV.md](DEV.md)).
+`git status` shows them. File names link to their pages where you may read them.
 
-- Mizoine runs the server's own `git`, with the server user's settings: what you see is what `git status` says
-  in that folder.
+| Button | What runs |
+|---|---|
+| Stage selected / Stage all | `git add -- <files>`: the files of the list, never anything else |
+| Unstage selected / Unstage all | `git restore --staged -- <files>` (a rename with its old name) |
+| Commit | `git commit -m <message> --author="<you> <your email>"` |
+| Pull | `git pull --ff-only --no-rebase` |
+| Push | `git -c push.default=upstream push`: the current branch to its upstream, never forced |
+
+- **Author:** you, with `email` from `users.yaml` (optional, e.g. `email: alice@example.org`; else
+  `<username>@mizoine`). The committer is the server's own Git identity: set `git config --global user.name`
+  and `user.email` for the user running Mizoine, or a commit is refused.
+- **Credentials:** pull and push use the server user's SSH key or credential helper; Mizoine stores no Git
+  passwords and never asks for one. SSH runs in batch mode: a key with a passphrase needs an agent. A server
+  with its own `core.sshCommand` sets `GIT_SSH_COMMAND` in its start script instead.
+- **By hand on the server:** merges, conflicts (they are listed, but not staged from the page), branches, and a
+  branch that has diverged from its upstream (pull refuses; push is rejected).
+- Hooks of the repository run, as with a commit by hand.
+- A pull and Mizoine's own file writes take turns: an upload waits for its last step until the pull is done.
+- `mizoine.git.timeout` (default `60s`): how long one Git command may take before it is ended ("did not finish").
 - Only a repository whose folder is the top of a Git working tree has a status; otherwise the page says so.
-- If the page says that about a folder that *is* a Git repository, Git probably refuses it because another
-  user owns it ("dubious ownership"): run Mizoine as the owner, or
-  `git config --global --add safe.directory /path/to/the/folder` as the user running Mizoine.
-- `mizoine.git.timeout` (default `60s`): how long one Git command may take before it is ended.
+  If it says that about a folder that *is* a Git repository, Git probably refuses it because another user owns it
+  ("dubious ownership"): run Mizoine as the owner, or `git config --global --add safe.directory /path/to/folder`
+  as the user running Mizoine.
 - The MCP tools have no Git: agents write files, a human reviews and commits.
+
+The same as JSON, for scripts (a JSON `POST` needs no CSRF token):
+
+```sh
+curl -u alice -H 'Accept: application/json' http://127.0.0.1:12013/notes/.git/              # status
+curl -u alice -H 'Content-Type: application/json' -d '{"all": true}' http://127.0.0.1:12013/notes/.git/stage
+curl -u alice -H 'Content-Type: application/json' -d '{"paths": ["plan.md"]}' http://127.0.0.1:12013/notes/.git/unstage
+curl -u alice -H 'Content-Type: application/json' -d '{"message": "Notes of today"}' http://127.0.0.1:12013/notes/.git/commit
+curl -u alice -H 'Content-Type: application/json' -X POST http://127.0.0.1:12013/notes/.git/pull   # and /push
+```
+
+Answers: the new status (200); 400 for a request that names nothing; 409 with `{"message": …}` when it is not
+done (nothing to do, a file not in the list, Git refused); 504 when the remote did not answer in time.
 
 ## Connect an AI agent (MCP)
 

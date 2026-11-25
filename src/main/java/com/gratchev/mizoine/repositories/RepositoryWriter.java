@@ -17,6 +17,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import com.gratchev.mizoine.files.FileVersion;
@@ -165,6 +166,20 @@ public class RepositoryWriter {
 	}
 
 	private final Lock lock = new ReentrantLock();
+
+	/**
+	 * Runs the action while no write of Mizoine takes its final step (the replace, under the same lock): a Git pull
+	 * (step 48) rewrites files, and an upload must not replace one in the middle of it. Uploads still read their
+	 * body meanwhile; only their last step waits.
+	 */
+	public <T> T exclusively(final Supplier<T> action) {
+		lock.lock();
+		try {
+			return action.get();
+		} finally {
+			lock.unlock();
+		}
+	}
 
 	/**
 	 * @throws UncheckedIOException if reading the body or writing the disk fails; the old content stays

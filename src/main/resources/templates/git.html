@@ -4,9 +4,15 @@
 <body>
 	<h1><span th:text="${repository}">repository</span> Git</h1>
 	<p><a href="../">Files</a></p>
+	<p th:if="${outcome != null}" th:classappend="${outcome instanceof T(com.gratchev.mizoine.git.GitOutcome$Refused)} ? 'refused' : 'done'"
+		class="outcome" role="status" th:text="${outcome.message}">Staged 1 file.</p>
 	<p th:if="${git == null}">This repository's folder is not the top of a Git working tree: there is no Git status to show.</p>
 	<th:block th:if="${git != null}">
 		<p>Branch <strong th:text="${git.branch}">main</strong>, <span th:text="${git.upstream}">no upstream</span>.</p>
+		<div class="actions">
+			<form method="post" th:action="@{/{r}/.git/pull(r=${repository})}"><button type="submit">Pull</button></form>
+			<form method="post" th:action="@{/{r}/.git/push(r=${repository})}"><button type="submit">Push</button></form>
+		</div>
 		<p th:unless="${git.hasCommits}">No commits yet.</p>
 		<p th:if="${git.clean}">Nothing to commit: the working tree is clean.</p>
 		<th:block th:unless="${git.conflicts.isEmpty()}">
@@ -14,14 +20,24 @@
 			<p>To be resolved by hand on the server.</p>
 			<ul><li th:each="line : ${git.conflicts}" th:insert="~{:: line(${line})}"></li></ul>
 		</th:block>
-		<th:block th:unless="${git.staged.isEmpty()}">
+		<form th:unless="${git.staged.isEmpty()}" method="post" th:action="@{/{r}/.git/unstage(r=${repository})}">
 			<h2>Staged</h2>
-			<ul><li th:each="line : ${git.staged}" th:insert="~{:: line(${line})}"></li></ul>
-		</th:block>
-		<th:block th:unless="${git.unstaged.isEmpty()}">
+			<ul><li th:each="line : ${git.staged}"><label><input type="checkbox" name="path" th:value="${line.path}">
+				<th:block th:insert="~{:: line(${line})}"></th:block></label></li></ul>
+			<p><button type="submit">Unstage selected</button> <button type="submit" name="all" value="true">Unstage all</button></p>
+		</form>
+		<form th:unless="${git.staged.isEmpty()}" method="post" th:action="@{/{r}/.git/commit(r=${repository})}">
+			<h2>Commit</h2>
+			<p><label for="message">Message</label><br>
+				<textarea id="message" name="message" rows="3" cols="60" required></textarea></p>
+			<p><button type="submit">Commit the staged changes</button></p>
+		</form>
+		<form th:unless="${git.unstaged.isEmpty()}" method="post" th:action="@{/{r}/.git/stage(r=${repository})}">
 			<h2>Not staged</h2>
-			<ul><li th:each="line : ${git.unstaged}" th:insert="~{:: line(${line})}"></li></ul>
-		</th:block>
+			<ul><li th:each="line : ${git.unstaged}"><label><input type="checkbox" name="path" th:value="${line.path}">
+				<th:block th:insert="~{:: line(${line})}"></th:block></label></li></ul>
+			<p><button type="submit">Stage selected</button> <button type="submit" name="all" value="true">Stage all</button></p>
+		</form>
 	</th:block>
 	<!-- one file: its kind, its name (a link where the user may read it), the old name of a rename or copy -->
 	<th:block th:if="false"><th:block th:fragment="line(line)"><span th:text="${line.kind}">modified</span>

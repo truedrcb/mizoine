@@ -4,6 +4,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import com.gratchev.mizoine.MizoineProperties;
+import com.gratchev.mizoine.repositories.RepositoryWriter;
 
 /** Git in the browser (steps 43–48): the server's {@code git}, with the server's settings and credentials (T4). */
 @Configuration
@@ -15,5 +16,10 @@ class GitConfig {
 	@Bean
 	GitCommands gitCommands(final MizoineProperties properties) {
 		return new GitCommands("git", properties.git().timeout(), MAX_OUTPUT, System.getenv());
+	}
+
+	@Bean
+	GitActions gitActions(final GitCommands gitCommands, final RepositoryWriter writer) {
+		return new GitActions(gitCommands, writer);
 	}
 }

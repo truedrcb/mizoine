@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -29,7 +30,8 @@ public class UsersFileParser {
 	private static final String USERS = "users";
 	private static final String USERNAME = "username";
 	private static final String PASSWORD = "password";
-	private static final Set<String> USER_FIELDS = Set.of(USERNAME, PASSWORD);
+	private static final String EMAIL = "email";
+	private static final Set<String> USER_FIELDS = Set.of(USERNAME, PASSWORD, EMAIL);
 
 	private static final Pattern HASH_WITH_ID = Pattern.compile("^\\{([^}]+)}(.+)$");
 	private static final String PLAIN_TEXT_ID = "noop";
@@ -92,7 +94,16 @@ public class UsersFileParser {
 			throw new UsersFileException("User '" + username + "' in users file " + file
 					+ " must have a hashed password like '{bcrypt}$2a$...', plain text is not allowed");
 		}
-		return new UserEntry(username, password);
+		return new UserEntry(username, password, email(node, username, file));
+	}
+
+	/** D38: optional; the author address of the user's Git commits. */
+	private static Optional<String> email(final JsonNode node, final String username, final Path file) {
+		final JsonNode email = node.get(EMAIL);
+		if (email != null && !email.isNull() && !email.isString()) {
+			throw new UsersFileException("User '" + username + "' in users file " + file + ": '" + EMAIL + "' must be a text");
+		}
+		return Optional.ofNullable(text(node, EMAIL)).filter(text -> !text.isBlank());
 	}
 
 	private static String text(final JsonNode node, final String field) {

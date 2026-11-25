@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,6 +47,47 @@ class UsersFileParserTest {
 		assertThat(users).containsExactly(
 				new UserEntry("artem", HASH_1),
 				new UserEntry("guest", HASH_2));
+	}
+
+	/** D38: the optional email, the author of the user's Git commits. */
+	@Test
+	void usersAreCountedFromOneInMessages() throws IOException {
+		final Path file = write("""
+				users:
+				  - username: artem
+				    password: "%s"
+				  - password: "%s"
+				""".formatted(HASH_1, HASH_2));
+
+		assertThatThrownBy(() -> parser.parse(file)).hasMessageContaining("User #2 ");
+	}
+
+	@Test
+	void anEmailIsOptional() throws IOException {
+		final Path file = write("""
+				users:
+				  - username: artem
+				    password: "%s"
+				    email: artem@example.org
+				  - username: guest
+				    password: "%s"
+				""".formatted(HASH_1, HASH_2));
+
+		assertThat(parser.parse(file)).containsExactly(
+				new UserEntry("artem", HASH_1, Optional.of("artem@example.org")),
+				new UserEntry("guest", HASH_2, Optional.empty()));
+	}
+
+	@Test
+	void anEmailMustBeText() throws IOException {
+		final Path file = write("""
+				users:
+				  - username: artem
+				    password: "%s"
+				    email: [a, b]
+				""".formatted(HASH_1));
+
+		assertThatThrownBy(() -> parser.parse(file)).isInstanceOf(UsersFileException.class).hasMessageContaining("email");
 	}
 
 	@Test
@@ -222,7 +264,7 @@ class UsersFileParserTest {
 				users:
 				  - username: artem
 				    password: "%s"
-				    email: artem@example.org
+				    role: admin
 				""".formatted(HASH_1));
 
 		final List<UserEntry> users = parser.parse(file);
@@ -231,7 +273,7 @@ class UsersFileParserTest {
 		assertThat(output.getOut())
 				.contains("WARN")
 				.contains("'version'")
-				.contains("'email'")
+				.contains("'role'")
 				.contains("artem");
 	}
 

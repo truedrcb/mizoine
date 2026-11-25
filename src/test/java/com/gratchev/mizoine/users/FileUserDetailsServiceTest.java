@@ -32,8 +32,15 @@ class FileUserDetailsServiceTest {
 				users:
 				  - username: artem
 				    password: "%s"
+				    email: artem@example.org
 				""".formatted(ARTEM_HASH));
 		service = new FileUserDetailsService(file, new UsersFileParser());
+	}
+
+	@Test
+	void theEmailOfAUser() {
+		assertThat(service.email("artem")).contains("artem@example.org");
+		assertThat(service.email("nobody")).isEmpty();
 	}
 
 	@Test

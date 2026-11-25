@@ -10,8 +10,13 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
@@ -411,5 +416,62 @@ class RepositoryWriterTest {
 		assertThat(move("a/old.md", "a/.hidden.md", false, Optional.empty())).isEqualTo(new MoveResult.NotFound());
 		assertThat(move("a/old.md", "../outside.md", false, Optional.empty())).isEqualTo(new MoveResult.NotFound());
 		assertThat(namesIn("a")).containsExactly("leak.txt", "old.md", "sub");
+	}
+
+	@Test
+	void aReplacedFileKeepsItsPermissions() throws IOException {
+		// e.g. readable for the group: the atomic replace must not reset that
+		Files.writeString(root.resolve("shared.md"), "old");
+		final Set<PosixFilePermission> groupReadable = PosixFilePermissions.fromString("rw-r-----");
+		Files.setPosixFilePermissions(root.resolve("shared.md"), groupReadable);
+
+		write("shared.md", "new", Precondition.NONE);
+
+		assertThat(Files.getPosixFilePermissions(root.resolve("shared.md"))).isEqualTo(groupReadable);
+	}
+
+	// step 48: one at a time with a Git pull
+
+	@Test
+	void aWriteWaitsWhileSomethingRunsExclusively() throws Exception {
+		final CountDownLatch inside = new CountDownLatch(1);
+		final CountDownLatch release = new CountDownLatch(1);
+		final Thread holder = Thread.ofPlatform().start(() -> writer.exclusively(() -> {
+			inside.countDown();
+			awaitQuietly(release);
+			return null;
+		}));
+		assertThat(inside.await(5, TimeUnit.SECONDS)).isTrue();
+
+		final Thread writing = Thread.ofPlatform().start(() -> write("waited.md", "w", Precondition.NONE));
+		waitUntilWaiting(writing);
+		assertThat(root.resolve("waited.md")).doesNotExist();
+
+		release.countDown();
+		writing.join(5000);
+		holder.join(5000);
+		assertThat(root.resolve("waited.md")).hasContent("w");
+	}
+
+	@Test
+	void exclusivelyGivesTheResult() {
+		assertThat(writer.exclusively(() -> "result")).isEqualTo("result");
+	}
+
+	/** Parked on the writer's lock: the state a waiting thread shows. */
+	static void waitUntilWaiting(final Thread thread) throws InterruptedException {
+		final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+		while (thread.getState() != Thread.State.WAITING && System.nanoTime() < deadline) {
+			Thread.sleep(10);
+		}
+		assertThat(thread.getState()).isEqualTo(Thread.State.WAITING);
+	}
+
+	private static void awaitQuietly(final CountDownLatch latch) {
+		try {
+			latch.await(10, TimeUnit.SECONDS);
+		} catch (final InterruptedException e) {
+			Thread.currentThread().interrupt();
+		}
 	}
 }

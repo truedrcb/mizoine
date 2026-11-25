@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-24): steps 0–34 and 37–45 done (848 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 46–48 (Git in the browser; T4, D33–D38 decided). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-24): steps 0–34 and 37–48 done (901 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -1213,7 +1213,7 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
     - the intro describes today's Mizoine.
   - **Found by the README check:** `oauth2` was not a reserved repository name. With OAuth on, such a repository would have shared its URLs with `/oauth2/authorize` and `/oauth2/token`. Now reserved. The parser's message lists all reserved names from the one set (`RepositoryNames.reserved()`) instead of a hand-written part of them.
 
-### 46. Stage and unstage  ☐
+### 46. Stage and unstage  ☑
 - Stage: `git add -- <paths>`, or `git add --all`. Unstage: `git restore --staged -- <paths>`, or everything. Before the first commit, `git rm --cached`.
 - Paths must be in the current status. Others give 409, so the request cannot name any path in the working tree.
 - Tests:
@@ -1223,7 +1223,25 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
   - a path with `..`;
   - CSRF (a form without token: 403; JSON without token: allowed).
 
-### 47. Commit  ☐
+- *Done 2026-11-25:*
+  - **Domain:** `GitActions`, one place for every action. Each starts from the current status, and a repository that is no working tree (D34) is refused before Git runs. The outcome is `GitOutcome.Done(message)` or `Refused(message)`, the latter often in Git's own words.
+  - **Input checked where it comes in:** `Selection` is all, or a non-empty list of paths, never blank. JSON `{"all": true}` and the page's form both become one.
+  - **Stage:** `git add -- <paths>`.
+    - Only paths of the not-staged list; anything else is refused naming the path (`../outside.md`, `.git/config`, `*.md`, unchanged files).
+    - "All" is that list, not `git add --all`, so Mizoine's temporary upload files (left out of the status) are never staged.
+    - Conflicts are in neither list, so they are not staged (D37).
+  - **Unstage:** `git restore --staged -- <paths>`; before the first commit `git rm --cached`. A rename is unstaged with its old name.
+  - **HTTP:**
+    - `POST /{repository}/.git/stage` and `/unstage` with JSON: 200 with the new status, 400 for a selection of nothing, 409 `{"message": …}`, 404 without Git access.
+    - The page's forms (checkbox per file, "… selected", "… all") post to the same URLs as forms. A hidden handler answers 303 back to the page, which shows the result (flash attribute).
+  - **CSRF:** the rule for `/mcp` became "a JSON POST" (`SecurityConfig.isJsonPost`): a cross-site form cannot send JSON, wherever it posts. Form posts keep the token, also with HTTP Basic (D11).
+  - **Found while testing:**
+    - (a) With `produces = JSON`, a POST without `Accept` was routed to the file move on the same pattern (400). The mappings have no `produces`.
+    - (b) Without `Accept`, the pages' default type (HTML, D6) gave 406 for the JSON answer. The answers set `Content-Type: application/json` themselves.
+    - (c) Jackson 3 refuses a missing primitive `boolean`. The controller reads `SelectionRequest(paths, Boolean all)` and turns it into a `Selection` once.
+  - Tests: `GitActionsTest` (real repositories) and `GitActionsPageTest` (JSON, forms with token and cookie as a browser sends them, 403 without token).
+
+### 47. Commit  ☑
 - `git commit -m <message>`; the message is not empty (else 400).
 - Nothing staged: 409.
 - Author: the Mizoine user (D38). Committer: the server's Git settings.
@@ -1234,7 +1252,21 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
   - nothing staged;
   - a failing `pre-commit` hook gives 409 with its message.
 
-### 48. Pull and push  ☐
+- *Done 2026-11-25:*
+  - `git commit -q -m <message> --author=<user>`. `CommitMessage` is never blank. Nothing staged is refused before Git runs. Hooks run; a refusing hook gives its own message.
+  - **Author (D38):** `Author.of(username, email)`; `<`, `>` and line breaks are removed, as they would end the name or the email in Git's form.
+    - `users.yaml` has an optional `email` per user (`UserEntry.email`), parsed and checked to be text.
+    - `UserEmails` (implemented by `FileUserDetailsService`, reloaded like the users) is all the Git page knows of the users.
+    - The committer is the server's own Git identity.
+  - `POST /{repository}/.git/commit` with `{"message": …}`; the page shows a message field and "Commit the staged changes" when something is staged.
+  - Tests:
+    - the commit in `git log` with author `artem <artem@example.org>` and the server as committer;
+    - nothing staged;
+    - a `pre-commit` hook that refuses;
+    - an empty message (400);
+    - the form.
+
+### 48. Pull and push  ☑
 - Pull: `git pull --ff-only`. Diverged or conflicting: 409 with Git's message; resolved by hand on the server (D37).
 - Push: `git push` of the current branch to its upstream, never `--force`. Without upstream: 409.
 - Access to the remote: the server user's SSH key or credential helper. Mizoine stores no Git passwords.
@@ -1246,6 +1278,40 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
   - what each button runs;
   - credentials on the server;
   - what stays by hand: merge, conflicts, branches.
+
+- *Done 2026-11-25:*
+  - **Pull:** `git pull --ff-only --no-rebase -q`. Never a merge or a rebase, also where the server sets `pull.rebase`. A diverged branch is refused with Git's message.
+  - **Push:** `git -c push.default=upstream push -q`: the current branch to its upstream only, never forced. Rejected when behind.
+  - Without upstream, both are refused before Git runs.
+  - **One at a time with Mizoine's writes (decided here, open since step 44):** a pull runs under the writer's lock (`RepositoryWriter.exclusively`). An upload keeps reading its body meanwhile; only its final replace waits. Push and staging change no file of the working tree and run without the lock.
+    - Tested with a "remote" whose upload-pack writes a marker and sleeps: a write started during the pull waits (thread state WAITING) and completes after it.
+    - Proven by removing the lock: the test failed.
+  - **Time limit:** a remote that does not answer (upload-pack `sleep 30; true`; Git appends the remote's path to the command) ends after the limit. JSON gives 504 `{"message": "Git did not finish within …"}`, the page shows it.
+  - `POST /{repository}/.git/pull` and `/push` (JSON content type, body may be empty); Pull and Push buttons on the page.
+  - README "Git in the browser": what each button runs, author and committer, credentials (the server user's SSH key or credential helper, SSH in batch mode), what stays by hand, the JSON API with curl. `users.example.yaml` mentions `email`.
+- *Tools for steps 46–48:*
+  - crapper: `UsersFileParser.toUser` rose to 11.1 with the email check. The check is its own method now: 8.1.
+  - dryer:
+    - the two exception handlers were one shape: now one handler, its status taken from the exception;
+    - the five JSON endpoints share `act(…)`.
+    - Left: `stage` and `unstage` at 0.81. Their signature and the annotation structure OpenAPI needs per endpoint are alike by design; merging them into one `{action}` endpoint would make the API description worse.
+  - mutator, per group of files with their test classes:
+
+    | Files | Result |
+    |---|---|
+    | `GitActions`, `Selection`, `CommitMessage`, `Author` | 25 killed |
+    | `GitController`, `GitConfig` | 4 killed; "uncovered" only the annotation texts |
+    | `SecurityConfig` | 16 killed, with the CSRF tests (`ApiClientCsrfTest`, `FileWriteTest`, …) |
+    | `UsersFileParser`, `FileUserDetailsService`, `RepositoryWriter` (first run on the whole files) | survivors in code of earlier steps, below |
+
+    - Killed with new tests (gaps from earlier steps):
+      - a replaced file keeps its permissions (`RepositoryWriter.keepPermissions`, step 30);
+      - the users are counted from 1 in messages ("User #2").
+    - Left, equivalent, and why:
+      - `UsersFileParser` `||` → `&&` on the root check: a scalar root is refused by the next check anyway;
+      - `RepositoryWriter.isInside` `>` → `>=`: a folder moved onto itself is refused as "destination exists" anyway;
+      - `isVersion` `orElse(false)` → `true`: only for a file that vanishes between two checks, a race;
+      - `copy` `read >= 0` → `> 0` and `0` → `1`: `read` returns 0 only for an empty buffer.
 
 ## Glossary
 
@@ -1265,6 +1331,7 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
 | Move | A file or folder to a new path in the same repository, in one atomic step; never overwrites (D29–D31). |
 | Git access | The grant `.git` (or `/`): the Git page and API of a repository, for the whole repository (D33). Never the `.git` folder as files. |
 | Git page | `/{repository}/.git/`: status, stage / unstage, commit, pull, push (steps 43–48). |
+| Git action | Stage, unstage, commit, pull or push from the Git page or its JSON API (`GitActions`): starts from the status, so it names only files of the status; done, or refused with the reason. |
 
 ---
 

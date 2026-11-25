@@ -118,7 +118,7 @@ public class SecurityConfig {
 	static boolean isApiClientWrite(final HttpServletRequest request) {
 		final String method = request.getMethod();
 		final boolean fileWrite = HttpMethod.PUT.matches(method) || HttpMethod.DELETE.matches(method);
-		return fileWrite && request.getHeader(HttpHeaders.AUTHORIZATION) != null || isMcpCall(request) || isMove(request);
+		return fileWrite && request.getHeader(HttpHeaders.AUTHORIZATION) != null || isJsonPost(request) || isMove(request);
 	}
 
 	/**
@@ -130,14 +130,13 @@ public class SecurityConfig {
 	}
 
 	/**
-	 * The MCP endpoint (step 33) takes JSON-RPC by POST. A cross-site form can POST, but cannot send
-	 * {@code Content-Type: application/json} (that needs CORS, which Mizoine does not allow), so JSON is required,
-	 * with or without credentials: a chat app connects without them first and needs the 401 that leads it to the
-	 * OAuth login (step 34), not a 403 from CSRF.
+	 * A POST with {@code Content-Type: application/json}: the MCP endpoint (step 33) and the Git actions (steps
+	 * 46–48). A cross-site form can POST, but cannot send JSON (that needs CORS, which Mizoine does not allow), so a
+	 * JSON POST needs no token, with or without credentials: a chat app connects to /mcp without them first and needs
+	 * the 401 that leads it to the OAuth login (step 34), not a 403 from CSRF. A form POST stays CSRF-protected.
 	 */
-	private static boolean isMcpCall(final HttpServletRequest request) {
-		return HttpMethod.POST.matches(request.getMethod()) && McpPaths.ENDPOINT.equals(request.getServletPath())
-				&& request.getContentType() != null
+	private static boolean isJsonPost(final HttpServletRequest request) {
+		return HttpMethod.POST.matches(request.getMethod()) && request.getContentType() != null
 				&& MediaType.APPLICATION_JSON.isCompatibleWith(MediaType.parseMediaType(request.getContentType()));
 	}
 

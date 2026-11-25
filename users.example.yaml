@@ -4,6 +4,8 @@
 # - password: a BCrypt hash, never the password itself. Create one with:
 #     java -jar mizoine.jar hash-password
 #
+# - email: optional; the author address of your Git commits from the Git page
+#
 # The hash below belongs to a random password nobody knows: replace it.
 users:
   - username: alice
