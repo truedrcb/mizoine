@@ -4,6 +4,7 @@ import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
@@ -96,6 +97,16 @@ public class RepositoryFiles {
 			throw new NotVisibleException(repository, List.of(FolderGrant.GIT));
 		}
 		return granted.config().root();
+	}
+
+	/**
+	 * Step 45: links for the Git page. For a path below the repository root as Git names it ({@code notes/a b.md}),
+	 * the URL of the file's page where the user may read it; empty for anything else (no grant, hidden, deleted).
+	 */
+	public Function<String, Optional<String>> fileLinks(final String user, final String repository) {
+		final GrantedRepository granted = usable(user, repository, List.of());
+		return path -> readable(granted.config(), granted.access(), segments(path))
+				.map(file -> RepositoryUrls.url(repository, segments(path), false));
 	}
 
 	/** The real path of a file the user may read. */

@@ -96,7 +96,7 @@ class RepositoryController {
 	}
 
 	@GetMapping("/{repository}")
-	@Operation(summary = "Repository without trailing slash",
+	@Operation(operationId = "repositoryRedirect", summary = "Repository without trailing slash",
 			description = "Redirects to the same URL with a trailing slash (folder URLs end with '/'). "
 					+ "Done for every valid name, so it reveals nothing about which repositories exist.")
 	@ApiResponse(responseCode = "302", description = "Redirect to /{repository}/; or " + ApiTexts.LOGIN_REDIRECT,

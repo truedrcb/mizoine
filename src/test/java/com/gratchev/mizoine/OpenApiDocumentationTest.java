@@ -68,10 +68,11 @@ class OpenApiDocumentationTest {
 							+ "AI agents connect to the MCP endpoint /mcp (Model Context Protocol, Streamable HTTP, POST with "
 							+ "JSON-RPC): tools list_repositories, list_folder, read_file, write_file, create_folder, delete, move, "
 							+ "with the same grants as this API. It is not listed as an operation either. "
-							+ "With OAuth configured (mizoine.oauth.clients), /mcp also takes Bearer tokens from Mizoine's own "
+							+ "Where the server has OAuth set up, /mcp also takes Bearer tokens from Mizoine's own "
 							+ "OAuth server for chat apps: /.well-known/oauth-protected-resource/mcp (RFC 9728), "
 							+ "/.well-known/oauth-authorization-server, /oauth2/authorize and /oauth2/token (authorization code "
-							+ "with PKCE, one configured client per chat app); served by Spring Security, so not listed as operations."),
+							+ "with PKCE, one registered client per chat app). These are standard OAuth endpoints, not listed as "
+							+ "operations either."),
 			// relative: the same description fits every installation (e.g. behind nginx)
 			servers = @Server(url = "/", description = "This Mizoine server"),
 			security = @SecurityRequirement(name = BASIC_AUTH))
@@ -100,9 +101,9 @@ class OpenApiDocumentationTest {
 				.andExpect(jsonPath("$.info.title").value("Mizoine"))
 				// served by a resource handler, which springdoc does not list as an operation
 				.andExpect(jsonPath("$.info.description").value(containsString("/ui/")))
-				// the MCP endpoint for agents (step 33) is a servlet, not a controller, so not listed either
+				// the MCP endpoint for agents is a servlet, not a controller, so not listed either
 				.andExpect(jsonPath("$.info.description").value(containsString("/mcp")))
-				// step 34: OAuth for chat apps, served by Spring Security's filters, not controllers
+				// OAuth for chat apps, served by Spring Security's filters, not controllers
 				.andExpect(jsonPath("$.info.description").value(containsString("/.well-known/oauth-protected-resource")));
 	}
 
@@ -114,6 +115,31 @@ class OpenApiDocumentationTest {
 		final String[] methodAndPath = endpoint.split(" ");
 		mockMvc.perform(apiDocs(API_DOCS_PATH))
 				.andExpect(jsonPath("$.paths['" + methodAndPath[1] + "']." + methodAndPath[0] + ".summary").isNotEmpty());
+	}
+
+	/**
+	 * The description is for API users: what the API does, not how Mizoine is developed or configured. No dev
+	 * steps or decision ids (they live in DEV.md), no setting names, no frameworks.
+	 */
+	@Test
+	void describesTheApiNotItsDevelopment() throws Exception {
+		final String description = mockMvc.perform(apiDocs(API_DOCS_PATH)).andReturn().getResponse()
+				.getContentAsString(StandardCharsets.UTF_8);
+
+		assertThat(description)
+				.doesNotContainPattern("(?i)\\bsteps? \\d")
+				.doesNotContainPattern("\\b[DT]\\d+(\\.\\d+)?\\b")
+				.doesNotContain("DEV.md", "BACKLOG")
+				.doesNotContainPattern("\\bmizoine\\.[a-z]")
+				.doesNotContain("Spring", "springdoc", "Thymeleaf");
+	}
+
+	@Test
+	void operationIdsSayWhatTheOperationDoes() throws Exception {
+		mockMvc.perform(apiDocs(API_DOCS_PATH))
+				.andExpect(jsonPath("$.paths['/{repository}/.git/'].get.operationId").value("gitStatus"))
+				.andExpect(jsonPath("$.paths['/{repository}/.git'].get.operationId").value("gitRedirect"))
+				.andExpect(jsonPath("$.paths['/{repository}'].get.operationId").value("repositoryRedirect"));
 	}
 
 	@Test

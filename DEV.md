@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-24): steps 0–34 and 37–44 done (829 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 45–48 (Git in the browser; T4, D33–D38 decided). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-24): steps 0–34 and 37–45 done (848 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 46–48 (Git in the browser; T4, D33–D38 decided). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -1166,17 +1166,52 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
       - `RepositoryAccess.canReadFile`: a *file* whose path equals a grant (a file `public` next to the granted folder `public`) was untested. New test `aFileWhosePathIsAGrantIsNotReadable`.
       - Left: `visibleChildren` `>` → `>=` (code from step 16) is an equivalent mutant. With equal sizes, a grant starting with the folder *is* the folder, handled by the branch above.
 
-### 45. The Git page  ☐
+### 45. The Git page  ☑
 - `mizoine.git.timeout` (default 60 s) and the `GitCommands` bean, with the server's environment (moved from step 44).
 - `GET /{repository}/.git/`:
   - the branch, ahead / behind its upstream;
   - two lists, staged and not staged, each file with its kind;
-  - the forms for the actions of steps 46–48.
 - JSON with `Accept: application/json` (D6).
 - A server page like the folder page (Thymeleaf, D35): it works without JavaScript and on the phone, under the strict CSP.
 - File names link to the file's page where the user may read it.
 - OpenAPI: `@Tag("Git")`, every status.
 - Tests: page and JSON for a temporary repository with changes; "not a Git repository".
+
+- *Done 2026-11-25:*
+  - `mizoine.git.timeout` (default 60 s). `GitConfig` makes the `GitCommands` bean: `git` from the `PATH`, the server's environment, 16 MB output limit.
+  - **Domain:** `GitStatus.staged()`, `unstaged()`, `conflicts()`, `isClean()`. A file changed again after staging is in both of the first two lists; a conflict is only in its own list.
+  - **View:** `GitStatusView` (pure) gives the page's text.
+    - the branch, or "detached HEAD";
+    - the upstream: "origin/main: 2 ahead, 3 behind", "… up to date", "… gone", "no upstream";
+    - lines of kind, path, old name and link.
+    - The old name belongs only to the side that is the rename or copy: changed again after staging, the not-staged line has none.
+  - **Links:** `RepositoryFiles.fileLinks(user, repository)` gives the file's URL by the same rule as reading (`readable`). None for a user with `.git` alone, for hidden names, for deleted files.
+  - **Controller:** `GET /{repository}/.git/` as HTML (`git.html`, server page, no JavaScript) or JSON (`GitStatus`). A folder that is not the top of a working tree: the page says so, JSON gives 409 (D34).
+    - Git failing (not installed, time limit) gives the default error page, 500, no details. Steps 46–48 add Git's messages for the actions.
+  - **Moved to steps 46–48:** the forms for the actions, each with its own step.
+  - README: "Git in the browser", with the "dubious ownership" case (`safe.directory`).
+  - Tests:
+    - `GitStatusTest`, `GitStatusViewTest` (pure);
+    - `GitStatusPageTest`: real repositories with staged and not staged changes, rename, deletion, new file, UTF-8 and spaces; links for artem, none for Git access alone; JSON; clean; not a Git repository;
+    - `MizoinePropertiesTest`.
+  - Tools:
+    - crapper: nothing new above 7;
+    - dryer: no candidates;
+    - mutator: 33 killed, 1 survived. The survivor: `ahead == 0 && behind == 0` → `||` wrote "up to date" for "0 ahead, 1 behind". Killed with the one-sided cases.
+    - "Uncovered" only the text concatenations in the OpenAPI annotations, which are not executed.
+  - Untested: the 500 when Git fails on the page (Spring's default error handling; Git missing is tested in `GitCommandsTest`).
+
+- *2026-11-25, OpenAPI and README reviews:*
+  - OpenAPI: the descriptions say what an endpoint does, with no dev steps, decision ids, setting or framework names. `OpenApiDocumentationTest.describesTheApiNotItsDevelopment` checks it.
+    - Operation ids `gitStatus`, `gitRedirect`, `repositoryRedirect`.
+    - Field descriptions on all JSON schemas.
+    - The browser's CSRF header corrected to `X-XSRF-TOKEN`.
+  - README:
+    - the settings table complete (`public-url`, `oauth.clients`, `git.timeout`);
+    - the reserved names complete;
+    - Git needed for the build;
+    - the intro describes today's Mizoine.
+  - **Found by the README check:** `oauth2` was not a reserved repository name. With OAuth on, such a repository would have shared its URLs with `/oauth2/authorize` and `/oauth2/token`. Now reserved. The parser's message lists all reserved names from the one set (`RepositoryNames.reserved()`) instead of a hand-written part of them.
 
 ### 46. Stage and unstage  ☐
 - Stage: `git add -- <paths>`, or `git add --all`. Unstage: `git restore --staged -- <paths>`, or everything. Before the first commit, `git rm --cached`.

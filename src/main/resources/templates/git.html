@@ -4,5 +4,29 @@
 <body>
 	<h1><span th:text="${repository}">repository</span> Git</h1>
 	<p><a href="../">Files</a></p>
+	<p th:if="${git == null}">This repository's folder is not the top of a Git working tree: there is no Git status to show.</p>
+	<th:block th:if="${git != null}">
+		<p>Branch <strong th:text="${git.branch}">main</strong>, <span th:text="${git.upstream}">no upstream</span>.</p>
+		<p th:unless="${git.hasCommits}">No commits yet.</p>
+		<p th:if="${git.clean}">Nothing to commit: the working tree is clean.</p>
+		<th:block th:unless="${git.conflicts.isEmpty()}">
+			<h2>Conflicts</h2>
+			<p>To be resolved by hand on the server.</p>
+			<ul><li th:each="line : ${git.conflicts}" th:insert="~{:: line(${line})}"></li></ul>
+		</th:block>
+		<th:block th:unless="${git.staged.isEmpty()}">
+			<h2>Staged</h2>
+			<ul><li th:each="line : ${git.staged}" th:insert="~{:: line(${line})}"></li></ul>
+		</th:block>
+		<th:block th:unless="${git.unstaged.isEmpty()}">
+			<h2>Not staged</h2>
+			<ul><li th:each="line : ${git.unstaged}" th:insert="~{:: line(${line})}"></li></ul>
+		</th:block>
+	</th:block>
+	<!-- one file: its kind, its name (a link where the user may read it), the old name of a rename or copy -->
+	<th:block th:if="false"><th:block th:fragment="line(line)"><span th:text="${line.kind}">modified</span>
+		<a th:if="${line.href != null}" th:href="${line.href}" th:text="${line.path}">path</a><span
+			th:if="${line.href == null}" th:text="${line.path}">path</span><span th:if="${line.renamedFrom != null}"
+			th:text="| (from ${line.renamedFrom})|"></span></th:block></th:block>
 </body>
 </html>

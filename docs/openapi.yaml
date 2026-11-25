@@ -8,11 +8,12 @@ info:
     \ files, not API methods. AI agents connect to the MCP endpoint /mcp (Model Context\
     \ Protocol, Streamable HTTP, POST with JSON-RPC): tools list_repositories, list_folder,\
     \ read_file, write_file, create_folder, delete, move, with the same grants as\
-    \ this API. It is not listed as an operation either. With OAuth configured (mizoine.oauth.clients),\
-    \ /mcp also takes Bearer tokens from Mizoine's own OAuth server for chat apps:\
-    \ /.well-known/oauth-protected-resource/mcp (RFC 9728), /.well-known/oauth-authorization-server,\
-    \ /oauth2/authorize and /oauth2/token (authorization code with PKCE, one configured\
-    \ client per chat app); served by Spring Security, so not listed as operations."
+    \ this API. It is not listed as an operation either. Where the server has OAuth\
+    \ set up, /mcp also takes Bearer tokens from Mizoine's own OAuth server for chat\
+    \ apps: /.well-known/oauth-protected-resource/mcp (RFC 9728), /.well-known/oauth-authorization-server,\
+    \ /oauth2/authorize and /oauth2/token (authorization code with PKCE, one registered\
+    \ client per chat app). These are standard OAuth endpoints, not listed as operations\
+    \ either."
   version: "1.0"
 servers:
 - url: /
@@ -99,7 +100,7 @@ paths:
         \ never a part. The folder must exist (folders are created explicitly). If-Match:\
         \ <ETag> writes only if the file is unchanged since it was read; If-None-Match:\
         \ * creates only. API clients with an Authorization header need no CSRF token;\
-        \ the browser UI (session cookie) sends X-CSRF-TOKEN."
+        \ the browser UI (session cookie) sends X-XSRF-TOKEN."
       operationId: put
       parameters:
       - name: repository
@@ -145,7 +146,7 @@ paths:
         "412":
           description: If-Match or If-None-Match not met; nothing written
         "413":
-          description: Larger than mizoine.max-file-size; nothing written
+          description: Larger than the server's maximum file size; nothing written
         "415":
           description: A folder URL with a request body
         "500":
@@ -263,7 +264,7 @@ paths:
       description: "Redirects to the same URL with a trailing slash (folder URLs end\
         \ with '/'). Done for every valid name, so it reveals nothing about which\
         \ repositories exist."
-      operationId: withoutTrailingSlash
+      operationId: repositoryRedirect
       parameters:
       - name: repository
         in: path
@@ -284,8 +285,9 @@ paths:
       tags:
       - Git
       summary: Git page without trailing slash
-      description: "Redirects to /{repository}/.git/ for users with Git access (D5)."
-      operationId: withoutTrailingSlash_1
+      description: "Redirects to /{repository}/.git/ for users with Git access (folder\
+        \ URLs end with '/')."
+      operationId: gitRedirect
       parameters:
       - name: repository
         in: path
@@ -303,16 +305,21 @@ paths:
           description: "Unknown repository, or no Git access to it: deliberately the\
             \ same answer"
         "500":
-          description: Repository configured wrongly (e.g. missing root folder)
+          description: Repository configured wrongly (e.g. missing root folder); or
+            Git failed
   /{repository}/.git/:
     get:
       tags:
       - Git
-      summary: Git page of a repository
-      description: "The page for Git in the browser: status, stage and unstage, commit,\
-        \ pull and push (steps 43–48). Only for users with Git access: grant '.git'\
-        \ or '/' in the repository file."
-      operationId: page
+      summary: Git status of a repository
+      description: "The Git status: branch, upstream with ahead and behind, the staged\
+        \ and the not staged changes, conflicts; an HTML page (default) or JSON when\
+        \ asked for. File names link to their pages where the user may read them.\
+        \ Only for users with Git access: grant '.git' or '/' in the repository file;\
+        \ the status covers the whole repository. A repository whose folder is not\
+        \ the top of a Git working tree has no status: the page says so, JSON gives\
+        \ 409."
+      operationId: gitStatus
       parameters:
       - name: repository
         in: path
@@ -322,9 +329,12 @@ paths:
           type: string
       responses:
         "200":
-          description: The Git page
+          description: "The Git page, or the status as JSON"
           content:
             text/html: {}
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitStatus"
         "302":
           description: "Browser not logged in: redirect to the login page"
         "401":
@@ -332,8 +342,12 @@ paths:
         "404":
           description: "Unknown repository, or no Git access to it: deliberately the\
             \ same answer"
+        "409":
+          description: The repository's folder is not the top of a Git working tree
+            (JSON only)
         "500":
-          description: Repository configured wrongly (e.g. missing root folder)
+          description: Repository configured wrongly (e.g. missing root folder); or
+            Git failed
   /:
     get:
       tags:
@@ -362,50 +376,149 @@ components:
   schemas:
     FolderListing:
       type: object
+      description: The subfolders and files of a folder that the user may see
       properties:
         repository:
           type: string
+          description: Repository name
         path:
           type: string
+          description: "The folder, from the repository root, with leading and trailing\
+            \ '/' ('/' = the root)"
         folders:
           type: array
+          description: "Names of the visible subfolders, sorted"
           items:
             type: string
         files:
           type: array
+          description: "Names of the visible files, sorted; none in folders above\
+            \ a granted folder"
           items:
             type: string
     RepositoryProblem:
       type: object
+      description: A repository that is configured wrongly
       properties:
         repository:
           type: string
+          description: Repository name
         error:
           type: string
+          description: Always 'repository not available'
         file:
           type: string
+          description: The repository file to fix; only for users with access to the
+            whole repository
         problems:
           type: array
+          description: What is wrong; only for users with access to the whole repository
           items:
             type: string
+    Change:
+      type: object
+      properties:
+        path:
+          type: string
+          description: "From the repository root, with '/'"
+        renamedFrom:
+          type:
+          - string
+          - "null"
+          description: The old path of a renamed or copied file; null otherwise
+        staged:
+          type: string
+          description: "The change in the index: what the next commit takes"
+          enum:
+          - UNCHANGED
+          - MODIFIED
+          - TYPE_CHANGED
+          - ADDED
+          - DELETED
+          - RENAMED
+          - COPIED
+          - UNTRACKED
+          - CONFLICT
+        unstaged:
+          type: string
+          description: "The change in the working tree, not staged yet"
+          enum:
+          - UNCHANGED
+          - MODIFIED
+          - TYPE_CHANGED
+          - ADDED
+          - DELETED
+          - RENAMED
+          - COPIED
+          - UNTRACKED
+          - CONFLICT
+    GitStatus:
+      type: object
+      description: "The Git status of a repository, as 'git status' gives it"
+      properties:
+        branch:
+          type:
+          - string
+          - "null"
+          description: The current branch; null for a detached HEAD
+        hasCommits:
+          type: boolean
+          description: false before the first commit
+        upstream:
+          $ref: "#/components/schemas/Upstream"
+          description: The branch it pulls from and pushes to; null if none is set
+        changes:
+          type: array
+          description: "The changed files in Git's order; paths from the repository\
+            \ root, with '/'"
+          items:
+            $ref: "#/components/schemas/Change"
+        clean:
+          type: boolean
+          description: Nothing to commit and nothing changed
+    Upstream:
+      type: object
+      properties:
+        name:
+          type: string
+          description: e.g. origin/main
+        gone:
+          type: boolean
+          description: The upstream branch no longer exists; ahead and behind are
+            then 0
+        ahead:
+          type: integer
+          format: int32
+          description: Commits here that the upstream does not have
+        behind:
+          type: integer
+          format: int32
+          description: "Commits in the upstream that are not here: pull first"
     Repository:
       type: object
       properties:
         name:
           type: string
+          description: "Repository name, also its URL: /{name}/"
         available:
           type: boolean
+          description: false if the repository is configured wrongly
         problems:
           type: array
+          description: "What is wrong; only for users with access to the whole repository,\
+            \ otherwise left out"
           items:
             type: string
     StartPage:
       type: object
+      description: The logged-in user and the repositories they can access
       properties:
         user:
           type: string
+          description: Username of the logged-in user
         repositories:
           type: array
+          description: Sorted by name; empty without access to any repository
           items:
             $ref: "#/components/schemas/Repository"
   securitySchemes:

@@ -61,6 +61,20 @@ class MizoinePropertiesTest {
 	}
 
 	@Test
+	void gitHasOneMinuteByDefault() {
+		runner.withPropertyValues("mizoine.users-file=users.yaml")
+				.run(context -> assertThat(context.getBean(MizoineProperties.class).git().timeout())
+						.isEqualTo(Duration.ofMinutes(1)));
+	}
+
+	@Test
+	void bindsGitTimeout() {
+		runner.withPropertyValues("mizoine.users-file=users.yaml", "mizoine.git.timeout=5m")
+				.run(context -> assertThat(context.getBean(MizoineProperties.class).git().timeout())
+						.isEqualTo(Duration.ofMinutes(5)));
+	}
+
+	@Test
 	void bindsMaxFileSize() {
 		runner.withPropertyValues("mizoine.users-file=users.yaml", "mizoine.max-file-size=1GB")
 				.run(context -> assertThat(context.getBean(MizoineProperties.class).maxFileSize())

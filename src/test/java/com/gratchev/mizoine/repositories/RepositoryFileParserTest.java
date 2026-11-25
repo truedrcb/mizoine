@@ -224,6 +224,14 @@ class RepositoryFileParserTest {
 	}
 
 	@Test
+	void theMessageNamesEveryReservedName() throws IOException {
+		final Path file = write("oauth2.yaml", "path: data\naccess: {}\n");
+
+		assertThatThrownBy(() -> parser.parse(file))
+				.hasMessageContaining("default-ui.css, error, favicon.ico, login, logout, mcp, oauth2, ui");
+	}
+
+	@Test
 	void malformedYamlGivesPositionButNotContent() throws IOException {
 		final Path file = notes("path: data\naccess:\n  artem: [s3cret-folder\n");
 
@@ -277,7 +285,7 @@ class RepositoryFileParserTest {
 
 	@ParameterizedTest
 	@ValueSource(strings = {"", ".", "..", ".git", "a/b", "a\\\\b", "a b", "a%2fb", "login", "logout", "error",
-			"default-ui.css", "favicon.ico", "ui", "mcp"})
+			"default-ui.css", "favicon.ico", "ui", "mcp", "oauth2"})
 	void invalidNames(final String name) {
 		assertThat(RepositoryNames.isValid(name)).isFalse();
 	}

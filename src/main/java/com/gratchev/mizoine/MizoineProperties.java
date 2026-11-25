@@ -33,6 +33,7 @@ import jakarta.validation.constraints.Positive;
  * @param publicUrl the address users and chat apps reach Mizoine at, e.g. {@code https://mizoine.example.org}
  *            ({@code mizoine.public-url}); needed for OAuth, because behind a proxy the request's host may be wrong
  * @param oauth the OAuth clients for chat apps ({@code mizoine.oauth.clients}, step 34); OAuth is off without any
+ * @param git Git in the browser ({@code mizoine.git.*}, steps 43–48)
  */
 @Validated
 @ConfigurationProperties("mizoine")
@@ -42,7 +43,8 @@ public record MizoineProperties(
 		@NotBlank @DefaultValue(".") String repositoriesDir,
 		@NotNull @DefaultValue("100MB") DataSize maxFileSize,
 		String publicUrl,
-		@Valid @DefaultValue OAuth oauth) {
+		@Valid @DefaultValue OAuth oauth,
+		@Valid @DefaultValue Git git) {
 
 	/** {@code mizoine.users-file}, relative to the working directory. */
 	public Path usersFilePath() {
@@ -88,6 +90,10 @@ public record MizoineProperties(
 	 * @param maxFailures failed logins after which the address is blocked
 	 * @param window how long failures are remembered, and how long the block lasts after the last failure
 	 */
+	/** @param timeout how long one Git command may take (a pull or push waits for the remote), then it is ended */
+	public record Git(@NotNull @DefaultValue("60s") Duration timeout) {
+	}
+
 	public record LoginLimit(
 			@Positive @DefaultValue("5") int maxFailures,
 			@NotNull @DefaultValue("5m") Duration window) {

@@ -63,7 +63,7 @@ class FileWriteController {
 					+ "or the new content, never a part. The folder must exist (folders are created explicitly). "
 					+ "If-Match: <ETag> writes only if the file is unchanged since it was read; If-None-Match: * "
 					+ "creates only. API clients with an Authorization header need no CSRF token; the browser UI "
-					+ "(session cookie) sends X-CSRF-TOKEN.")
+					+ "(session cookie) sends X-XSRF-TOKEN.")
 	@ApiResponse(responseCode = "201", description = "Created; Location (and for files the ETag)", content = @Content)
 	@ApiResponse(responseCode = "204", description = "File replaced (ETag of the new content), or folder exists already",
 			content = @Content)
@@ -75,7 +75,7 @@ class FileWriteController {
 			content = @Content)
 	@ApiResponse(responseCode = "412", description = "If-Match or If-None-Match not met; nothing written",
 			content = @Content)
-	@ApiResponse(responseCode = "413", description = "Larger than mizoine.max-file-size; nothing written",
+	@ApiResponse(responseCode = "413", description = "Larger than the server's maximum file size; nothing written",
 			content = @Content)
 	@ApiResponse(responseCode = "415", description = "A folder URL with a request body", content = @Content)
 	@ApiResponse(responseCode = "500", description = "Repository configured wrongly", content = @Content)

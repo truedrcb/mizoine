@@ -59,7 +59,7 @@ public class RepositoryFileParser {
 		if (!RepositoryNames.isValid(name)) {
 			throw new RepositoryFileException("Repository file " + file + ": '" + fileName
 					+ "' does not give a valid repository name (<name>.yaml; letters, digits, '.', '_', '-';"
-					+ " not starting with '.'; not login, logout, error)");
+					+ " not starting with '.'; not " + RepositoryNames.reserved() + ")");
 		}
 		return name;
 	}
