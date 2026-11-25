@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-25): steps 0–34 and 37–48 done (907 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 49–54 (stable URLs, postponed), 55–60 (search; T5 and D47–D63 decided, D52 and D55 postponed), 61–65 (folder tags and statuses; D64–D71 decided, D72 postponed). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-25): steps 0–34, 37–48 and 55–58 done (969 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor, search without a reindexing request yet). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 49–54 (stable URLs, postponed), 59–60 (search for agents, index state and reindexing; T5 and D47–D63 decided, D52 and D55 postponed), 61–65 (folder tags and statuses; D64–D71 decided, D72 postponed). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -1428,7 +1428,7 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
 - Every user who may read something in a repository may search it; the results are only what that user may read (D47). A repository the user cannot see is 404, as everywhere (D2). Every other path under `.search` is 404.
 - `.search` is a technical address only, never a grant: like `.id`, a dot name cannot be a real file or folder (D3).
 
-### 55. Text analysis  ☐
+### 55. Text analysis  ☑
 - Lucene `core`, `analysis-common`, `queryparser`, `highlighter` (10.5.x).
 - One analyzer per field (D51):
   - `exact`: words, lower case, and every spelling of a letter folded to one:
@@ -1454,7 +1454,7 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
   - `bericht-2026.pdf` is found by `bericht-2026.pdf`, `bericht` and `pdf`; `Übersicht.md` by `uebersicht.md`;
   - `MeetingNotes.md` by `meeting notes`.
 
-### 56. The index  ☐
+### 56. The index  ☑
 - **What (D50):**
   - text files (UTF-8, no NUL bytes, up to 2 MB, as D21): file name, path, title (a Markdown file's first heading, else the name) and content;
   - all other files (PDF, pictures, email files, …): name and path only. Their text comes from the import layer (BACKLOG §4) as a Markdown file beside them, indexed like any text file; the search result is that Markdown file, which links to its source;
@@ -1506,7 +1506,7 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
   - a deleted index becomes `not-indexed`;
   - a binary file is found by its name only, a folder by its name.
 
-### 57. Searching, ranked and filtered  ☐
+### 57. Searching, ranked and filtered  ☑
 - **Query (D53):** words, `"a phrase"`, `-without`, `prefix*` (Lucene's simple query syntax, no field or regex syntax). At most 200 characters.
 - **Order:** BM25. A match in the name or title ranks above one in the content; `exact` above stemmed.
 - **Strict, then loose (D53):**
@@ -1525,12 +1525,67 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
   - another user's folder, a repository without any grant, a hidden folder, a grant removed while running, a link out of the grants: never in the results, nor in their number;
   - ranking (title above content); the three levels of strictness; the query length limit.
 
-### 58. Search page and API  ☐
+### 58. Search page and API  ☑
 - `GET /{repository}/.search?q=…` and `GET /.search?q=…`: HTML (a search box, the results with title, path and snippet, links to the documents) or JSON.
 - A search box on the start page (all repositories) and on each folder page (this repository).
 - The search terms are part of the URL, so a search can be bookmarked and opened in several windows (BACKLOG §3).
 - OpenAPI: `@Operation`, parameters `q`, `limit`, `offset`; 200, 400 (empty or too long query), 401, 404, 500.
 - README: a section "Search": who finds what, the query syntax, German spellings, the languages, the settings, and the index state: after installing or upgrading, reindex where the state says so; deleting `search-index/` is always safe.
+
+- *Done 2026-11-25 (steps 55–58):*
+  - **Lucene 10.5.1** (`lucene-core`, `lucene-analysis-common`, `lucene-highlighter`); no query parser: `SearchQuery` reads the query once, `SearchQueries` builds Lucene's queries with its `QueryBuilder`.
+  - **Analysis (step 55), `SearchAnalysis`:**
+    - one analyzer per field (`exact`, `title`, one per language, `tokens`, `name`, `nameparts`);
+    - folding: `ё` → `е` as a char filter; lower case, accents (`ASCIIFoldingFilter`), German spellings (`GermanNormalizationFilter`); French elision;
+    - stemmers per `Language`: Porter (en), light (de, fr, ru, es, it, pt, sv). Unknown codes stop the startup with the known ones named.
+    - `ANALYSIS_VERSION` 1; the format names the sorted languages: `a1-de-en-fr-ru`. Some stems look odd (German `artem` → `art`, French `meetings` → `meting`) but do no harm: queries are analyzed the same way.
+  - **Found on the way:** `TextFile` read a valid UTF-8 file with a NUL byte as text, against D21. Fixed at the cause (`TextFileTest.aNulByteIsNotText`): binary files are no longer text for the Markdown page and `read_file` either.
+  - **Index (step 56):**
+    - `RepositoryIndex` per repository in `<index-dir>/<repository>/<format>/`, format `lucene10-a1-…` (`IndexFormat`); commit data records the format and Lucene's version.
+    - `open` looks at the index folder only; it has no access to the repository's root at all (structural, D61).
+    - `reindex` builds `<format>.building` beside the old index, which answers meanwhile; under the lock it applies the changes made during the walk, switches, deletes the other folders. A failure keeps the old index: `failed` with the reason.
+    - `update` compares the stored versions (the ETag of each file) with the files; `changed` re-reads one path with everything below it (a write, a new folder, a delete, either side of a move).
+    - `IndexDocuments`: files and folders by name (`name` whole, `nameparts`), title (first Markdown heading, else the name), text files' content in the text fields and `tokens`. The index keeps no content: snippets read the file after the hit was checked.
+    - Hidden names and links are never indexed; a linked file is found at its own place.
+    - Mizoine's own changes: `RepositoryFiles` publishes a `RepositoryChange` (the real path) after each write, new folder, delete and move; the search layer listens (`SearchConfig.IndexUpdates`). A failing index update is logged, never a failed write. The files layer does not know search.
+    - `mizoine.search.enabled=false`: no beans, no index folder, the addresses are 404 (`@SearchEnabled`, one condition for configuration and controller; `SearchDisabledTest` found the controller still being scanned).
+    - At startup, one warning per repository whose index is not `indexed`.
+  - **Searching (step 57), `Search`:**
+    - one `MultiReader` over the indexes of all searched repositories: one ranking, one count;
+    - field weights: `name` 8, `nameparts` and `title` 4, `tokens` 3, `exact` 2, languages 1;
+    - levels: all words, any word, similar spelling (`FuzzyQuery` on `exact` and `nameparts`, words of 4+ letters, prefix of one letter kept);
+    - permissions: `RepositoryFiles.searchArea(s)` gives the granted folders; the query filters on repository and path prefixes; `RepositoryFiles.findable` checks each hit with the rules of reading (links followed) before it is shown. A file deleted by hand since the indexing is dropped (`aFileGoneSinceTheIndexingIsNotShown`);
+    - folders only on the way to a grant (D4) are not searched;
+    - snippets: Lucene's highlighter on the words as written, else on a language's forms, else on `tokens`; returned as plain-text parts, so the page never needs unescaped HTML.
+  - **Page and API (step 58), `SearchController`:** `GET /{repository}/.search` (`searchRepository`) and `GET /.search` (`searchAllRepositories`), HTML (D6 default; without `q` the search box) or JSON; 400 with the message, 404 without a grant, 503 with the states when no index can answer. Search boxes on the start page and on every folder page.
+  - Enum values in the API (`not-indexed`, `all-words`) come from one interface, `ApiCode` (dryer found the two copies).
+  - **Not yet usable on a live server:** without step 60 there is no request that builds an index, so every repository answers 503 `not-indexed` until then. The startup warning says only that a reindexing is needed; step 60 adds the request to it.
+  - **Found by the mutator:** a repository root that is itself a symbolic link was indexed as empty: `walkFileTree` follows no link, also not its start. The walk now starts at the root's real place (`aRootThatIsALinkIsIndexedWhereItLeads`).
+  - **Untested branches** (disk errors and races; no honest test):
+    - `RepositoryIndex`: `IOException` in `update`, `changed`, `known`, `closeQuietly`, `deleteQuietly`, listing the index folder; `lease` failing to acquire.
+    - `RepositoryIndex.reindex` while another reindexing of the same index runs, and changes arriving during its walk (`pending`): a race between two requests; step 60 runs reindexings in the background and will test the "not twice".
+    - `IndexDocuments.walk`: a repository root or start path that vanishes between the check and the walk.
+    - `SearchAnalysis.terms`, `Snippets`: `IOException` and invalid offsets while analyzing a `String` (cannot happen).
+    - `Search.release`: closing a lease fails.
+    - `SearchConfig.IndexUpdates.changed`: an index that fails to take a change (a disk error after the write); the startup warning's reason part (only states with a reason: an index of another format at startup).
+- *Tools for steps 55–58:*
+  - crapper: every new or changed method below 10 (highest `SearchQuery.parse`, 8.0).
+  - dryer, over all production code: `IndexStatus` and `Strictness` named their values the same way → one interface `ApiCode` with the rule. Left: the two `GitController` pairs, as before (step 48).
+  - mutator, per group with its test classes:
+
+    | Files | First run | After |
+    |---|---|---|
+    | search core (analysis, index, queries, snippets, search) | 88 killed, 24 survived, 3 uncovered | all killed but 4 equivalent (below) |
+    | `SearchController`, `SearchConfig` | 7 killed; uncovered only annotation texts | the same |
+    | `TextFile`, `RepositoryAccess` | 35 killed, 3 survived | 37 killed, 1 equivalent (below) |
+    | `RepositoryFiles` | 11 killed, 3 survived | 2 were Git code, killed by the Git page tests; 1 dead check removed |
+
+    - Killed with new tests: a 4-letter word spelled loosely, an 8-letter word with two letters wrong, the first letter kept; a grant `public` is no grant for `publicity/`; a changed folder leaves `projects-old/` alone; the prefix of a whole name (`bericht-20*`); a lone `*` asks nothing (the check was not dead: as an empty prefix of the whole-name field it found everything); snippet parts at the start and end of a passage; neighbouring passages stay apart; a NUL byte as the first byte; an update after a whole folder is gone; an unreadable older index; a failed first reindexing has nothing to search.
+    - Removed as dead: the `asks` flag of `SearchQueries.query` (a query that asks nothing finds nothing); the root check in `RepositoryFiles.findable` (search never asks for the root); the link check of a path's last part (the walk does not follow it).
+    - Left, equivalent, and why:
+      - `IndexDocuments.indexable`, `i = 1 → 0` and `< → <=`: the root is already its real path, and the walk does not follow a last part that is a link;
+      - `RepositoryIndex.reindex`, the "searchable" of the state while a reindexing runs: only visible during the walk (the race above);
+      - `RepositoryAccess.visibleChildren` `> → >=` (step 21 code): a grant as long as the folder is the folder itself, which the branch above already answered.
 
 ### 59. Search for agents (MCP)  ☐
 - MCP tool `search(query, repository?, limit?)`: the same search, as the agent user. Results: path, title, snippet; then `read_file` reads the document.
@@ -1662,6 +1717,8 @@ Builds on steps 55–60: the search index knows the tags, so the vocabulary is o
 | Permalink | `/{repository}/.id/{id}`: leads to the object with this short ID, wherever it is now (step 50). |
 | Search index | Lucene's index of one repository's files, outside the repositories; derived from the files, may be deleted, built anew on request (D48, D60). |
 | Index state | `not-indexed`, `needs-reindexing`, `reindexing`, `indexed` or `failed`, with the dates of the index, the newest file and the last commit (D49, D59). |
+| Search area | Where a user may search in a repository: the granted folders, inside which everything may be read (`RepositoryFiles.SearchArea`, D54). |
+| Strictness | How a search found its results: `all-words`, else `any-word`, else `similar-spelling`, else `none` (D53). |
 | Tag | A word given to a folder, kept in its `.tags` file (D64–D66); `key:value` tags such as `status:open` hold one value per key (D67). Tags of files: later (D72). |
 | `.tags` | The hidden plain-text file of a folder with the folder's own tags (D64, D65). |
 

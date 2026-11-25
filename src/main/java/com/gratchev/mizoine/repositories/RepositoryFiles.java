@@ -4,6 +4,7 @@ import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -55,10 +56,18 @@ public class RepositoryFiles {
 
 	private final RepositoryRegistry registry;
 	private final RepositoryWriter writer;
+	private final Consumer<RepositoryChange> changes;
 
 	public RepositoryFiles(final RepositoryRegistry registry, final RepositoryWriter writer) {
+		this(registry, writer, change -> { });
+	}
+
+	/** @param changes told of every write, new folder, delete and move, after it is done (step 56) */
+	public RepositoryFiles(final RepositoryRegistry registry, final RepositoryWriter writer,
+			final Consumer<RepositoryChange> changes) {
 		this.registry = registry;
 		this.writer = writer;
+		this.changes = changes;
 	}
 
 	/** A path below a repository as text ({@code knowledge/ideas.md}, {@code inbox/topic/}, {@code /}) → segments. */
@@ -109,6 +118,60 @@ public class RepositoryFiles {
 				.map(file -> RepositoryUrls.url(repository, segments(path), false));
 	}
 
+	/**
+	 * Step 57, D54: where a user may search in a repository: the granted folders, inside which everything may be
+	 * read. Folders above a grant show only the way down (D4) and are not searched.
+	 *
+	 * @param folders path segments of the granted folders; an empty list for the whole repository
+	 */
+	public record SearchArea(String repository, Path root, List<List<String>> folders) {
+
+		public boolean wholeRepository() {
+			return folders.stream().anyMatch(List::isEmpty);
+		}
+	}
+
+	/** @throws NotVisibleException without a grant; MisconfiguredException for a repository with problems */
+	public SearchArea searchArea(final String user, final String repository) {
+		final GrantedRepository granted = usable(user, repository, List.of());
+		return new SearchArea(repository, granted.config().root(), granted.access().readableFolders());
+	}
+
+	/** @return where the user may search in every repository: those with a file grant and without problems */
+	public List<SearchArea> searchAreas(final String user) {
+		return registry.all().stream()
+				.filter(config -> config.problems().isEmpty())
+				.map(config -> new SearchArea(config.name(), config.root(), RepositoryAccess.of(config, user).readableFolders()))
+				.filter(area -> !area.folders().isEmpty())
+				.toList();
+	}
+
+	/**
+	 * Step 57, D54: a search hit checked again with the rules of reading before it is shown, links followed.
+	 *
+	 * @return the real path of the file, or of the folder, if the user may read it now
+	 */
+	public Optional<Path> findable(final String user, final String repository, final List<String> segments,
+			final boolean folder) {
+		final Optional<GrantedRepository> granted = GrantedRepository.find(registry, repository, user)
+				.filter(found -> !found.hasProblems());
+		if (granted.isEmpty()) {
+			return Optional.empty();
+		}
+		final RepositoryConfig config = granted.get().config();
+		final RepositoryAccess access = granted.get().access();
+		if (!folder) {
+			return readable(config, access, segments);
+		}
+		return RepositoryPaths.resolveFolder(config.root(), segments)
+				.filter(found -> holds(access::canReadIn, segments, RepositoryPaths.realSegments(config.root(), segments)));
+	}
+
+	/** The URL of a file or folder (folders end with '/', D5), fully encoded. */
+	public static String url(final String repository, final List<String> segments, final boolean folder) {
+		return RepositoryUrls.url(repository, segments, folder);
+	}
+
 	/** The real path of a file the user may read. */
 	public Path readableFile(final String user, final String repository, final List<String> segments) {
 		final GrantedRepository granted = usable(user, repository, segments);
@@ -134,13 +197,17 @@ public class RepositoryFiles {
 	public Result write(final String user, final String repository, final List<String> segments, final InputStream body,
 			final long maxBytes, final Precondition precondition) {
 		final GrantedRepository granted = writable(user, repository, segments);
-		return writer.write(granted.config().root(), segments, body, maxBytes, precondition);
+		final Result result = writer.write(granted.config().root(), segments, body, maxBytes, precondition);
+		changed(granted, RepositoryPaths.realSegments(granted.config().root(), segments));
+		return result;
 	}
 
 	public FolderResult createFolder(final String user, final String repository, final List<String> segments,
 			final boolean createOnly) {
 		final GrantedRepository granted = writable(user, repository, segments);
-		return writer.createFolder(granted.config().root(), segments, createOnly);
+		final FolderResult result = writer.createFolder(granted.config().root(), segments, createOnly);
+		changed(granted, RepositoryPaths.realSegments(granted.config().root(), segments));
+		return result;
 	}
 
 	/** @param folder the path names a folder (URL or argument ends with '/'); the entry must be of that kind */
@@ -152,7 +219,9 @@ public class RepositoryFiles {
 			return new DeleteResult.IsGrantedFolder();
 		}
 		checkChangeable(granted, repository, segments, real);
-		return writer.delete(granted.config().root(), segments, folder, ifMatch);
+		final DeleteResult result = writer.delete(granted.config().root(), segments, folder, ifMatch);
+		changed(granted, real);
+		return result;
 	}
 
 	/**
@@ -170,8 +239,17 @@ public class RepositoryFiles {
 			return new MoveResult.IsGrantedFolder();
 		}
 		checkChangeable(granted, repository, from, realFrom);
-		checkChangeable(granted, repository, to, RepositoryPaths.realEntry(root, to));
-		return writer.move(granted.config().root(), from, to, folder, ifMatch);
+		final List<String> realTo = RepositoryPaths.realEntry(root, to);
+		checkChangeable(granted, repository, to, realTo);
+		final MoveResult result = writer.move(granted.config().root(), from, to, folder, ifMatch);
+		changed(granted, realFrom);
+		changed(granted, realTo);
+		return result;
+	}
+
+	/** Also after a refused change: looking again at an unchanged path changes nothing. */
+	private void changed(final GrantedRepository granted, final List<String> real) {
+		changes.accept(new RepositoryChange(granted.config().name(), granted.config().root(), real));
 	}
 
 	/** The subfolders and files the user may see in a folder already checked. */

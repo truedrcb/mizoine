@@ -81,6 +81,9 @@ effect without a restart.
 | `mizoine.public-url` | — | The address users and chat apps reach Mizoine at; needed for OAuth ([Connect an AI agent](#connect-an-ai-agent-mcp)) |
 | `mizoine.oauth.clients` | none (OAuth off) | One OAuth client per chat app ([Connect an AI agent](#connect-an-ai-agent-mcp)) |
 | `mizoine.git.timeout` | `60s` | How long one Git command may take ([Git in the browser](#git-in-the-browser)) |
+| `mizoine.search.enabled` | `true` | `false`: no search, no index ([Search](#search)) |
+| `mizoine.search.index-dir` | `search-index` | Where the search indexes are kept, one folder per repository; never inside a repository |
+| `mizoine.search.languages` | `en,de,fr,ru` | Languages whose word forms search knows; also `es`, `it`, `pt`, `sv` |
 | `server.address` | `127.0.0.1` | Listen address (only nginx on the same machine can connect) |
 | `server.port` | `12013` | Listen port ("MIZOINE" in digits: M and N skipped, I=1, Z=2, O=0, I=1, E=3) |
 
@@ -264,6 +267,44 @@ curl -u alice -H 'Content-Type: application/json' -X POST http://127.0.0.1:12013
 
 Answers: the new status (200); 400 for a request that names nothing; 409 with `{"message": …}` when it is not
 done (nothing to do, a file not in the list, Git refused); 504 when the remote did not answer in time.
+
+### Search
+
+`/<name>/.search?q=…` (the search box on every folder page) searches one repository, `/.search?q=…` (the search
+box on the start page) all of them. Everyone finds what they may read, and only that: no grant of its own. The
+search is part of the URL, so a search can be bookmarked and opened in several windows.
+
+- **What is found:** every file and folder by its name, and text files (UTF-8, up to 2 MB) by their content. A
+  Markdown file's first heading is its title. A match in a name or title ranks above one in the text.
+- **The query:** words (all must be found), `"a phrase"`, `-leftout`, `prefix*`; at most 200 characters.
+- **Strict, then loose:** if no file has all the words, any of them; if still nothing, words of a similar spelling
+  (one letter different in words of 4–7 letters, two from 8). The page says which.
+- **Spellings:** `Äpfel` = `Aepfel` = `Apfel`, `Straße` = `Strasse`, `Café` = `Cafe`, `l'école` = `ecole`,
+  `ёлка` = `елка`; and word forms (`Häuser` finds `Haus`, `книги` finds `книга`) in the languages of
+  `mizoine.search.languages`.
+- **Email addresses and file names** are found whole and by their parts: `artem@example.org` also by
+  `example.org`; `bericht-2026.pdf` also by `bericht` and `pdf`; `MeetingNotes.md` by `meeting notes`.
+- **The index** lives in `search-index/<name>/`, outside the repositories, derived from the files: deleting it is
+  always safe. Mizoine's own writes, moves and deletes are in it at once. Nothing else updates it on its own: not
+  at startup, not on a timer. Building an index on request is not available yet; until a repository has an index,
+  its search answers 503 with the state `not-indexed`.
+
+The same as JSON:
+
+```sh
+curl -u alice -H 'Accept: application/json' 'http://127.0.0.1:12013/notes/.search?q=garden+plan'
+# {"query":"garden plan","strictness":"all-words","total":1,"offset":0,"limit":20,
+#  "hits":[{"repository":"notes","path":"projects/plan.md","url":"/notes/projects/plan.md","kind":"file",
+#           "title":"Garden plan","snippets":[{"parts":[{"text":"Garden","match":true},…]}]}],
+#  "indexes":[{"repository":"notes","status":"indexed","reason":null,"searchable":true}]}
+```
+
+- `limit` (1–100, default 20) and `offset` page through the results.
+- Answers: 200; 400 for a query that asks nothing (empty, too long, only `-leftout`); 404 for a repository you
+  have no grant in; 503 when no searched repository has an index to answer from, with the states.
+- Every answer gives the state of each searched repository's index: `not-indexed`, `needs-reindexing` (made by
+  another version, `reason: format`, or `damaged`), `reindexing`, `indexed` or `failed`. While an older index can
+  still be read, it answers meanwhile (`searchable: true`).
 
 ## Connect an AI agent (MCP)
 

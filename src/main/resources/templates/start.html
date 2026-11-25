@@ -3,6 +3,10 @@
 <head th:replace="~{fragments/head :: head('Mizoine')}"></head>
 <body>
 	<h1 th:text="|Hello, ${page.user}|">Hello, user</h1>
+	<form method="get" th:action="@{/.search}" role="search">
+		<input type="search" name="q" maxlength="200" aria-label="Search in all repositories">
+		<button type="submit">Search</button>
+	</form>
 	<ul th:unless="${page.repositories.isEmpty()}">
 		<li th:each="repository : ${page.repositories}">
 			<a th:href="|${repository.name}/|" th:text="${repository.name}">name</a>

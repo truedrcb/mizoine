@@ -4,6 +4,9 @@ mizoine:
   # Users: artem / artem-pass, guest / guest-pass (TestUsers).
   users-file: src/test/resources/users-test.yaml
   repositories-dir: src/test/resources/repositories
+  # Search indexes of the tests, outside the source tree; a test that indexes sets its own folder.
+  search:
+    index-dir: target/test-search-index
   login-limit:
     # Many tests log in wrongly from the same address within one shared Spring context.
     # LoginRateLimitTest sets its own low limit.

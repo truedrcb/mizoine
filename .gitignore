@@ -51,3 +51,6 @@ credentials
 
 # Except test and sample files: no real credentials (AGENTS.md); test keys and certificates may be committed
 !/src/test/resources/**
+
+# Search indexes (derived from the files; may be deleted at any time, AGENTS.md)
+/search-index/

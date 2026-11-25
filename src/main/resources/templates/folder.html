@@ -6,6 +6,10 @@
 	<p th:if="${root}"><a href="/">All repositories</a></p>
 	<p th:if="${git}"><a href=".git/">Git</a></p>
 	<p th:unless="${root}"><a href="../">Up</a></p>
+	<form method="get" th:action="@{/{r}/.search(r=${listing.repository})}" role="search">
+		<input type="search" name="q" maxlength="200" aria-label="Search in this repository">
+		<button type="submit">Search</button>
+	</form>
 	<ul th:unless="${links.isEmpty()}">
 		<li th:each="link : ${links}"><a th:href="${link.href}" th:text="${link.name}">folder</a></li>
 	</ul>

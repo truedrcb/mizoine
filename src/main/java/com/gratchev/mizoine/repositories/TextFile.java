@@ -10,27 +10,29 @@ import java.nio.file.Path;
 import java.util.Optional;
 
 /**
- * A file read as text (D21): valid UTF-8 and not larger than 2 MB. For the rendered Markdown page and for agents
+ * A file read as text (D21): valid UTF-8, no NUL byte, and not larger than 2 MB. For the rendered Markdown page and for agents
  * reading files; anything else is given only as bytes (file download).
  */
-final class TextFile {
+public final class TextFile {
 
-	static final long MAX_BYTES = 2L * 1024 * 1024;
+	public static final long MAX_BYTES = 2L * 1024 * 1024;
 
 	private TextFile() {
 	}
 
-	/** @return the content, if it is valid UTF-8 and not larger than {@link #MAX_BYTES} */
-	static Optional<String> read(final Path file) {
+	/** @return the content, if it is valid UTF-8 without a NUL byte and not larger than {@link #MAX_BYTES} */
+	public static Optional<String> read(final Path file) {
 		try {
 			if (Files.size(file) > MAX_BYTES) {
 				return Optional.empty();
 			}
-			return Optional.of(StandardCharsets.UTF_8.newDecoder()
+			final String text = StandardCharsets.UTF_8.newDecoder()
 					.onMalformedInput(CodingErrorAction.REPORT)
 					.onUnmappableCharacter(CodingErrorAction.REPORT)
 					.decode(ByteBuffer.wrap(Files.readAllBytes(file)))
-					.toString());
+					.toString();
+			// valid UTF-8 may still be binary: text has no NUL byte (D21)
+			return text.indexOf('\0') < 0 ? Optional.of(text) : Optional.empty();
 		} catch (final CharacterCodingException e) {
 			return Optional.empty();
 		} catch (final IOException e) {

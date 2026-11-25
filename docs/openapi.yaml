@@ -517,6 +517,84 @@ paths:
           description: "Not logged in (non-browser clients): HTTP Basic challenge"
         "404":
           description: Not a valid repository name
+  /{repository}/.search:
+    get:
+      tags:
+      - Search
+      summary: Search in a repository
+      description: "Finds files and folders by their names, and text files by their\
+        \ content, among those the user may read; best first. Words are found in every\
+        \ spelling of a letter (German ä = ae = a, ß = ss, accents, French elision,\
+        \ Russian ё = е) and in their word forms (English, German, French, Russian\
+        \ by default). A query: words, \"a phrase\", -leftout, prefix*; at most 200\
+        \ characters. All words first; if nothing is found, any of them; then words\
+        \ of a similar spelling: strictness says which. Email addresses and file names\
+        \ are found whole and by their parts. An HTML page (default; without q the\
+        \ search box) or JSON when asked for. Every answer gives the state of each\
+        \ searched repository's index."
+      operationId: searchRepository
+      parameters:
+      - name: repository
+        in: path
+        description: Repository name
+        required: true
+        schema:
+          type: string
+      - name: q
+        in: query
+        description: "What to find: words, \"a phrase\", -leftout, prefix*"
+        required: false
+        schema:
+          type: string
+      - name: limit
+        in: query
+        description: "How many results, 1 to 100"
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      - name: offset
+        in: query
+        description: "From which result, from 0"
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      responses:
+        "200":
+          description: "The results: an HTML page, or JSON"
+          content:
+            text/html: {}
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResults"
+        "302":
+          description: "Browser not logged in: redirect to the login page"
+        "400":
+          description: "q is missing, empty, too long or only leaves out; or limit\
+            \ or offset is wrong; the message says which"
+          content:
+            text/html: {}
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refusal"
+        "401":
+          description: "Not logged in (non-browser clients): HTTP Basic challenge"
+        "404":
+          description: "Unknown repository, or one the user has no grant in"
+        "500":
+          description: "The repository is configured wrongly, or the index could not\
+            \ be read"
+        "503":
+          description: "None of the searched repositories has a search index to answer\
+            \ from; the states say why (e.g. not-indexed: to be built)"
+          content:
+            text/html: {}
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unavailable"
   /{repository}/.git:
     get:
       tags:
@@ -609,6 +687,77 @@ paths:
           description: "Not logged in (non-browser clients): HTTP Basic challenge"
         "406":
           description: Neither text/html nor application/json accepted
+  /.search:
+    get:
+      tags:
+      - Search
+      summary: Search in all repositories
+      description: "Finds files and folders by their names, and text files by their\
+        \ content, among those the user may read; best first. Words are found in every\
+        \ spelling of a letter (German ä = ae = a, ß = ss, accents, French elision,\
+        \ Russian ё = е) and in their word forms (English, German, French, Russian\
+        \ by default). A query: words, \"a phrase\", -leftout, prefix*; at most 200\
+        \ characters. All words first; if nothing is found, any of them; then words\
+        \ of a similar spelling: strictness says which. Email addresses and file names\
+        \ are found whole and by their parts. An HTML page (default; without q the\
+        \ search box) or JSON when asked for. Every answer gives the state of each\
+        \ searched repository's index. Searches every repository the user may read\
+        \ in, results of all in one order."
+      operationId: searchAllRepositories
+      parameters:
+      - name: q
+        in: query
+        description: "What to find: words, \"a phrase\", -leftout, prefix*"
+        required: false
+        schema:
+          type: string
+      - name: limit
+        in: query
+        description: "How many results, 1 to 100"
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      - name: offset
+        in: query
+        description: "From which result, from 0"
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      responses:
+        "200":
+          description: "The results: an HTML page, or JSON"
+          content:
+            text/html: {}
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResults"
+        "302":
+          description: "Browser not logged in: redirect to the login page"
+        "400":
+          description: "q is missing, empty, too long or only leaves out; or limit\
+            \ or offset is wrong; the message says which"
+          content:
+            text/html: {}
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refusal"
+        "401":
+          description: "Not logged in (non-browser clients): HTTP Basic challenge"
+        "500":
+          description: "The repository is configured wrongly, or the index could not\
+            \ be read"
+        "503":
+          description: "None of the searched repositories has a search index to answer\
+            \ from; the states say why (e.g. not-indexed: to be built)"
+          content:
+            text/html: {}
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unavailable"
 components:
   schemas:
     SelectionRequest:
@@ -706,7 +855,7 @@ components:
       properties:
         message:
           type: string
-          description: "Why, often in Git's own words"
+          description: "Why, for the user"
     CommitRequest:
       type: object
       properties:
@@ -754,6 +903,108 @@ components:
           description: What is wrong; only for users with access to the whole repository
           items:
             type: string
+    Hit:
+      type: object
+      description: A found file or folder
+      properties:
+        repository:
+          type: string
+        path:
+          type: string
+        url:
+          type: string
+          description: Its page
+        kind:
+          type: string
+          description: file or folder
+        title:
+          type: string
+        snippets:
+          type: array
+          description: Up to 3 passages of a text file with the found words
+          items:
+            $ref: "#/components/schemas/Snippet"
+    IndexInfo:
+      type: object
+      description: The search index of a searched repository
+      properties:
+        repository:
+          type: string
+        status:
+          type: string
+          description: "not-indexed, needs-reindexing, reindexing, indexed or failed"
+          enum:
+          - not-indexed
+          - needs-reindexing
+          - reindexing
+          - indexed
+          - failed
+        reason:
+          type: string
+          description: "Why: format or damaged (needs-reindexing), or what went wrong\
+            \ (failed)"
+        searchable:
+          type: boolean
+          description: "Whether its results are in the answer: from the current index,\
+            \ or an older one"
+    Part:
+      type: object
+      properties:
+        text:
+          type: string
+        match:
+          type: boolean
+    SearchResults:
+      type: object
+      description: "Search results, best first"
+      properties:
+        query:
+          type: string
+        strictness:
+          type: string
+          description: "all-words, any-word, similar-spelling (each tried only if\
+            \ the stricter found nothing) or none"
+          enum:
+          - all-words
+          - any-word
+          - similar-spelling
+          - none
+        total:
+          type: integer
+          format: int64
+        offset:
+          type: integer
+          format: int32
+        limit:
+          type: integer
+          format: int32
+        hits:
+          type: array
+          items:
+            $ref: "#/components/schemas/Hit"
+        indexes:
+          type: array
+          description: The index state of each searched repository
+          items:
+            $ref: "#/components/schemas/IndexInfo"
+    Snippet:
+      type: object
+      description: "A passage of the file; joined, the parts give the text; found\
+        \ words have match true"
+      properties:
+        parts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Part"
+    Unavailable:
+      type: object
+      properties:
+        message:
+          type: string
+        indexes:
+          type: array
+          items:
+            $ref: "#/components/schemas/IndexInfo"
     Repository:
       type: object
       properties:

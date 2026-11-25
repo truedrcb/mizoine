@@ -5,6 +5,7 @@ import java.nio.file.Path;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -31,8 +32,9 @@ public class RepositoriesConfig {
 	}
 
 	@Bean
-	RepositoryFiles repositoryFiles(final RepositoryRegistry registry, final RepositoryWriter writer) {
-		return new RepositoryFiles(registry, writer);
+	RepositoryFiles repositoryFiles(final RepositoryRegistry registry, final RepositoryWriter writer,
+			final ApplicationEventPublisher events) {
+		return new RepositoryFiles(registry, writer, events::publishEvent);
 	}
 
 	/** One instance: it allows one writer at a time (version check and move). */

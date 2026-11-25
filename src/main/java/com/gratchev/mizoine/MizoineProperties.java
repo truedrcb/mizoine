@@ -34,6 +34,7 @@ import jakarta.validation.constraints.Positive;
  *            ({@code mizoine.public-url}); needed for OAuth, because behind a proxy the request's host may be wrong
  * @param oauth the OAuth clients for chat apps ({@code mizoine.oauth.clients}, step 34); OAuth is off without any
  * @param git Git in the browser ({@code mizoine.git.*}, steps 43–48)
+ * @param search search ({@code mizoine.search.*}, steps 55–60)
  */
 @Validated
 @ConfigurationProperties("mizoine")
@@ -44,7 +45,8 @@ public record MizoineProperties(
 		@NotNull @DefaultValue("100MB") DataSize maxFileSize,
 		String publicUrl,
 		@Valid @DefaultValue OAuth oauth,
-		@Valid @DefaultValue Git git) {
+		@Valid @DefaultValue Git git,
+		@Valid @DefaultValue Search search) {
 
 	/** {@code mizoine.users-file}, relative to the working directory. */
 	public Path usersFilePath() {
@@ -86,14 +88,30 @@ public record MizoineProperties(
 			@NotEmpty(message = "each of mizoine.oauth.clients needs redirect-uris") List<String> redirectUris) {
 	}
 
-	/**
-	 * @param maxFailures failed logins after which the address is blocked
-	 * @param window how long failures are remembered, and how long the block lasts after the last failure
-	 */
 	/** @param timeout how long one Git command may take (a pull or push waits for the remote), then it is ended */
 	public record Git(@NotNull @DefaultValue("60s") Duration timeout) {
 	}
 
+	/**
+	 * @param enabled {@code false}: no index, search answers 404
+	 * @param indexDir where the search indexes are kept, one folder per repository; never inside a repository
+	 * @param languages the languages whose word forms search knows (D51), e.g. {@code en,de,fr,ru}
+	 */
+	public record Search(
+			@DefaultValue("true") boolean enabled,
+			@NotBlank @DefaultValue("search-index") String indexDir,
+			@NotBlank @DefaultValue("en,de,fr,ru") String languages) {
+
+		/** {@code mizoine.search.index-dir}, relative to the working directory. */
+		public Path indexDirPath() {
+			return Path.of(indexDir);
+		}
+	}
+
+	/**
+	 * @param maxFailures failed logins after which the address is blocked
+	 * @param window how long failures are remembered, and how long the block lasts after the last failure
+	 */
 	public record LoginLimit(
 			@Positive @DefaultValue("5") int maxFailures,
 			@NotNull @DefaultValue("5m") Duration window) {

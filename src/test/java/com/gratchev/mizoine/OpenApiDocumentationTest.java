@@ -112,7 +112,7 @@ class OpenApiDocumentationTest {
 	@ValueSource(strings = {"get /", "get /{repository}", "get /{repository}/{path}", "put /{repository}/{path}",
 			"delete /{repository}/{path}", "post /{repository}/{path}", "get /{repository}/.git/", "get /{repository}/.git",
 			"post /{repository}/.git/stage", "post /{repository}/.git/unstage", "post /{repository}/.git/commit",
-			"post /{repository}/.git/pull", "post /{repository}/.git/push"})
+			"post /{repository}/.git/pull", "post /{repository}/.git/push", "get /{repository}/.search", "get /.search"})
 	void everyEndpointIsDocumented(final String endpoint) throws Exception {
 		final String[] methodAndPath = endpoint.split(" ");
 		mockMvc.perform(apiDocs(API_DOCS_PATH))
@@ -141,7 +141,9 @@ class OpenApiDocumentationTest {
 		mockMvc.perform(apiDocs(API_DOCS_PATH))
 				.andExpect(jsonPath("$.paths['/{repository}/.git/'].get.operationId").value("gitStatus"))
 				.andExpect(jsonPath("$.paths['/{repository}/.git'].get.operationId").value("gitRedirect"))
-				.andExpect(jsonPath("$.paths['/{repository}'].get.operationId").value("repositoryRedirect"));
+				.andExpect(jsonPath("$.paths['/{repository}'].get.operationId").value("repositoryRedirect"))
+				.andExpect(jsonPath("$.paths['/{repository}/.search'].get.operationId").value("searchRepository"))
+				.andExpect(jsonPath("$.paths['/.search'].get.operationId").value("searchAllRepositories"));
 	}
 
 	@Test

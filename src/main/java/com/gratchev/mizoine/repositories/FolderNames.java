@@ -9,12 +9,12 @@ package com.gratchev.mizoine.repositories;
  * <li>Plain: a single, visible name — not empty, not hidden, no separator ({@code /}, {@code \}) and no NUL.</li>
  * </ul>
  */
-final class FolderNames {
+public final class FolderNames {
 
 	private FolderNames() {
 	}
 
-	static boolean isHidden(final String name) {
+	public static boolean isHidden(final String name) {
 		return name.startsWith(".") || name.indexOf('%') >= 0;
 	}
 

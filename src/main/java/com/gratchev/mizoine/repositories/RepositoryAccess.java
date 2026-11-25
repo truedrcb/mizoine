@@ -99,8 +99,19 @@ public final class RepositoryAccess {
 	 * @return the folder lies inside a granted folder and is not hidden; folders above a grant stay read-only (D4)
 	 */
 	public boolean canWriteIn(final List<String> folder) {
+		// every grant is for reading and writing
+		return canReadIn(folder);
+	}
+
+	/** @return the folder lies inside a granted folder and is not hidden: its files and subfolders may be read */
+	public boolean canReadIn(final List<String> folder) {
 		return folder.stream().noneMatch(FolderNames::isHidden)
 				&& grants.stream().anyMatch(grant -> startsWith(folder, grant.segments()));
+	}
+
+	/** @return the granted folders, inside which everything may be read (the root for the whole repository) */
+	public List<List<String>> readableFolders() {
+		return grants.stream().map(FolderGrant::segments).toList();
 	}
 
 	/** @param entry a file or folder to be created, replaced, moved or deleted: its folder must be writable */

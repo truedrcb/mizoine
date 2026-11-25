@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/head :: head(${repository} ? |Mizoine – search in ${repository}| : 'Mizoine – search')}"></head>
+<body>
+	<h1>Search<th:block th:if="${repository}"> in <span th:text="${repository}">repository</span></th:block></h1>
+	<p th:if="${repository}"><a th:href="@{/{r}/(r=${repository})}">Files</a></p>
+	<p th:unless="${repository}"><a href="/">All repositories</a></p>
+	<form method="get" th:action="@{${searchUrl}}" role="search">
+		<input type="search" name="q" th:value="${query}" maxlength="200" aria-label="Search for">
+		<button type="submit">Search</button>
+	</form>
+	<p th:if="${message}" class="refused" role="status" th:text="${message}">Write what to search for.</p>
+	<ul th:if="${indexes}" class="indexes">
+		<li th:each="index : ${indexes}" th:if="${index.status.code() != 'indexed'}"
+			th:text="|${index.repository}: ${index.status.code()}${index.reason.isPresent() ? ' (' + index.reason.get() + ')' : ''}${index.searchable ? ', results from an older index' : ', not searched'}|">notes: not-indexed</li>
+	</ul>
+	<th:block th:if="${results}">
+		<p th:switch="${results.strictness.code()}" role="status">
+			<th:block th:case="'all-words'" th:text="${results.total == 1} ? '1 result.' : |${results.total} results.|">2 results.</th:block>
+			<th:block th:case="'any-word'" th:text="|Not all words found: ${results.total} with any of them.|">Not all words found.</th:block>
+			<th:block th:case="'similar-spelling'" th:text="|Nothing found as written: ${results.total} of a similar spelling.|">Similar.</th:block>
+			<th:block th:case="*">Nothing found.</th:block>
+		</p>
+		<ol th:unless="${results.hits.isEmpty()}" th:start="${results.offset + 1}">
+			<li th:each="hit : ${results.hits}">
+				<a th:href="${hit.url}" th:text="${hit.title}">Garden plan</a>
+				<small th:text="|${hit.repository}/${hit.path}|">notes/plan.md</small>
+				<p th:each="snippet : ${hit.snippets}" class="snippet"><th:block th:each="part : ${snippet.parts}"><mark
+					th:if="${part.match}" th:text="${part.text}">apples</mark><th:block th:unless="${part.match}"
+					th:text="${part.text}">text</th:block></th:block></p>
+			</li>
+		</ol>
+		<p>
+			<a th:if="${results.offset > 0}" th:href="@{${searchUrl}(q=${query},offset=${results.offset > results.limit ? results.offset - results.limit : 0},limit=${results.limit})}">Previous</a>
+			<a th:if="${results.total > results.offset + results.limit}" th:href="@{${searchUrl}(q=${query},offset=${results.offset + results.limit},limit=${results.limit})}">Next</a>
+		</p>
+	</th:block>
+</body>
+</html>

@@ -10,7 +10,7 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** D21: a file as text only if it is valid UTF-8 and not larger than 2 MB (Markdown page, agents' read_file). */
+/** D21: a file as text only if it is valid UTF-8, has no NUL byte and is not larger than 2 MB (Markdown page, agents' read_file, search). */
 class TextFileTest {
 
 	private final Path dir;
@@ -31,6 +31,16 @@ class TextFileTest {
 		final Path file = Files.write(dir.resolve("latin1.md"), "Gr\u00fc\u00dfe".getBytes(StandardCharsets.ISO_8859_1));
 
 		assertThat(TextFile.read(file)).isEmpty();
+	}
+
+	@Test
+	void aNulByteIsNotText() throws IOException {
+		// valid UTF-8, but binary: e.g. a file format with text inside
+		final Path file = Files.writeString(dir.resolve("data.bin"), "header\u0000body");
+		final Path first = Files.writeString(dir.resolve("first.bin"), "\u0000body");
+
+		assertThat(TextFile.read(file)).isEmpty();
+		assertThat(TextFile.read(first)).isEmpty();
 	}
 
 	@Test
