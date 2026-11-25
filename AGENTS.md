@@ -1,0 +1,95 @@
+# Agent Instructions
+
+This file defines operating rules for AI agents (including Cline and Claude Code) working in this repository.
+
+## Commit Policy
+
+**Agents must NEVER commit any changes to this repository.**
+
+- Agents may read files
+- Agents may edit files in the working tree
+- Agents may suggest changes
+- Agents must NOT run `git commit`, `git push`, or any command that creates a git commit
+
+Only human users may perform commits manually.
+
+## Sensitive Files
+
+Agents must not touch, read, modify, or commit any sensitive files, including but not limited to:
+
+- Environment files: `.env`, `.env.local`, `.env.*.local`
+- Keys and certificates: `*.key`, `*.pem`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`
+- Encrypted secrets: `*.gpg`, `*.asc`, `*.pgp`, `*.kdbx`
+- Secret configs: `secrets.yaml`, `secrets.yml`, `secrets.json`, `*.secret.*`
+- Cloud credentials: `.aws/`, `credentials`, `config`
+
+These are blocked by `.gitignore` and must never be added to version control.
+
+**Test and sample files are not sensitive.** They hold no real credentials, only made-up users and passwords. Agents
+may read and edit them, and they belong in version control: e.g. `users.example.yaml`,
+`src/test/resources/users-test.yaml`, and test keys or certificates under `src/test/resources/` (`.gitignore` lets
+them through).
+
+## Scope
+
+This project manages development skills and document management. Agents should limit their work to this scope.
+
+## Role
+
+Act as an expert Java developer. Build with Java 25, Maven 3.9+ (`mvn`, no Maven Wrapper), Spring Boot (current GA).
+
+## Way of working: strict TDD
+
+1. **Red** — write the test first and run it; confirm it fails for the expected reason.
+2. **Green** — write the smallest production change that makes it pass.
+3. **Refactor** — clean up with all tests green.
+4. A step is done only when `mvn verify` passes. Never mark a step done with failing or skipped tests.
+
+- No production code without a failing test that requires it.
+- Unit tests for plain logic (no Spring context); `@WebMvcTest` / `@SpringBootTest` only where the framework is part of what is tested.
+- Tests: JUnit 5, AssertJ, MockMvc, `spring-security-test`. Use `@TempDir` for file tests.
+
+## Code style
+
+- `final` everywhere it is possible: fields, local variables, parameters, `catch` parameters, enhanced-for variables. Exception: lambda parameters.
+- Prefer constructor injection so fields can be final, in tests too (`MyTest(@Autowired final MockMvc mockMvc)`, `MyTest(@TempDir final Path dir)`).
+- Checkstyle ([checkstyle.xml](checkstyle.xml)) enforces locals and parameters in `mvn verify`. Final fields are not checked by the tool; take care of them in code.
+
+## Quality gates (ub-mode)
+
+- All development follows ub-mode ([github.com/unclebob/ub-mode](https://github.com/unclebob/ub-mode), MIT; its `SKILL.md`, commit 3da62bf, 2026-11-02): First Make it Work, Then Make it Right, Practice. Read it before working on a step.
+- Where it differs, this file wins:
+  - "Commit and Push" in ub-mode does not apply: agents never commit or push (Commit Policy above); the user commits.
+  - "Keep a Log": report the actions and their reasons at the end of a step.
+  - "If an honest test is impractical, do not write a bad one" does not lift "No production code without a failing test": it covers only branches inside code that a failing test already requires (e.g. a `catch` for disk errors, a race). Name such untested branches and the reason in the step notes in DEV.md.
+- Its tools: crapper (CRAP < 10 per method), dryer (duplication ≥ 0.8 removed), mutator (survivors killed), Python, from github.com/unclebob, Java supported.
+  - Installed 2026-11-25 in `~/.local/opt/ub-tools/{crapper,dryer,mutator}` (git clones; mutator needs crapper next to it). Each has its own `.venv`. This Ubuntu has no `pip`/`ensurepip`, so it was installed with PyPA's `pip.pyz` (`~/.local/opt/ub-tools/pip/`): `python3 -m venv --without-pip <tool>/.venv && <tool>/.venv/bin/python -I pip/pip.pyz install -e ./<tool>`.
+  - Run from the project root, with coverage from `mvn verify` (`target/site/jacoco/jacoco.xml`, JaCoCo 0.8.16 for Java 25): `crapper --use-existing-coverage --changed`, `dryer --threshold 0.8 --changed`, `mutator --use-existing-coverage --changed`.
+  - `--changed` looks at uncommitted files only. To review committed work, name the files, or run dryer over `src/main/java`.
+  - Mutation testing runs `mvn test` once per mutant: only on changed code (`--changed`).
+    - The whole suite per mutant takes hours. Use `--test-command "mvn -q test -Dtest=<the test classes of these files> -Dsurefire.failIfNoSpecifiedTests=false -Djacoco.skip=true"` per group of files, and `--max-workers 4`. This is conservative: a mutant that only another test class would catch shows up as a survivor, never as falsely killed.
+    - `--changed` misses some modified files: name the changed files explicitly.
+    - After editing code, run `mvn clean verify` again before `--use-existing-coverage`: stale line numbers show up as "uncovered".
+  - Their snapshots go to `.metrics/` (git-ignored).
+- Uncovered new lines get behaviour tests or a stated reason (JaCoCo's line and branch coverage, besides the tools).
+
+## API documentation (OpenAPI)
+
+- Every HTTP endpoint (HTML pages and JSON alike) is annotated for OpenAPI (springdoc): `@Tag` on the controller; `@Operation` with summary; `@Parameter` for path/query parameters; `@ApiResponse` for every status it can return (incl. 401, 404, 500) with media types.
+- Descriptions are for API users: what the endpoint does. No dev steps, decision ids (D…, T…), DEV.md, setting names or framework names; `OpenApiDocumentationTest.describesTheApiNotItsDevelopment` checks it. The links to steps and decisions belong in Javadoc and code comments.
+- Write the test first: `OpenApiDocumentationTest` checks only that each endpoint appears in `/v3/api-docs` with a summary (smoke test, no detailed checks; the details are reviewed in `docs/openapi.yaml`).
+- `mvn verify` writes the description to `docs/openapi.yaml` (in version control). The application itself does not serve it; springdoc is a test dependency only, no Swagger UI (DEV.md step 15, D9).
+
+## Plan and status
+
+- [DEV.md](DEV.md) holds the numbered development steps. The user refers to them by number ("do step 4").
+- Work one step at a time. After a step: tick its checkbox (☐ → ☑) and update the status date in DEV.md.
+- Record decisions made during a step under that step or in "Open decisions" in DEV.md.
+- [BACKLOG.md](BACKLOG.md) holds long-term goals and principles (plain files are the source of truth, thin independent layers). Do not violate them.
+
+## Repo notes
+
+- JDK 25 and Maven are in `~/.local/opt/` and not on `PATH`. Before `mvn`, run `export JAVA_HOME=$(ls -d ~/.local/opt/jdk-25*); export PATH=$JAVA_HOME/bin:$HOME/.local/opt/apache-maven-3.9.16/bin:$PATH`.
+- Node.js (from nvm, on the PATH) runs the JavaScript tests in `src/test/js/` (`node --test`, also in `mvn verify`). No npm packages for tests; vendor libraries go to `src/main/resources/ui/vendor/`.
+- Spring Boot 4 uses Jackson 3 (`tools.jackson.*` packages), not Jackson 2 (`com.fasterxml.jackson.*`).
+- Users files with made-up users (`users.example.yaml`, test resources) are test and sample files, see Sensitive Files.

@@ -319,12 +319,12 @@ Notes:
 
 ## Development
 
-Test-driven, step by step: plan and status in [DEV.md](DEV.md), way of working in [CLAUDE.md](CLAUDE.md).
+Test-driven, step by step: plan and status in [DEV.md](DEV.md), way of working and rules for AI agents in [AGENTS.md](AGENTS.md) (Claude Code specifics in [CLAUDE.md](CLAUDE.md)).
 
 - Building needs **Node.js** and **Git** on the PATH as well: `mvn verify` also runs the JavaScript tests of the
   pages under `/ui/` (`node --test src/test/js/`, no npm packages), and the Git tests run the real `git` on
   temporary repositories.
-- Quality tools (optional, see [CLAUDE.md](CLAUDE.md)): crapper, dryer and mutator from github.com/unclebob.
+- Quality tools (optional, see [AGENTS.md](AGENTS.md)): crapper, dryer and mutator from github.com/unclebob.
 - `mvn verify` runs all tests and Checkstyle (`final` wherever possible), and writes the API description
   [docs/openapi.yaml](docs/openapi.yaml) (the application itself does not serve it).
 - Known vulnerabilities in dependencies: `NVD_API_KEY=<key> mvn verify -Psecurity-check -DskipTests`

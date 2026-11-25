@@ -1,25 +1,53 @@
+# Build output
 /target/
-**/.mizoine
-**/.factorypath
+**/node_modules/
+
+# IDEs and editors
 /.classpath
-/.settings/
 .project
-**/.vscode
+/.settings/
+**/.factorypath
 /.sts4-cache
 .idea
 mizoine.iml
-**/node_modules/
-/archive/mizoine0/
-# real users file: contains password hashes (see users.example.yaml)
-/users.yaml
-# real repositories folder, if kept in the project (see repositories.example)
-/repositories/
+**/.vscode
 
-# Quality-gate snapshots of the ub-mode tools (crapper, dryer, mutator)
-/.metrics/
-
+# AI agents and quality tools
 # Claude Code: local settings and skills
 /.claude/
+# ub-mode tools (crapper, dryer, mutator): snapshots
+/.metrics/
 
-# CodeMirror bundle build (tools/codemirror/build.sh): only the lock file is kept
-/tools/codemirror/node_modules/
+# A local Mizoine: its real data, not samples
+# real users file with password hashes (sample: users.example.yaml)
+/users.yaml
+# real repositories folder (sample: repositories.example/)
+/repositories/
+**/.mizoine
+# the archived earlier version
+/archive/mizoine0/
+
+# Sensitive files (AGENTS.md): never in version control
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.gpg
+*.asc
+*.pgp
+*.kdbx
+secrets.yaml
+secrets.yml
+secrets.json
+*.secret.*
+.aws/
+credentials
+# No bare "config": it would also hide the source folders named config (Java package, test resources).
+
+# Except test and sample files: no real credentials (AGENTS.md); test keys and certificates may be committed
+!/src/test/resources/**
