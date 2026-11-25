@@ -137,6 +137,19 @@ public class RepositoryFiles {
 		return new SearchArea(repository, granted.config().root(), granted.access().readableFolders());
 	}
 
+	/**
+	 * Step 60, D56: the search area of a user with the whole repository ({@code /}), who may reindex it.
+	 *
+	 * @throws NotVisibleException for everyone else, as for anything not visible (D2)
+	 */
+	public SearchArea wholeSearchArea(final String user, final String repository) {
+		final SearchArea area = searchArea(user, repository);
+		if (!area.wholeRepository()) {
+			throw new NotVisibleException(repository, List.of());
+		}
+		return area;
+	}
+
 	/** @return where the user may search in every repository: those with a file grant and without problems */
 	public List<SearchArea> searchAreas(final String user) {
 		return registry.all().stream()

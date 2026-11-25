@@ -7,8 +7,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
+import java.util.stream.Stream;
 
 import com.gratchev.mizoine.repositories.RepositoryFiles;
+import com.gratchev.mizoine.search.Search;
 import com.gratchev.mizoine.repositories.RepositoryWriter.DeleteResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.FolderResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.MoveResult;
@@ -44,14 +46,21 @@ final class McpTools {
 	private final RepositoryFiles files;
 	private final long maxFileSize;
 	private final McpJsonMapper json;
+	private final Optional<McpSearchTool> search;
 
-	McpTools(final RepositoryFiles files, final long maxFileSize, final McpJsonMapper json) {
+	/** @param search the search, if it is switched on: then agents get the tool {@code search} (step 59) */
+	McpTools(final RepositoryFiles files, final long maxFileSize, final McpJsonMapper json, final Optional<Search> search) {
 		this.files = files;
 		this.maxFileSize = maxFileSize;
 		this.json = json;
+		this.search = search.map(found -> new McpSearchTool(found, json));
 	}
 
 	List<SyncToolSpecification> all() {
+		return Stream.concat(fileTools().stream(), search.map(McpSearchTool::specification).stream()).toList();
+	}
+
+	private List<SyncToolSpecification> fileTools() {
 		return List.of(
 				tool("list_repositories", "List the repositories you have access to.", schema(), this::listRepositories),
 				tool("list_folder", "List the subfolders and files of a folder you may see. Path '/' is the repository root.",
@@ -196,7 +205,8 @@ final class McpTools {
 				"required", List.of(arguments).stream().filter(argument -> !IF_MATCH.equals(argument)).toList());
 	}
 
-	private static String text(final Map<String, Object> arguments, final String name) {
+	/** A text argument; missing or not text is the agent's error, said in the tool's answer. */
+	static String text(final Map<String, Object> arguments, final String name) {
 		if (!(arguments.get(name) instanceof final String value)) {
 			throw new IllegalArgumentException("Missing argument: " + name);
 		}
@@ -233,7 +243,7 @@ final class McpTools {
 		return CallToolResult.builder().addTextContent(text).isError(false).build();
 	}
 
-	private static CallToolResult error(final String text) {
+	static CallToolResult error(final String text) {
 		return CallToolResult.builder().addTextContent(text).isError(true).build();
 	}
 }

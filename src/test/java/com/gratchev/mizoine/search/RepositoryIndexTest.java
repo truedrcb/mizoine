@@ -91,6 +91,7 @@ class RepositoryIndexTest {
 
 		assertThat(index.state().status()).isEqualTo(IndexStatus.NOT_INDEXED);
 		assertThat(index.lease()).isEmpty();
+		assertThat(index.details().files()).isZero();
 	}
 
 	@Test
@@ -230,6 +231,94 @@ class RepositoryIndexTest {
 
 		assertThat(found(index, SearchAnalysis.TITLE, "notes.txt")).containsExactly("projects/notes.txt");
 		assertThat(found(index, SearchAnalysis.TITLE, "heading")).isEmpty();
+	}
+
+	@Test
+	void aReindexingStartsOnceAndSaysHowFarItIs() {
+		final RepositoryIndex index = open(ANALYSIS);
+
+		assertThat(index.begin()).isTrue();
+		assertThat(index.begin()).isFalse();
+		assertThat(index.state().status()).isEqualTo(IndexStatus.REINDEXING);
+		assertThat(index.details().progress()).contains(new IndexDetails.Progress(0, 0));
+
+		index.build(root);
+
+		assertThat(index.state().status()).isEqualTo(IndexStatus.INDEXED);
+		assertThat(index.details().progress()).isEmpty();
+		// projects/, plan.md, budget.xlsx, archive/
+		assertThat(index.details().files()).isEqualTo(4);
+		// a new reindexing counts from 0 again
+		index.begin();
+		assertThat(index.details().progress()).contains(new IndexDetails.Progress(0, 0));
+		index.build(root);
+	}
+
+	@Test
+	void anUpdateStartsOnlyOnAnIndexedIndexAndOnce() {
+		final RepositoryIndex index = open(ANALYSIS);
+		assertThat(index.beginUpdate()).isEqualTo(RepositoryIndex.Start.NEEDS_REINDEXING);
+
+		index.reindex(root);
+
+		assertThat(index.beginUpdate()).isEqualTo(RepositoryIndex.Start.STARTED);
+		assertThat(index.beginUpdate()).isEqualTo(RepositoryIndex.Start.RUNNING);
+		index.runUpdate(root);
+		assertThat(index.beginUpdate()).isEqualTo(RepositoryIndex.Start.STARTED);
+		index.runUpdate(root);
+	}
+
+	@Test
+	void theIndexKnowsWhenItWasBuiltAndLastChanged() throws IOException {
+		final Instant before = Instant.now().minusSeconds(1);
+		final RepositoryIndex index = indexed();
+		final IndexDetails built = index.details();
+
+		assertThat(built.indexedAt()).hasValueSatisfying(at -> assertThat(at).isAfter(before));
+		assertThat(built.updatedAt()).isEqualTo(built.indexedAt());
+
+		write("projects/new.md", "cherries");
+		index.changed(root, List.of("projects", "new.md"));
+
+		assertThat(index.details().indexedAt()).isEqualTo(built.indexedAt());
+		assertThat(index.details().updatedAt().orElseThrow()).isAfterOrEqualTo(built.indexedAt().orElseThrow());
+		// an update is no reindexing either
+		index.update(root);
+		assertThat(index.details().indexedAt()).isEqualTo(built.indexedAt());
+		index.close();
+		final IndexDetails again = open(ANALYSIS).details();
+		assertThat(again.indexedAt()).isEqualTo(built.indexedAt());
+		assertThat(again.files()).isEqualTo(5);
+	}
+
+	@Test
+	void anUpdateReadsOnlyChangedFiles() throws IOException {
+		final RepositoryIndex index = indexed();
+		// unchanged in size and time, but no longer readable: an update that read it again would lose its words
+		Files.setPosixFilePermissions(root.resolve("projects/plan.md"), PosixFilePermissions.fromString("---------"));
+		try {
+			write("projects/new.md", "cherries");
+
+			index.update(root);
+
+			assertThat(found(index, SearchAnalysis.EXACT, "apples")).containsExactly("projects/plan.md");
+			assertThat(found(index, SearchAnalysis.EXACT, "cherries")).containsExactly("projects/new.md");
+		} finally {
+			Files.setPosixFilePermissions(root.resolve("projects/plan.md"), PosixFilePermissions.fromString("rw-r--r--"));
+		}
+	}
+
+	@Test
+	void unreadableFoldersAreNamed() throws IOException {
+		write("locked/inside.md", "cherries");
+		Files.setPosixFilePermissions(root.resolve("locked"), PosixFilePermissions.fromString("---------"));
+		try {
+			final RepositoryIndex index = indexed();
+
+			assertThat(index.details().unreadable()).containsExactly("locked/");
+		} finally {
+			Files.setPosixFilePermissions(root.resolve("locked"), PosixFilePermissions.fromString("rwxr-xr-x"));
+		}
 	}
 
 	@Test

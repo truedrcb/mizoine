@@ -5,6 +5,8 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -75,6 +77,22 @@ public class GitCommands {
 		final GitStatus status = GitStatusParser.parse(result.output());
 		return Optional.of(new GitStatus(status.branch(), status.hasCommits(), status.upstream(),
 				status.changes().stream().filter(change -> !isTemporary(change.path())).toList()));
+	}
+
+	/**
+	 * The time of the last commit (step 60), shown beside the search index's own dates.
+	 *
+	 * @return empty if the folder is no Git repository (or only a subfolder of one), or has no commit yet
+	 */
+	public Optional<Instant> lastCommit(final Path root) {
+		if (!isTopOfWorkingTree(root)) {
+			return Optional.empty();
+		}
+		final Result result = run(root, List.of("log", "-1", "--format=%cI"));
+		// without a commit yet, Git exits with an error
+		return result.exitCode() == 0
+				? Optional.of(OffsetDateTime.parse(result.output().strip()).toInstant())
+				: Optional.empty();
 	}
 
 	private boolean isTopOfWorkingTree(final Path root) {

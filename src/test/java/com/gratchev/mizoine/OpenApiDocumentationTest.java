@@ -67,6 +67,7 @@ class OpenApiDocumentationTest {
 							+ "they are plain files, not API methods. "
 							+ "AI agents connect to the MCP endpoint /mcp (Model Context Protocol, Streamable HTTP, POST with "
 							+ "JSON-RPC): tools list_repositories, list_folder, read_file, write_file, create_folder, delete, move, "
+							+ "search, "
 							+ "with the same grants as this API. It is not listed as an operation either. "
 							+ "Where the server has OAuth set up, /mcp also takes Bearer tokens from Mizoine's own "
 							+ "OAuth server for chat apps: /.well-known/oauth-protected-resource/mcp (RFC 9728), "
@@ -112,7 +113,9 @@ class OpenApiDocumentationTest {
 	@ValueSource(strings = {"get /", "get /{repository}", "get /{repository}/{path}", "put /{repository}/{path}",
 			"delete /{repository}/{path}", "post /{repository}/{path}", "get /{repository}/.git/", "get /{repository}/.git",
 			"post /{repository}/.git/stage", "post /{repository}/.git/unstage", "post /{repository}/.git/commit",
-			"post /{repository}/.git/pull", "post /{repository}/.git/push", "get /{repository}/.search", "get /.search"})
+			"post /{repository}/.git/pull", "post /{repository}/.git/push", "get /{repository}/.search", "get /.search",
+			"get /{repository}/.search/index", "get /.search/index", "post /{repository}/.search/reindex",
+			"post /{repository}/.search/update"})
 	void everyEndpointIsDocumented(final String endpoint) throws Exception {
 		final String[] methodAndPath = endpoint.split(" ");
 		mockMvc.perform(apiDocs(API_DOCS_PATH))
@@ -143,7 +146,8 @@ class OpenApiDocumentationTest {
 				.andExpect(jsonPath("$.paths['/{repository}/.git'].get.operationId").value("gitRedirect"))
 				.andExpect(jsonPath("$.paths['/{repository}'].get.operationId").value("repositoryRedirect"))
 				.andExpect(jsonPath("$.paths['/{repository}/.search'].get.operationId").value("searchRepository"))
-				.andExpect(jsonPath("$.paths['/.search'].get.operationId").value("searchAllRepositories"));
+				.andExpect(jsonPath("$.paths['/.search'].get.operationId").value("searchAllRepositories"))
+				.andExpect(jsonPath("$.paths['/{repository}/.search/reindex'].post.operationId").value("searchReindex"));
 	}
 
 	@Test

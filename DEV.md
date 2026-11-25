@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-25): steps 0–34, 37–48 and 55–58 done (969 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor, search without a reindexing request yet). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 49–54 (stable URLs, postponed), 59–60 (search for agents, index state and reindexing; T5 and D47–D63 decided, D52 and D55 postponed), 61–65 (folder tags and statuses; D64–D71 decided, D72 postponed). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-25): steps 0–34, 37–48 and 55–60 done (993 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor, search with index state and reindexing on request). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 49–54 (stable URLs, postponed), 61–65 (folder tags and statuses; D64–D71 decided, D72 postponed). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -1559,7 +1559,7 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
     - snippets: Lucene's highlighter on the words as written, else on a language's forms, else on `tokens`; returned as plain-text parts, so the page never needs unescaped HTML.
   - **Page and API (step 58), `SearchController`:** `GET /{repository}/.search` (`searchRepository`) and `GET /.search` (`searchAllRepositories`), HTML (D6 default; without `q` the search box) or JSON; 400 with the message, 404 without a grant, 503 with the states when no index can answer. Search boxes on the start page and on every folder page.
   - Enum values in the API (`not-indexed`, `all-words`) come from one interface, `ApiCode` (dryer found the two copies).
-  - **Not yet usable on a live server:** without step 60 there is no request that builds an index, so every repository answers 503 `not-indexed` until then. The startup warning says only that a reindexing is needed; step 60 adds the request to it.
+  - ~~Not yet usable on a live server~~ (until step 60, done 2026-11-26): there was no request that built an index.
   - **Found by the mutator:** a repository root that is itself a symbolic link was indexed as empty: `walkFileTree` follows no link, also not its start. The walk now starts at the root's real place (`aRootThatIsALinkIsIndexedWhereItLeads`).
   - **Untested branches** (disk errors and races; no honest test):
     - `RepositoryIndex`: `IOException` in `update`, `changed`, `known`, `closeQuietly`, `deleteQuietly`, listing the index folder; `lease` failing to acquire.
@@ -1587,12 +1587,18 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
       - `RepositoryIndex.reindex`, the "searchable" of the state while a reindexing runs: only visible during the walk (the race above);
       - `RepositoryAccess.visibleChildren` `> → >=` (step 21 code): a grant as long as the folder is the folder itself, which the branch above already answered.
 
-### 59. Search for agents (MCP)  ☐
+### 59. Search for agents (MCP)  ☑
 - MCP tool `search(query, repository?, limit?)`: the same search, as the agent user. Results: path, title, snippet; then `read_file` reads the document.
 - Its description tells the agent the query syntax and that results are limited to its folders.
 - Tests: an agent with `[knowledge, inbox]` finds only in those folders; a repository it has no grant in answers as unknown.
+- *Done 2026-11-26:*
+  - `McpSearchTool`, given to `McpTools` only when search is on (`ObjectProvider<Search>`): without search, agents have no `search` tool.
+  - Arguments: `query`, optional `repository` and `limit` (an integer; text is refused). The same `Search` as the page, as the agent user.
+  - The answer: a text for every client (one line per result, its first passage below it with the found words in `**bold**`, line breaks as spaces; the level of strictness; repositories without an index), and the results as structured content, as the JSON API.
+  - Errors as tool errors: "Not found: other" for a repository without a grant; "Not searched: no search index yet for tree. A person with access to the whole repository can build it."; the query's own messages.
+  - The text and error helpers of `McpTools` are shared (dryer).
 
-### 60. Index state and reindexing on request  ☐
+### 60. Index state and reindexing on request  ☑
 - `GET /{repository}/.search/index` (JSON or HTML): the state (D59): `not-indexed`, `needs-reindexing` (with `reason`), `reindexing` (files done and total), `indexed`, `failed` (with the reason). With the dates the user needs to judge whether the index is current (D49):
   - `indexedAt`: when the last full reindexing finished;
   - `updatedAt`: the last change of the index (Mizoine's own write, or an update request);
@@ -1622,6 +1628,24 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
   - a user with folder grants only: the state without counts; reindexing 404;
   - a form POST without token is refused (CSRF).
 - README: the state, update and reindexing with curl; after installing and after an upgrade: check the state, reindex where it says so; after changes by hand or a pull: compare the dates, update.
+- *Done 2026-11-26:*
+  - `RepositoryIndex`:
+    - `begin()` marks a reindexing at once (so a second request starts nothing), `build(root)` does it; `reindex` is both.
+    - `beginUpdate()` gives `STARTED`, `RUNNING` or `NEEDS_REINDEXING`; `runUpdate`.
+    - An update now reads the files without the lock and writes under it, so searches are not held up; unchanged files are not read (`anUpdateReadsOnlyChangedFiles`).
+    - `details()`: progress (counted in a first walk, names and times only), `indexedAt` and `updatedAt` in the commit data (kept across a restart; one moment for both after a reindexing), the number of entries, what could not be read.
+    - Any failure of a reindexing in the background ends it as `failed`, not only I/O.
+  - `SearchIndexes` runs reindexing and updates in the background (virtual threads); closing waits up to 10 s.
+  - `IndexReports`: the state for a user. `newestFile` from the user's own folders (names and times, the index's rules: no hidden names, no links); `lastCommit` with Git access (`GitCommands.lastCommit`: `git log -1 --format=%cI`; a failing Git gives no date); `files` and `unreadable` only with the whole repository.
+  - `RepositoryFiles.wholeSearchArea`: who may reindex (D56) is decided in the files layer, which alone makes "not found".
+  - `SearchIndexController`: `GET /{repository}/.search/index` (`searchIndexState`), `GET /.search/index` (`searchIndexStates`), HTML and JSON; `POST …/reindex` (`searchReindex`) and `POST …/update` (`searchUpdate`), JSON, 202, 409 for an update that needs a reindexing, 404 without the whole repository.
+  - The startup warning names the request: `Search index of notes is not-indexed: reindex it (POST /notes/.search/reindex)`.
+  - `TestGit` is public now, for tests of other packages with a real Git repository.
+  - **Untested branches:** `SearchIndexes.close` interrupted while waiting; an update that fails in the background (logged); `IndexReports`' Git failure (logged, no date): a missing or broken `git` program.
+- *Tools for steps 59–60:*
+  - crapper: all below 10 (highest of the new code `RepositoryIndex.update`, 8.0).
+  - dryer: the search tool read its arguments and wrote its errors as `McpTools` does: now it uses `McpTools`' helpers. Left: the two `GitController` pairs (step 48).
+  - mutator: first run 186 killed, 12 survived. Killed with new tests: no index has 0 files; a new reindexing counts from 0 again; an update keeps `indexedAt`. Removed as dead: the blank-output check of `GitCommands.lastCommit` (Git exits with an error without a commit). The `RepositoryFiles` survivors (access rules of step 35) were only due to the narrow test selection: killed by the file API's own tests. Left, equivalent: `IndexDocuments.indexable` (step 57, see there); `McpTools.createFolder`'s create-only `false` (step 31: "exists" either way, as its comment says).
 
 ## Tags and statuses (planned 2026-11-25)
 *Requested 2026-11-25:* folders and files can be tagged; the tags are shown with their attributes and in search results, can be searched, and can be read and edited over the HTTP API and MCP.

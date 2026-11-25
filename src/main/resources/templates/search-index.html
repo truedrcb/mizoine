@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/head :: head(${repository} ? |Mizoine – search index of ${repository}| : 'Mizoine – search indexes')}"></head>
+<body>
+	<h1 th:text="${repository} ? |Search index of ${repository}| : 'Search indexes'">Search indexes</h1>
+	<p th:if="${repository}"><a th:href="@{/{r}/.search(r=${repository})}">Search</a></p>
+	<p th:unless="${repository}"><a href="/.search">Search</a></p>
+	<table>
+		<thead>
+			<tr><th>Repository</th><th>State</th><th>Built</th><th>Last change</th><th>Newest file</th><th>Last commit</th><th>Files</th></tr>
+		</thead>
+		<tbody>
+			<tr th:each="report : ${reports}">
+				<td th:text="${report.repository}">notes</td>
+				<td th:text="|${report.status.code()}${report.reason.isPresent() ? ' (' + report.reason.get() + ')' : ''}${report.updating ? ', updating' : ''}${report.progress.isPresent() ? ', ' + report.progress.get().done() + ' of ' + report.progress.get().total() : ''}|">indexed</td>
+				<td th:text="${report.indexedAt.orElse(null)}">–</td>
+				<td th:text="${report.updatedAt.orElse(null)}">–</td>
+				<td th:text="${report.newestFile.orElse(null)}">–</td>
+				<td th:text="${report.lastCommit.orElse(null)}">–</td>
+				<td th:text="${report.files.orElse(null)}">–</td>
+			</tr>
+		</tbody>
+	</table>
+	<th:block th:each="report : ${reports}" th:if="${report.unreadable.isPresent() and !report.unreadable.get().isEmpty()}">
+		<p th:text="|Not readable in ${report.repository}, left out:|">Not readable:</p>
+		<ul><li th:each="path : ${report.unreadable.get()}" th:text="${path}">locked/</li></ul>
+	</th:block>
+</body>
+</html>

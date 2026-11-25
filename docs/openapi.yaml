@@ -7,8 +7,8 @@ info:
     \ (logos etc.). Those under /ui/ are not listed as operations: they are plain\
     \ files, not API methods. AI agents connect to the MCP endpoint /mcp (Model Context\
     \ Protocol, Streamable HTTP, POST with JSON-RPC): tools list_repositories, list_folder,\
-    \ read_file, write_file, create_folder, delete, move, with the same grants as\
-    \ this API. It is not listed as an operation either. Where the server has OAuth\
+    \ read_file, write_file, create_folder, delete, move, search, with the same grants\
+    \ as this API. It is not listed as an operation either. Where the server has OAuth\
     \ set up, /mcp also takes Bearer tokens from Mizoine's own OAuth server for chat\
     \ apps: /.well-known/oauth-protected-resource/mcp (RFC 9728), /.well-known/oauth-authorization-server,\
     \ /oauth2/authorize and /oauth2/token (authorization code with PKCE, one registered\
@@ -256,6 +256,81 @@ paths:
           description: If-Match not met; nothing deleted
         "500":
           description: Repository configured wrongly
+  /{repository}/.search/update:
+    post:
+      tags:
+      - Search
+      summary: Update a repository's search index
+      description: "Indexes only what changed since the index's own record, in the\
+        \ background: new, changed (by size and modification time) and deleted files\
+        \ and folders. Quicker than a reindexing; for changes by hand or a pull. Only\
+        \ on an indexed index; requested again while it runs, the running one counts.\
+        \ Only with access to the whole repository. Send Content-Type: application/json;\
+        \ the body may be empty."
+      operationId: searchUpdate
+      parameters:
+      - name: repository
+        in: path
+        description: Repository name
+        required: true
+        schema:
+          type: string
+      responses:
+        "202":
+          description: "Started, or running already; the state"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IndexReport"
+        "401":
+          description: "Not logged in (non-browser clients): HTTP Basic challenge"
+        "404":
+          description: "Unknown repository, or the user has no access to the whole\
+            \ repository"
+        "409":
+          description: "The index needs a reindexing first (not indexed, another format,\
+            \ damaged, failed, or reindexing)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refusal"
+        "500":
+          description: "The repository is configured wrongly, or the index could not\
+            \ be read"
+  /{repository}/.search/reindex:
+    post:
+      tags:
+      - Search
+      summary: Build a repository's search index anew
+      description: "Builds the search index anew from all the repository's files,\
+        \ in the background, beside the old index, which answers searches meanwhile.\
+        \ For a first index, after an upgrade, for a damaged index, or after many\
+        \ changes by hand. Requested again while it runs, the running one counts.\
+        \ Only with access to the whole repository. Send Content-Type: application/json;\
+        \ the body may be empty."
+      operationId: searchReindex
+      parameters:
+      - name: repository
+        in: path
+        description: Repository name
+        required: true
+        schema:
+          type: string
+      responses:
+        "202":
+          description: "Started, or running already; the state"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IndexReport"
+        "401":
+          description: "Not logged in (non-browser clients): HTTP Basic challenge"
+        "404":
+          description: "Unknown repository, or the user has no access to the whole\
+            \ repository"
+        "500":
+          description: "The repository is configured wrongly, or the index could not\
+            \ be read"
   /{repository}/.git/unstage:
     post:
       tags:
@@ -595,6 +670,42 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Unavailable"
+  /{repository}/.search/index:
+    get:
+      tags:
+      - Search
+      summary: The state of a repository's search index
+      description: "The state of a repository's search index, and the dates to judge\
+        \ whether it is current: when it was built and last changed, the newest file\
+        \ in the folders the user may read, and the last commit (with Git access).\
+        \ A newest file younger than the last change is not in the index yet: update\
+        \ it. The number of files and what could not be read only with access to the\
+        \ whole repository."
+      operationId: searchIndexState
+      parameters:
+      - name: repository
+        in: path
+        description: Repository name
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: "The state: an HTML page, or JSON"
+          content:
+            text/html: {}
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IndexReport"
+        "302":
+          description: "Browser not logged in: redirect to the login page"
+        "401":
+          description: "Not logged in (non-browser clients): HTTP Basic challenge"
+        "404":
+          description: "Unknown repository, or one the user has no grant in"
+        "500":
+          description: "The repository is configured wrongly, or the index could not\
+            \ be read"
   /{repository}/.git:
     get:
       tags:
@@ -758,8 +869,109 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Unavailable"
+  /.search/index:
+    get:
+      tags:
+      - Search
+      summary: The states of all search indexes
+      description: "The state and dates of the search index of every repository the\
+        \ user may search, by name; e.g. to see after installing or upgrading which\
+        \ repositories need a reindexing."
+      operationId: searchIndexStates
+      responses:
+        "200":
+          description: "The states: an HTML page, or JSON"
+          content:
+            text/html: {}
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IndexReport"
+        "302":
+          description: "Browser not logged in: redirect to the login page"
+        "401":
+          description: "Not logged in (non-browser clients): HTTP Basic challenge"
+        "500":
+          description: "The repository is configured wrongly, or the index could not\
+            \ be read"
 components:
   schemas:
+    IndexReport:
+      type: object
+      description: "The search index of a repository, with the dates to judge whether\
+        \ it is current"
+      properties:
+        repository:
+          type: string
+        status:
+          type: string
+          description: "not-indexed, needs-reindexing, reindexing, indexed or failed"
+          enum:
+          - not-indexed
+          - needs-reindexing
+          - reindexing
+          - indexed
+          - failed
+        reason:
+          type: string
+          description: "Why: format or damaged (needs-reindexing), or what went wrong\
+            \ (failed)"
+        searchable:
+          type: boolean
+          description: "Whether search answers from it: the current index, or an older\
+            \ one meanwhile"
+        updating:
+          type: boolean
+          description: Whether an update runs
+        progress:
+          $ref: "#/components/schemas/Progress"
+          description: "While a reindexing runs: files and folders done, and in all\
+            \ (0 while counting)"
+        indexedAt:
+          type: string
+          format: date-time
+          description: When the last reindexing finished
+        updatedAt:
+          type: string
+          format: date-time
+          description: "The last change of the index: a reindexing, a write through\
+            \ Mizoine, or an update"
+        newestFile:
+          type: string
+          format: date-time
+          description: The newest modification time of a file in the folders you may
+            read
+        lastCommit:
+          type: string
+          format: date-time
+          description: The time of the last Git commit; only with Git access
+        files:
+          type: integer
+          format: int64
+          description: Files and folders in the index; only with access to the whole
+            repository
+        unreadable:
+          type: array
+          description: What the last reindexing or update could not read; only with
+            access to the whole repository
+          items:
+            type: string
+    Progress:
+      type: object
+      properties:
+        done:
+          type: integer
+          format: int32
+        total:
+          type: integer
+          format: int32
+    Refusal:
+      type: object
+      properties:
+        message:
+          type: string
+          description: "Why, for the user"
     SelectionRequest:
       type: object
       properties:
@@ -850,12 +1062,6 @@ components:
           type: integer
           format: int32
           description: "Commits in the upstream that are not here: pull first"
-    Refusal:
-      type: object
-      properties:
-        message:
-          type: string
-          description: "Why, for the user"
     CommitRequest:
       type: object
       properties:

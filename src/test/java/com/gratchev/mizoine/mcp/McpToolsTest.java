@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -45,7 +46,7 @@ class McpToolsTest {
 		Files.writeString(base.resolve("tree.yaml"), "path: tree\naccess:\n  agent: [inbox, knowledge]\n");
 		final RepositoryFiles files = new RepositoryFiles(
 				new RepositoryRegistry(base, new RepositoryFileParser(), user -> true, null), new RepositoryWriter());
-		this.tools = new McpTools(files, LIMIT, new JacksonMcpJsonMapper(JsonMapper.builder().build())).all();
+		this.tools = new McpTools(files, LIMIT, new JacksonMcpJsonMapper(JsonMapper.builder().build()), Optional.empty()).all();
 	}
 
 	private CallToolResult call(final String tool, final Map<String, Object> arguments) {

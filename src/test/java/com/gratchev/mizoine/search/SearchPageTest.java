@@ -183,7 +183,7 @@ class SearchPageTest {
 	/** The startup only looks at each index (D61), and says which are not ready. */
 	@Test
 	void theStartupSaysWhichIndexesAreNotReady(final CapturedOutput output) {
-		assertThat(output.getAll()).contains("Search index of other is not-indexed: search answers from it after a reindexing");
+		assertThat(output.getAll()).contains("Search index of other is not-indexed: reindex it (POST /other/.search/reindex)");
 	}
 
 	@Test

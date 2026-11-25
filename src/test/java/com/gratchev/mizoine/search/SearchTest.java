@@ -270,6 +270,20 @@ class SearchTest {
 	}
 
 	@Test
+	void duringAReindexingTheOldIndexAnswersAndSaysSo() {
+		reindex("notes");
+		final RepositoryIndex index = indexes.index("notes");
+		index.begin();
+
+		final SearchResults results = inNotes("guest", "apples");
+
+		assertThat(results.total()).isEqualTo(2);
+		assertThat(results.indexes()).containsExactly(new IndexInfo("notes", IndexStatus.REINDEXING, Optional.empty(), true));
+		index.build(repositories.resolve("notes"));
+		assertThat(inNotes("guest", "apples").indexes().getFirst().status()).isEqualTo(IndexStatus.INDEXED);
+	}
+
+	@Test
 	void withoutAnyIndexSearchCannotAnswer() {
 		assertThatThrownBy(() -> inNotes("guest", "apples"))
 				.isInstanceOfSatisfying(NotSearchableException.class, e -> assertThat(e.indexes())

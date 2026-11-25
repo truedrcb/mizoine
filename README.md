@@ -286,8 +286,30 @@ search is part of the URL, so a search can be bookmarked and opened in several w
   `example.org`; `bericht-2026.pdf` also by `bericht` and `pdf`; `MeetingNotes.md` by `meeting notes`.
 - **The index** lives in `search-index/<name>/`, outside the repositories, derived from the files: deleting it is
   always safe. Mizoine's own writes, moves and deletes are in it at once. Nothing else updates it on its own: not
-  at startup, not on a timer. Building an index on request is not available yet; until a repository has an index,
-  its search answers 503 with the state `not-indexed`.
+  at startup, not on a timer. You build it, and update it after changes by hand or a `git pull` (below).
+- **Agents** search with the MCP tool `search`, only in their own folders.
+
+**The index: state, update, reindexing.** After installing or upgrading, each repository's index needs a
+reindexing once (the log says which: `Search index of notes is not-indexed: reindex it`); until then its search
+answers 503.
+
+```sh
+curl -u alice -H 'Accept: application/json' http://127.0.0.1:12013/notes/.search/index      # state and dates
+curl -u alice -H 'Accept: application/json' http://127.0.0.1:12013/.search/index            # all repositories
+curl -u alice -H 'Content-Type: application/json' -X POST http://127.0.0.1:12013/notes/.search/reindex
+curl -u alice -H 'Content-Type: application/json' -X POST http://127.0.0.1:12013/notes/.search/update
+```
+
+- **The state** (also as a page: `/notes/.search/index`): `status`, `indexedAt` (the last reindexing),
+  `updatedAt` (the last change of the index), `newestFile` (the newest file in your folders) and `lastCommit` (with
+  Git access). A `newestFile` later than `updatedAt` means: changes are not in the index yet. With the whole
+  repository (`/`) also `files` and `unreadable` (what could not be read).
+- **Reindexing** builds everything anew, in the background (202); the old index answers meanwhile. For a first
+  index, after an upgrade (`needs-reindexing`), for a damaged index.
+- **Update** indexes only new, changed and deleted files, in the background (202): quick, after changes by hand
+  or a pull. Only on an `indexed` index; otherwise 409, reindex first.
+- Both only with the whole repository (`/`), else 404; asked again while running, the running one counts. A JSON
+  `POST` needs no CSRF token.
 
 The same as JSON:
 
@@ -310,7 +332,7 @@ curl -u alice -H 'Accept: application/json' 'http://127.0.0.1:12013/notes/.searc
 
 Agents (Claude, also on the phone, Claude Code, others) store and retrieve knowledge through the MCP endpoint
 `https://<host>/mcp`. Tools: `list_repositories`, `list_folder`, `read_file`, `write_file`, `create_folder`, `delete`,
-`move`. `read_file` also gives the file's version; with it, `write_file` and `move` change the file only if nobody
+`move`, `search` (when search is on). `read_file` also gives the file's version; with it, `write_file` and `move` change the file only if nobody
 else did in between.
 Files are given raw; the agent's writes are plain files that you review with `git diff` and commit.
 

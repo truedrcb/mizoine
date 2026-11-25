@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -56,6 +57,27 @@ class GitCommandsTest {
 
 		assertThat(commands.status(repository)).contains(new GitStatus(Optional.of("main"), false, Optional.empty(),
 				List.of(new Change("first.md", Optional.empty(), Kind.UNCHANGED, Kind.UNTRACKED))));
+	}
+
+	// the last commit (step 60: a date beside the search index's own)
+
+	@Test
+	void theTimeOfTheLastCommit() throws Exception {
+		final Instant before = Instant.now().minusSeconds(2);
+		final Path repository = git.repository(dir.resolve("repo"));
+
+		assertThat(commands.lastCommit(repository)).hasValueSatisfying(at -> assertThat(at).isAfter(before)
+				.isBeforeOrEqualTo(Instant.now()));
+	}
+
+	@Test
+	void noLastCommitWithoutGitOrCommits() throws Exception {
+		final Path fresh = Files.createDirectories(dir.resolve("new"));
+		git.git(fresh, "init", "-q");
+
+		assertThat(commands.lastCommit(Files.createDirectories(dir.resolve("plain")))).isEmpty();
+		assertThat(commands.lastCommit(fresh)).isEmpty();
+		assertThat(commands.lastCommit(Files.createDirectories(git.repository(dir.resolve("repo")).resolve("sub")))).isEmpty();
 	}
 
 	// the status

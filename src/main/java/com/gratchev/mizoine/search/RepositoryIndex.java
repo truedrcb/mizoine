@@ -5,6 +5,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -13,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import org.apache.lucene.document.Document;
@@ -32,6 +34,8 @@ import org.apache.lucene.util.Version;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.gratchev.mizoine.files.FileVersion;
+
 /**
  * The search index of one repository (step 56, D58–D61), in its own folder per format below
  * {@code mizoine.search.index-dir/<repository>/}. Nothing heavy runs on its own:
@@ -48,6 +52,8 @@ public final class RepositoryIndex {
 	private static final Logger log = LoggerFactory.getLogger(RepositoryIndex.class);
 	private static final String FORMAT_KEY = "mizoine.format";
 	private static final String LUCENE_KEY = "lucene";
+	private static final String INDEXED_AT_KEY = "mizoine.indexed-at";
+	private static final String UPDATED_AT_KEY = "mizoine.updated-at";
 	private static final String BUILDING = ".building";
 
 	private final String repository;
@@ -63,6 +69,18 @@ public final class RepositoryIndex {
 	private Directory directory;
 	/** Changes made while a reindexing walks the files: applied to the new index before it is used. */
 	private Set<List<String>> pending;
+	private boolean updating;
+	private Optional<Instant> indexedAt = Optional.empty();
+	private Optional<Instant> updatedAt = Optional.empty();
+	private List<String> unreadable = List.of();
+	/** How far a reindexing is: written by its own thread, read by anyone. */
+	private final AtomicInteger done = new AtomicInteger();
+	private final AtomicInteger total = new AtomicInteger();
+
+	/** Whether an update was started (step 60). */
+	public enum Start {
+		STARTED, RUNNING, NEEDS_REINDEXING
+	}
 
 	private RepositoryIndex(final String repository, final Path dir, final SearchAnalysis analysis) {
 		this.repository = repository;
@@ -96,6 +114,8 @@ public final class RepositoryIndex {
 			}
 			writer = new IndexWriter(directory, config(IndexWriterConfig.OpenMode.APPEND));
 			searchers = new SearcherManager(writer, null);
+			indexedAt = Optional.ofNullable(data.get(INDEXED_AT_KEY)).map(Instant::parse);
+			updatedAt = Optional.ofNullable(data.get(UPDATED_AT_KEY)).map(Instant::parse);
 			return IndexState.of(IndexStatus.INDEXED, true);
 		} catch (final IOException e) {
 			log.warn("Search index of {} at {} cannot be read: {}", repository, current, e.toString());
@@ -140,6 +160,12 @@ public final class RepositoryIndex {
 		return state;
 	}
 
+	public synchronized IndexDetails details() {
+		return new IndexDetails(state, updating, state.status() == IndexStatus.REINDEXING
+				? Optional.of(new IndexDetails.Progress(done.get(), total.get())) : Optional.empty(),
+				indexedAt, updatedAt, writer == null ? 0 : writer.getDocStats().numDocs, unreadable);
+	}
+
 	/** A view for one search, if there is an index to search; close it after the search. */
 	public synchronized Optional<IndexLease> lease() {
 		if (searchers == null) {
@@ -157,23 +183,44 @@ public final class RepositoryIndex {
 	 * deletes the folders of other formats. A failure keeps the old index and says why ({@link IndexStatus#FAILED}).
 	 */
 	public void reindex(final Path root) {
-		synchronized (this) {
-			if (state.status() == IndexStatus.REINDEXING) {
-				return;
-			}
-			pending = new LinkedHashSet<>();
-			state = IndexState.of(IndexStatus.REINDEXING, searchers != null);
+		if (begin()) {
+			build(root);
 		}
+	}
+
+	/** @return whether a reindexing starts now: {@code false} while one runs, which counts instead */
+	public synchronized boolean begin() {
+		if (state.status() == IndexStatus.REINDEXING) {
+			return false;
+		}
+		pending = new LinkedHashSet<>();
+		done.set(0);
+		total.set(0);
+		state = IndexState.of(IndexStatus.REINDEXING, searchers != null);
+		return true;
+	}
+
+	/** The reindexing started by {@link #begin()}: long, without the lock, so search answers meanwhile. */
+	public void build(final Path root) {
 		final Path building = dir.resolve(format.folder() + BUILDING);
 		try {
 			deleteTree(building);
 			Files.createDirectories(building);
 			final Directory built = FSDirectory.open(building);
 			final IndexWriter newWriter = new IndexWriter(built, config(IndexWriterConfig.OpenMode.CREATE));
-			IndexDocuments.walk(root, List.of(), entry -> add(newWriter, root, entry));
+			IndexDocuments.walk(root, List.of(), entry -> total.incrementAndGet());
+			final List<String> left = new ArrayList<>();
+			IndexDocuments.walk(root, List.of(), entry -> {
+				add(newWriter, root, entry);
+				done.incrementAndGet();
+			}, left::add);
 			switchTo(root, building, built, newWriter);
+			synchronized (this) {
+				unreadable = List.copyOf(left);
+			}
 			log.info("Search index of {} built", repository);
-		} catch (final IOException | UncheckedIOException e) {
+		} catch (final IOException | RuntimeException e) {
+			// also an unexpected failure ends the reindexing: it runs in the background, nobody else would see it
 			log.error("Search index of {} could not be built: {}", repository, e.toString());
 			deleteQuietly(building);
 			synchronized (this) {
@@ -188,7 +235,7 @@ public final class RepositoryIndex {
 		for (final List<String> path : pending) {
 			apply(newWriter, root, path);
 		}
-		commit(newWriter);
+		commit(newWriter, true);
 		newWriter.close();
 		built.close();
 		closeQuietly();
@@ -202,33 +249,73 @@ public final class RepositoryIndex {
 		}
 	}
 
-	/** Indexes only what changed since the index's own record (by version): new, changed and deleted files. */
-	public synchronized void update(final Path root) {
+	/** @return whether an update starts now; it runs only on an index of the current format, one at a time */
+	public synchronized Start beginUpdate() {
 		if (state.status() != IndexStatus.INDEXED) {
-			return;
+			return Start.NEEDS_REINDEXING;
 		}
+		if (updating) {
+			return Start.RUNNING;
+		}
+		updating = true;
+		return Start.STARTED;
+	}
+
+	/** The update started by {@link #beginUpdate()}. */
+	public void runUpdate(final Path root) {
 		try {
-			final Map<String, String> known = known();
-			final Set<String> seen = new LinkedHashSet<>();
-			IndexDocuments.walk(root, List.of(), entry -> {
-				seen.add(entry.path());
-				if (!entry.version().orElse("").equals(known.get(entry.path()))) {
-					update(writer, root, entry);
-				}
-			});
-			for (final String gone : known.keySet()) {
-				if (!seen.contains(gone)) {
-					writer.deleteDocuments(new Term(IndexDocuments.PATH, gone));
-				}
+			update(root);
+		} finally {
+			synchronized (this) {
+				updating = false;
 			}
-			commit(writer);
-		} catch (final IOException e) {
-			throw new UncheckedIOException(e);
+		}
+	}
+
+	/**
+	 * Indexes only what changed since the index's own record (by version): new, changed and deleted files. Unchanged
+	 * files are not read. The files are read without the lock; only the writing holds it.
+	 */
+	public void update(final Path root) {
+		final Map<String, String> known;
+		synchronized (this) {
+			if (state.status() != IndexStatus.INDEXED) {
+				return;
+			}
+			known = known();
+		}
+		final Set<String> seen = new LinkedHashSet<>();
+		final List<Document> changed = new ArrayList<>();
+		final List<String> left = new ArrayList<>();
+		IndexDocuments.walk(root, List.of(), entry -> {
+			seen.add(entry.path());
+			if (!entry.version().map(FileVersion::etag).orElse("").equals(known.get(entry.path()))) {
+				changed.add(IndexDocuments.document(repository, root, entry, analysis));
+			}
+		}, left::add);
+		synchronized (this) {
+			if (writer == null) {
+				return;
+			}
+			try {
+				for (final Document document : changed) {
+					writer.updateDocument(new Term(IndexDocuments.PATH, document.get(IndexDocuments.PATH)), document);
+				}
+				for (final String gone : known.keySet()) {
+					if (!seen.contains(gone)) {
+						writer.deleteDocuments(new Term(IndexDocuments.PATH, gone));
+					}
+				}
+				commit(writer, false);
+				unreadable = List.copyOf(left);
+			} catch (final IOException e) {
+				throw new UncheckedIOException(e);
+			}
 		}
 	}
 
 	/** Every path the index holds, with its version (empty for folders). */
-	private Map<String, String> known() throws IOException {
+	private Map<String, String> known() {
 		final Map<String, String> known = new HashMap<>();
 		try (DirectoryReader reader = DirectoryReader.open(writer)) {
 			for (final LeafReaderContext leaf : reader.leaves()) {
@@ -242,6 +329,8 @@ public final class RepositoryIndex {
 					}
 				}
 			}
+		} catch (final IOException e) {
+			throw new UncheckedIOException(e);
 		}
 		return known;
 	}
@@ -259,7 +348,7 @@ public final class RepositoryIndex {
 		}
 		try {
 			apply(writer, root, path);
-			commit(writer);
+			commit(writer, false);
 		} catch (final IOException e) {
 			throw new UncheckedIOException(e);
 		}
@@ -283,19 +372,20 @@ public final class RepositoryIndex {
 		}
 	}
 
-	private void update(final IndexWriter target, final Path root, final IndexDocuments.Entry entry) {
-		try {
-			target.updateDocument(new Term(IndexDocuments.PATH, entry.path()),
-					IndexDocuments.document(repository, root, entry, analysis));
-		} catch (final IOException e) {
-			throw new UncheckedIOException(e);
-		}
-	}
-
-	private void commit(final IndexWriter target) throws IOException {
-		target.setLiveCommitData(Map.of(FORMAT_KEY, format.folder(), LUCENE_KEY, Version.LATEST.toString()).entrySet());
+	/**
+	 * With the format and the dates in the commit data, so they are kept across a restart.
+	 *
+	 * @param rebuilt a reindexing: built and updated at this moment; otherwise built when it was
+	 */
+	private void commit(final IndexWriter target, final boolean rebuilt) throws IOException {
+		final Instant now = Instant.now();
+		final Map<String, String> data = new HashMap<>(Map.of(FORMAT_KEY, format.folder(),
+				LUCENE_KEY, Version.LATEST.toString(), UPDATED_AT_KEY, now.toString()));
+		(rebuilt ? Optional.of(now) : indexedAt).ifPresent(at -> data.put(INDEXED_AT_KEY, at.toString()));
+		target.setLiveCommitData(data.entrySet());
 		target.commit();
 		if (target == writer) {
+			updatedAt = Optional.of(now);
 			searchers.maybeRefreshBlocking();
 		}
 	}

@@ -1,5 +1,7 @@
 package com.gratchev.mizoine.search;
 
+import java.util.Optional;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -8,6 +10,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.event.EventListener;
 
 import com.gratchev.mizoine.MizoineProperties;
+import com.gratchev.mizoine.git.GitCommands;
+import com.gratchev.mizoine.git.GitException;
 import com.gratchev.mizoine.repositories.RepositoryChange;
 import com.gratchev.mizoine.repositories.RepositoryConfig;
 import com.gratchev.mizoine.repositories.RepositoryFiles;
@@ -33,6 +37,19 @@ public class SearchConfig {
 	@Bean
 	Search search(final RepositoryFiles files, final SearchIndexes indexes) {
 		return new Search(files, indexes);
+	}
+
+	/** The last commit for the index state: a Git that fails or is missing gives no date, not an error page. */
+	@Bean
+	IndexReports indexReports(final RepositoryFiles files, final SearchIndexes indexes, final GitCommands git) {
+		return new IndexReports(files, indexes, root -> {
+			try {
+				return git.lastCommit(root);
+			} catch (final GitException e) {
+				log.warn("No last commit for {}: {}", root, e.getMessage());
+				return Optional.empty();
+			}
+		});
 	}
 
 	@Bean
@@ -62,14 +79,15 @@ public class SearchConfig {
 			}
 		}
 
-		/** One line per repository whose index is not ready. */
+		/** One line per repository whose index is not ready, naming the request that builds it. */
 		@EventListener(ApplicationReadyEvent.class)
 		void opened() {
 			for (final RepositoryConfig repository : registry.all()) {
 				final IndexState state = indexes.index(repository.name()).state();
 				if (state.status() != IndexStatus.INDEXED) {
-					log.warn("Search index of {} is {}{}: search answers from it after a reindexing", repository.name(),
-							state.status().code(), state.reason().map(reason -> " (" + reason + ")").orElse(""));
+					log.warn("Search index of {} is {}{}: reindex it (POST /{}/.search/reindex)", repository.name(),
+							state.status().code(), state.reason().map(reason -> " (" + reason + ")").orElse(""),
+							repository.name());
 				}
 			}
 		}

@@ -77,7 +77,7 @@ class McpEndpointTest {
 			final List<McpSchema.Tool> tools = client.listTools().tools();
 
 			assertThat(tools).extracting(McpSchema.Tool::name).containsExactlyInAnyOrder(
-					"list_repositories", "list_folder", "read_file", "write_file", "create_folder", "delete", "move");
+					"list_repositories", "list_folder", "read_file", "write_file", "create_folder", "delete", "move", "search");
 			assertThat(tools).allSatisfy(tool -> assertThat(tool.description()).isNotBlank());
 			assertThat(tools).filteredOn(tool -> tool.name().equals("write_file")).singleElement()
 					.satisfies(tool -> assertThat(tool.description()).contains("git"));

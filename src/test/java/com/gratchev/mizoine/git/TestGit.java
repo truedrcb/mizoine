@@ -15,11 +15,11 @@ import java.util.Map;
  * Real Git repositories for tests, with Git cut off from the machine's settings: an own empty home, no system
  * settings, a fixed identity and branch name. Runs {@code git} directly, not through {@link GitCommands}.
  */
-final class TestGit {
+public final class TestGit {
 
 	private final Map<String, String> environment;
 
-	TestGit(final Path home) throws IOException {
+	public TestGit(final Path home) throws IOException {
 		Files.createDirectories(home);
 		final Path settings = Files.writeString(home.resolve(".gitconfig"),
 				"[user]\n\tname = Test\n\temail = test@example.org\n[init]\n\tdefaultBranch = main\n");
@@ -32,12 +32,12 @@ final class TestGit {
 	}
 
 	/** The environment for {@link GitCommands} in tests: the same isolation. */
-	Map<String, String> environment() {
+	public Map<String, String> environment() {
 		return environment;
 	}
 
 	/** Runs git in a folder; fails the test if git fails. */
-	String git(final Path folder, final String... arguments) throws IOException, InterruptedException {
+	public String git(final Path folder, final String... arguments) throws IOException, InterruptedException {
 		final List<String> command = new ArrayList<>(List.of("git", "-C", folder.toString()));
 		command.addAll(List.of(arguments));
 		final ProcessBuilder builder = new ProcessBuilder(command).redirectErrorStream(true);
@@ -50,7 +50,7 @@ final class TestGit {
 	}
 
 	/** A new repository with one committed file {@code README.md}. */
-	Path repository(final Path folder) throws IOException, InterruptedException {
+	public Path repository(final Path folder) throws IOException, InterruptedException {
 		Files.createDirectories(folder);
 		git(folder, "init", "-q");
 		Files.writeString(folder.resolve("README.md"), "readme\n");

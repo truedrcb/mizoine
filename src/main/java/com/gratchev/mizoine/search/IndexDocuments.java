@@ -7,7 +7,9 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -47,7 +49,7 @@ final class IndexDocuments {
 	private static final Pattern HEADING = Pattern.compile("(?m)^#{1,6}[ \\t]+(.+?)[ \\t#]*$");
 
 	/** A file or folder as it is now; {@code version} only for files. */
-	record Entry(List<String> segments, Optional<String> version) {
+	record Entry(List<String> segments, Optional<FileVersion> version) {
 
 		boolean folder() {
 			return version.isEmpty();
@@ -70,6 +72,12 @@ final class IndexDocuments {
 	 * link. The root itself is no entry.
 	 */
 	static void walk(final Path repositoryRoot, final List<String> start, final Consumer<Entry> entries) {
+		walk(repositoryRoot, start, entries, unreadable -> { });
+	}
+
+	/** @param unreadable told of each file or folder that cannot be read, by its path (folders end with '/') */
+	static void walk(final Path repositoryRoot, final List<String> start, final Consumer<Entry> entries,
+			final Consumer<String> unreadable) {
 		final Path root;
 		try {
 			// a root that is a link counts where it leads: the walk follows no link, also not its start
@@ -99,7 +107,7 @@ final class IndexDocuments {
 				public FileVisitResult visitFile(final Path file, final BasicFileAttributes attributes) {
 					if (attributes.isRegularFile() && !FolderNames.isHidden(file.getFileName().toString())) {
 						FileVersion.of(file).ifPresent(version -> entries.accept(new Entry(segments(root, file),
-								Optional.of(version.etag()))));
+								Optional.of(version))));
 					}
 					return FileVisitResult.CONTINUE;
 				}
@@ -107,6 +115,7 @@ final class IndexDocuments {
 				@Override
 				public FileVisitResult visitFileFailed(final Path file, final IOException e) {
 					log.warn("Search index: {} cannot be read, left out: {}", file, e.toString());
+					unreadable.accept(path(segments(root, file), Files.isDirectory(file, LinkOption.NOFOLLOW_LINKS)));
 					return FileVisitResult.CONTINUE;
 				}
 			});
@@ -114,6 +123,19 @@ final class IndexDocuments {
 			// gone since it was checked: nothing to index
 			log.debug("Search index: {} is gone", first, e);
 		}
+	}
+
+	/**
+	 * The newest modification time of a file in these folders (step 60, D49), by the same rules as the index: no
+	 * hidden names, no links. Reads names and times only, no content.
+	 *
+	 * @param folders path segments; an empty list is the whole repository
+	 */
+	static Optional<Instant> newest(final Path root, final List<List<String>> folders) {
+		final List<Instant> times = new ArrayList<>();
+		folders.forEach(folder -> walk(root, folder, entry -> entry.version()
+				.ifPresent(version -> times.add(version.modified().toInstant()))));
+		return times.stream().max(Comparator.naturalOrder());
 	}
 
 	/** No part hidden, none on the way a link (the walk does not follow the last one either), and it exists. */
@@ -150,7 +172,7 @@ final class IndexDocuments {
 		document.add(new StringField(REPOSITORY, repository, Field.Store.YES));
 		document.add(new StringField(PATH, entry.path(), Field.Store.YES));
 		document.add(new StringField(KIND, entry.folder() ? FOLDER : FILE, Field.Store.YES));
-		entry.version().ifPresent(version -> document.add(new StoredField(VERSION, version)));
+		entry.version().ifPresent(version -> document.add(new StoredField(VERSION, version.etag())));
 		document.add(new TextField(SearchAnalysis.NAME, name, Field.Store.NO));
 		document.add(new TextField(SearchAnalysis.NAME_PARTS, name, Field.Store.NO));
 		document.add(new TextField(SearchAnalysis.TITLE, text.flatMap(content -> title(name, content)).orElse(name),
