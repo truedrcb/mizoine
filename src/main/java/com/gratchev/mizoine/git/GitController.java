@@ -25,7 +25,7 @@ import org.springframework.web.servlet.view.RedirectView;
 
 import com.gratchev.mizoine.ApiTexts;
 import com.gratchev.mizoine.repositories.RepositoryFiles;
-import com.gratchev.mizoine.users.UserEmails;
+import com.gratchev.mizoine.users.KnownUsers;
 
 import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;
@@ -58,13 +58,13 @@ class GitController {
 	private final RepositoryFiles files;
 	private final GitCommands git;
 	private final GitActions actions;
-	private final UserEmails emails;
+	private final KnownUsers users;
 
-	GitController(final RepositoryFiles files, final GitCommands git, final GitActions actions, final UserEmails emails) {
+	GitController(final RepositoryFiles files, final GitCommands git, final GitActions actions, final KnownUsers users) {
 		this.files = files;
 		this.git = git;
 		this.actions = actions;
-		this.emails = emails;
+		this.users = users;
 	}
 
 	@GetMapping(value = "/{repository}/.git/", produces = MediaType.TEXT_HTML_VALUE)
@@ -202,7 +202,7 @@ class GitController {
 	}
 
 	private Author author(final String user) {
-		return Author.of(user, emails.email(user));
+		return Author.of(user, users.email(user));
 	}
 
 	/** Why an action was not done, often in Git's own words. */

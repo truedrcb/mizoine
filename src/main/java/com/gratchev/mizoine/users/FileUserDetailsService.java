@@ -25,7 +25,7 @@ import com.gratchev.mizoine.files.FileVersion;
  * <p>
  * Every password hash is checked to be one {@link PasswordHashing} supports.
  */
-public class FileUserDetailsService implements UserDetailsService, UserEmails {
+public class FileUserDetailsService implements UserDetailsService, KnownUsers {
 
 	private static final Logger log = LoggerFactory.getLogger(FileUserDetailsService.class);
 
@@ -56,6 +56,12 @@ public class FileUserDetailsService implements UserDetailsService, UserEmails {
 				.password(entry.passwordHash())
 				.roles(ROLE)
 				.build();
+	}
+
+	@Override
+	public boolean exists(final String username) {
+		reloadIfChanged();
+		return users.containsKey(username);
 	}
 
 	@Override

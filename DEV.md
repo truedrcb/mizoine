@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-24): steps 0–34 and 37–48 done (901 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-25): steps 0–34 and 37–48 done (907 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -1256,7 +1256,7 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
   - `git commit -q -m <message> --author=<user>`. `CommitMessage` is never blank. Nothing staged is refused before Git runs. Hooks run; a refusing hook gives its own message.
   - **Author (D38):** `Author.of(username, email)`; `<`, `>` and line breaks are removed, as they would end the name or the email in Git's form.
     - `users.yaml` has an optional `email` per user (`UserEntry.email`), parsed and checked to be text.
-    - `UserEmails` (implemented by `FileUserDetailsService`, reloaded like the users) is all the Git page knows of the users.
+    - `UserEmails` (since the review: `KnownUsers`; implemented by `FileUserDetailsService`, reloaded like the users) is all the Git page knows of the users.
     - The committer is the server's own Git identity.
   - `POST /{repository}/.git/commit` with `{"message": …}`; the page shows a message field and "Commit the staged changes" when something is staged.
   - Tests:
@@ -1312,6 +1312,17 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
       - `RepositoryWriter.isInside` `>` → `>=`: a folder moved onto itself is refused as "destination exists" anyway;
       - `isVersion` `orElse(false)` → `true`: only for a file that vanishes between two checks, a race;
       - `copy` `read >= 0` → `> 0` and `0` → `1`: `read` returns 0 only for an empty buffer.
+- *Review of the Git feature (steps 43–48), with the tools and for security, 2026-11-25:*
+  - **Fixed: the JSON exemption from CSRF was wider than JSON.** `isCompatibleWith` also let `*/*` and `application/*` through, and a malformed `Content-Type` threw out of the security filter. Now only `application/json` itself (with parameters such as `charset`) is exempt; anything else, or a type that cannot be read, needs the token (`ApiClientCsrfTest`). Browsers could not send these types cross-site anyway, so it was no open hole: the rule now says exactly what its reason covers.
+  - **dryer over all production code (not only `--changed`)** found `exists(UserDetailsService, …)` twice, in `RepositoriesConfig` and `OAuthConfig`. The question "does the users file name this user" is now asked once, `KnownUsers.exists` (the interface was `UserEmails`; `FileUserDetailsService` implements it). Left by design: `pull`/`push` at 0.87 and `stage`/`unstage` at 0.81, the annotations of separate endpoints around one-line bodies.
+  - crapper: all methods of the feature below 10 (the highest: `GitStatusParser.kind`, a switch, 9.0). mutator on `SecurityConfig` and `FileUserDetailsService`: 24 killed, none left.
+  - Checked, nothing to change:
+    - Git gets only paths from its own status, after `--`, with `--literal-pathspecs`; no shell. The message is one argument after `-m`; `--author` is always `Name <email>` with `<`, `>` and line breaks removed.
+    - Hooks, `.git/config`, `.gitattributes`, `.gitmodules` and nested `.git` folders cannot be written through Mizoine: hidden names are refused for every write (D3), also behind links. Git config and hooks stay the server administrator's.
+    - Git's environment has no variable that points it at another repository; the root must be the top of the working tree.
+    - No CORS anywhere, which the JSON and `Destination` exemptions rely on; cookies are `SameSite=Lax`.
+    - The page shows Git's messages and paths escaped (`th:text`); redirects use the repository name only after the access check.
+    - Git access reveals every changed path and Git's messages for the whole repository: as decided (D33).
 
 ## Glossary
 

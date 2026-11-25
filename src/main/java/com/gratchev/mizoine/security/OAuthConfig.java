@@ -15,8 +15,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
@@ -40,6 +38,7 @@ import org.springframework.security.web.authentication.LoginUrlAuthenticationEnt
 
 import com.gratchev.mizoine.MizoineProperties;
 import com.gratchev.mizoine.mcp.McpPaths;
+import com.gratchev.mizoine.users.KnownUsers;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
@@ -124,12 +123,12 @@ class OAuthConfig {
 	/** Checks Mizoine's own tokens: signature, time, issuer, audience, and that the user still exists. */
 	@Bean
 	JwtDecoder jwtDecoder(final JWKSource<SecurityContext> signingKey, final MizoineProperties properties,
-			final UserDetailsService users) {
+			final KnownUsers users) {
 		final NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSource(signingKey).build();
 		decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
 				JwtValidators.createDefaultWithIssuer(publicUrl(properties)),
 				claim("the token is not for " + resource(properties), jwt -> jwt.getAudience().contains(resource(properties))),
-				claim("the user of the token no longer exists", jwt -> exists(users, jwt.getSubject()))));
+				claim("the user of the token no longer exists", jwt -> users.exists(jwt.getSubject()))));
 		return decoder;
 	}
 
@@ -148,15 +147,6 @@ class OAuthConfig {
 		return jwt -> test.test(jwt)
 				? OAuth2TokenValidatorResult.success()
 				: OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token", description, null));
-	}
-
-	private static boolean exists(final UserDetailsService users, final String username) {
-		try {
-			users.loadUserByUsername(username);
-			return true;
-		} catch (final UsernameNotFoundException e) {
-			return false;
-		}
 	}
 
 	private static KeyPair rsaKeys() {

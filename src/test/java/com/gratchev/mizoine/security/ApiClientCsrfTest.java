@@ -12,6 +12,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -63,5 +65,27 @@ class ApiClientCsrfTest {
 		assertThat(statusOf(delete(TARGET).session(session))).isEqualTo(403);
 		// that the browser's token (cookie XSRF-TOKEN, header X-XSRF-TOKEN, D27) passes: EditorPageTest, in a context
 		// of its own. spring-security-test's csrf() replaces the token repository of the whole test context.
+	}
+
+	/** Only JSON itself is exempt (steps 33, 46): not a type JSON merely fits into, and not one that is no type. */
+	@ParameterizedTest
+	@ValueSource(strings = {"*/*", "application/*", "not a type", "application/json-seq"})
+	void postWithoutTheJsonTypeNeedsTheToken(final String contentType) throws Exception {
+		final MockHttpSession session = (MockHttpSession) mockMvc
+				.perform(formLogin().user(ARTEM).password(password(ARTEM)))
+				.andReturn().getRequest().getSession();
+
+		assertThat(statusOf(post("/notes/.git/stage").session(session).header("Content-Type", contentType)
+				.content("{\"all\":true}"))).isEqualTo(403);
+	}
+
+	@Test
+	void jsonPostNeedsNoToken() throws Exception {
+		final MockHttpSession session = (MockHttpSession) mockMvc
+				.perform(formLogin().user(ARTEM).password(password(ARTEM)))
+				.andReturn().getRequest().getSession();
+
+		assertThat(statusOf(post("/notes/.git/stage").session(session)
+				.header("Content-Type", "application/json; charset=UTF-8").content("{\"all\":true}"))).isNotEqualTo(403);
 	}
 }

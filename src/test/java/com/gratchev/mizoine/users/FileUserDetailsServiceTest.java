@@ -38,6 +38,12 @@ class FileUserDetailsServiceTest {
 	}
 
 	@Test
+	void whetherAUserExists() {
+		assertThat(service.exists("artem")).isTrue();
+		assertThat(service.exists("nobody")).isFalse();
+	}
+
+	@Test
 	void theEmailOfAUser() {
 		assertThat(service.email("artem")).contains("artem@example.org");
 		assertThat(service.email("nobody")).isEmpty();

@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.InvalidMediaTypeException;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -136,8 +137,16 @@ public class SecurityConfig {
 	 * the 401 that leads it to the OAuth login (step 34), not a 403 from CSRF. A form POST stays CSRF-protected.
 	 */
 	private static boolean isJsonPost(final HttpServletRequest request) {
-		return HttpMethod.POST.matches(request.getMethod()) && request.getContentType() != null
-				&& MediaType.APPLICATION_JSON.isCompatibleWith(MediaType.parseMediaType(request.getContentType()));
+		return HttpMethod.POST.matches(request.getMethod()) && isJson(request.getContentType());
+	}
+
+	/** JSON itself, with or without parameters; not a wildcard JSON fits into, and not a type that cannot be read. */
+	private static boolean isJson(final String contentType) {
+		try {
+			return contentType != null && MediaType.APPLICATION_JSON.equalsTypeAndSubtype(MediaType.parseMediaType(contentType));
+		} catch (final InvalidMediaTypeException e) {
+			return false;
+		}
 	}
 
 	/** D27: readable by the pages' JavaScript; {@code SameSite=Lax} like the session cookie; Secure behind HTTPS. */
