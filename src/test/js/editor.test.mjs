@@ -1,15 +1,20 @@
 // Step 37: the editor's logic (src/main/resources/ui/editor/editor.js), without a browser.
 // Run: node --test src/test/js/   (also part of mvn verify)
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { parseFileParam, csrfToken, restoreLineEndings, FileSession, languageFor } from '../../main/resources/ui/editor/editor.js';
+
+/** Every request of every test in this file: none may create a file (step 66). */
+const allCalls = [];
 
 /** A fake fetch: answers with the given responses in turn and records every request. */
 function fakeFetch(...responses) {
 	const calls = [];
 	const fetch = async (url, options = {}) => {
-		calls.push({ url, method: options.method ?? 'GET', headers: options.headers ?? {}, body: options.body });
+		const call = { url, method: options.method ?? 'GET', headers: options.headers ?? {}, body: options.body };
+		calls.push(call);
+		allCalls.push(call);
 		const next = responses.shift() ?? { status: 500 };
 		return {
 			status: next.status,
@@ -82,9 +87,49 @@ test('load is a GET of the file URL asking for the raw file', async () => {
 	assert.equal(fetch.calls[0].headers['X-Requested-With'], 'XMLHttpRequest');
 });
 
-test('missing file opens empty, as new', async () => {
-	const session = new FileSession('/notes/new.md', fakeFetch({ status: 404 }));
-	assert.deepEqual(await session.load(), { state: 'new', text: '' });
+// step 66 (D76): the editor never creates a file; a link to a missing path cannot make the user create one
+
+test('a missing file is shown as missing, and Save sends nothing', async () => {
+	const fetch = fakeFetch({ status: 404 });
+	const session = new FileSession('/notes/run.sh', fetch);
+
+	assert.deepEqual(await session.load(), { state: 'missing' });
+	assert.deepEqual(await session.save('echo hi', 't'), { state: 'not-loaded' });
+	assert.equal(fetch.calls.length, 1);
+	assert.equal(session.isChanged('echo hi'), false);
+});
+
+for (const failed of [{ status: 401 }, { status: 500 }, null]) {
+	test(`after a load that failed (${failed?.status ?? 'no answer'}), Save sends nothing`, async () => {
+		const fetch = failed ? fakeFetch(failed) : async () => { throw new TypeError('network'); };
+		const calls = [];
+		const session = new FileSession('/notes/plan.md', async (url, options) => {
+			calls.push(options);
+			return fetch(url, options);
+		});
+		await session.load();
+
+		assert.deepEqual(await session.save('text', 't'), { state: 'not-loaded' });
+		assert.equal(calls.length, 1);
+		assert.equal(session.isChanged('text'), false);
+	});
+}
+
+test('a file deleted elsewhere is not created again by Save', async () => {
+	const fetch = fakeFetch({ status: 200, body: 'a', headers: { ETag: '"v1"' } }, { status: 412 }, { status: 404 });
+	const session = new FileSession('/notes/plan.md', fetch);
+	await session.load();
+
+	// the server refuses an If-Match on a missing file; Reload then shows it missing, with no Save
+	assert.deepEqual(await session.save('b', 't'), { state: 'conflict' });
+	assert.equal(fetch.calls[1].headers['If-Match'], '"v1"');
+	assert.deepEqual(await session.load(), { state: 'missing' });
+	assert.deepEqual(await session.save('b', 't'), { state: 'not-loaded' });
+	assert.equal(fetch.calls.length, 3);
+});
+
+after(() => {
+	assert.deepEqual(allCalls.filter(call => 'If-None-Match' in call.headers), [], 'no request may create a file');
 });
 
 test('not logged in while loading', async () => {
@@ -92,7 +137,7 @@ test('not logged in while loading', async () => {
 	assert.deepEqual(await session.load(), { state: 'login' });
 });
 
-// saving: PUT of the same URL with If-Match, or If-None-Match: * for a new file
+// saving: PUT of the same URL with If-Match of the loaded version, never anything else
 
 test('save is a PUT of the same URL with If-Match, the CSRF header and the text', async () => {
 	const fetch = fakeFetch({ status: 200, body: 'old\r\n', headers: { ETag: '"v1"' } },
@@ -120,19 +165,6 @@ test('the next save uses the new ETag', async () => {
 	await session.save('c', 't');
 
 	assert.equal(fetch.calls[2].headers['If-Match'], '"v2"');
-});
-
-test('a new file is created only if it still does not exist', async () => {
-	const fetch = fakeFetch({ status: 404 }, { status: 201, headers: { ETag: '"v1"' } },
-		{ status: 204, headers: { ETag: '"v2"' } });
-	const session = new FileSession('/notes/new.md', fetch);
-	await session.load();
-
-	assert.deepEqual(await session.save('first', 't'), { state: 'saved' });
-	assert.equal(fetch.calls[1].headers['If-None-Match'], '*');
-	assert.equal(fetch.calls[1].headers['If-Match'], undefined);
-	await session.save('second', 't');
-	assert.equal(fetch.calls[2].headers['If-Match'], '"v1"');
 });
 
 test('changed elsewhere: conflict, and the text is kept for the user', async () => {
@@ -184,7 +216,8 @@ for (const [name, language] of [['plan.md', 'markdown'], ['README.markdown', 'ma
 	['config.yaml', 'yaml'], ['config.yml', 'yaml'], ['page.html', 'html'], ['page.htm', 'html'], ['style.css', 'css'],
 	['app.js', 'javascript'], ['app.mjs', 'javascript'], ['app.ts', 'javascript'], ['pom.xml', 'xml'],
 	['icon.svg', 'xml'], ['Main.java', 'java'], ['app.properties', 'properties'], ['run.sh', 'shell'],
-	['PLAN.MD', 'markdown'], ['notes.txt', 'text'], ['Makefile', 'text'], ['.hidden', 'text']]) {
+	['PLAN.MD', 'markdown'], ['a.md', 'markdown'], ['notes.txt', 'text'], ['Makefile', 'text'], ['.hidden', 'text'],
+	['.md', 'text']]) {
 	test(`${name} is highlighted as ${language}`, () => {
 		assert.equal(languageFor(name), language);
 	});

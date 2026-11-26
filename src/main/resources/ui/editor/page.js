@@ -30,9 +30,10 @@ async function editingField(textarea, fileName) {
 
 const MESSAGES = {
 	loaded: '',
-	new: 'New file: not saved yet.',
+	missing: 'This file does not exist. The editor does not create files.',
+	'not-loaded': 'Nothing loaded: nothing to save.',
 	saved: 'Saved.',
-	login: 'Not logged in. Log in (opens a new tab), then press Save again. Your text stays here.',
+	login: 'Not logged in. Log in (opens a new tab), then press Save again, or Reload if nothing was loaded. Your text stays here.',
 	conflict: 'Changed elsewhere since you opened it: not saved. Your text stays here; Reload shows the other version.',
 	'too-large': 'Too large to save.',
 	error: 'Error, not saved.',
@@ -44,7 +45,9 @@ function show(result) {
 	const detail = result.status === 0 ? ' (no answer from the server)' : result.status ? ` (${result.status})` : '';
 	element('status').textContent = MESSAGES[result.state] + detail;
 	element('login-link').hidden = result.state !== 'login';
-	element('reload').hidden = result.state !== 'conflict';
+	element('reload').hidden = result.state !== 'conflict' && result.state !== 'login';
+	// step 66: nothing to edit at a path that does not exist (the text field is CodeMirror's or the textarea)
+	(element('code') ?? element('text')).hidden = result.state === 'missing';
 }
 
 async function start(file, field) {

@@ -1,5 +1,6 @@
 // The editor's logic (DEV.md step 37), without the page: what it loads, saves and shows is decided here.
-// It uses only the public file API: GET to load, PUT to create or save, on the file's own URL.
+// It uses only the public file API: GET to load, PUT to save, on the file's own URL. It never creates a file
+// (step 66, D76): a link to a missing path must not make the user create one there.
 // Tests: src/test/js/editor.test.mjs (node --test).
 
 /** Marks requests of this script: no Basic login dialog on 401, and no "page to return to" after login. */
@@ -53,7 +54,7 @@ export class FileSession {
 
 	#url;
 	#fetch;
-	/** The file's content as stored, or null for a file that does not exist yet. */
+	/** The file's content as stored, or null while no existing file is loaded: then there is nothing to save. */
 	#stored = null;
 	#etag = null;
 
@@ -62,14 +63,14 @@ export class FileSession {
 		this.#fetch = fetch;
 	}
 
-	/** @returns {Promise<{state: 'loaded'|'new', text: string} | {state: 'login'} | {state: 'error', status: number}>} */
+	/** @returns {Promise<{state: 'loaded', text: string} | {state: 'missing'|'login'} | {state: 'error', status: number}>} */
 	async load() {
 		// '*/*': the raw file, never the rendered page (D22)
 		const response = await this.#request({ headers: { Accept: '*/*', ...SCRIPT }, cache: 'no-store' });
 		if (response.status === 404) {
 			this.#stored = null;
 			this.#etag = null;
-			return { state: 'new', text: '' };
+			return { state: 'missing' };
 		}
 		if (response.status === 401) {
 			return { state: 'login' };
@@ -83,15 +84,17 @@ export class FileSession {
 	}
 
 	/**
-	 * Saves only if nobody changed the file since it was loaded or last saved (If-Match), or, for a new file,
-	 * only if it still does not exist (If-None-Match: *). Nothing is overwritten silently.
+	 * Saves only if nobody changed the file since it was loaded or last saved (If-Match): nothing is overwritten
+	 * silently, and a file that is gone is not created again. Without a loaded file, no request at all.
 	 */
 	async save(text, csrf) {
-		const body = restoreLineEndings(this.#stored ?? '', text);
-		const precondition = this.#stored === null ? { 'If-None-Match': '*' } : { 'If-Match': this.#etag };
+		if (this.#stored === null) {
+			return { state: 'not-loaded' };
+		}
+		const body = restoreLineEndings(this.#stored, text);
 		const response = await this.#request({
 			method: 'PUT',
-			headers: { 'Content-Type': 'text/plain;charset=UTF-8', ...SCRIPT, ...precondition,
+			headers: { 'Content-Type': 'text/plain;charset=UTF-8', ...SCRIPT, 'If-Match': this.#etag,
 				...(csrf ? { 'X-XSRF-TOKEN': csrf } : {}) },
 			body,
 		});
@@ -113,8 +116,9 @@ export class FileSession {
 		}
 	}
 
+	/** Only a loaded file can have changes. */
 	isChanged(text) {
-		return text !== toLf(this.#stored ?? '');
+		return this.#stored !== null && text !== toLf(this.#stored);
 	}
 }
 

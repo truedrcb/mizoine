@@ -217,12 +217,14 @@ browser that loads and saves through the same file API.
 
 - **Save** writes only if nobody changed the file since it was opened; otherwise it says so and keeps your text
   (Reload shows the other version).
-- A file that does not exist yet opens empty and is created on the first save.
+- The editor only edits files that exist; it never creates one. A link to a path that does not exist shows
+  "does not exist", with nothing to save. Create a file with the API (`PUT`, above) or MCP `write_file`.
 - Syntax highlighting (CodeMirror 6) for Markdown, JSON, YAML, HTML, CSS, JavaScript, XML, Java, properties
   and shell, chosen by the file name. The bundle in `src/main/resources/ui/vendor/` is built by
   [tools/codemirror/](tools/codemirror/README.md), which also describes how to upgrade its libraries with npm.
 - Line endings and non-ASCII text are kept exactly.
-- Not logged in: "Log in" opens a new tab; your text stays, then press Save again.
+- Not logged in: "Log in" opens a new tab; your text stays, then press Save again (or Reload, if the file was not
+  loaded yet).
 
 ### Git in the browser
 

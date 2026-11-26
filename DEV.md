@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-26): steps 0–34, 37–48 and 55–65 done (1050 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor, search with index state and reindexing on request, folder tags and statuses). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 49–54 (stable URLs, postponed), 66–73 (uploads and editable files, first the editor's security fix; D73–D80 decided). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-26): steps 0–34, 37–48, 55–66 done (1052 Java and 56 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor, search with index state and reindexing on request, folder tags and statuses). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 49–54 (stable URLs, postponed), 67–73 (uploads and editable files; D73–D80 decided). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -1762,7 +1762,7 @@ Builds on steps 55–60: the search index knows the tags, so the vocabulary is o
 
 **Principles kept (BACKLOG):** plain files, nothing besides them; one way to write (`PUT` on the file's URL) for curl, the editor, the upload and the MCP tools; the same access, names and size rules for every way in.
 
-### 66. The editor never creates a file (security)  ☐
+### 66. The editor never creates a file (security)  ☑
 *Requested 2026-11-26 (D76):* the editor must not be able to create a file that does not exist; creating a file is a separate, explicit action (step 70).
 - **Why:** checked 2026-11-26, today the editor opens a missing file empty ("New file: not saved yet") and its Save creates it (`PUT` with `If-None-Match: *`; pinned by `editor.test.mjs`, "missing file opens empty, as new" and "a new file is created only if it still does not exist"). So a link from anywhere, e.g. `/ui/editor.html?file=/notes/projects/run.sh`, opens a logged-in user's editor at a path someone else chose, and one Save puts a file there.
 - **Change:**
@@ -1777,6 +1777,20 @@ Builds on steps 55–60: the search index knows the tags, so the vocabulary is o
      - open an existing file, delete it on the server, then Save → 412 and **the file is not created again** (an `If-Match` on a missing file never creates; checked against `RepositoryWriter`, with a Java test if it is not already pinned).
   4. Java: a `PUT` with `If-Match` on a missing path → 412, nothing written.
 - Docs: steps 37 and 39 get a note "changed in step 66"; README (editor section) says how files are created.
+- *Done 2026-11-26 (ub-mode):*
+  - **Reproduced end to end first** (red, against the real server with a browser's session): a link to a missing `run.sh` created it on Save (`load new`, `save-1 saved`), and a file deleted by another client while open was created again on the next Save after Reload (`reload new`, `save-2 saved`).
+  - **A second way to the same hole, found while designing the fix:** after a load that failed (401, server error, no answer), the session had no file either, and Save sent `If-None-Match: *`. Logging in and pressing Save, as the page told the user to, would have created a missing file.
+  - **The cause, removed:** `FileSession` treated "nothing loaded" as "a new file". Now "nothing loaded" means nothing to save: `save()` returns `not-loaded` without a request, `isChanged` is false, and every `PUT` carries the `If-Match` of the loaded version. The `If-None-Match: *` path is gone.
+  - **The page:** a missing file says "This file does not exist. The editor does not create files.", the text field is hidden, Save stays disabled. Not logged in while loading → Reload is offered as well (before, the page said only "press Save again").
+  - **Tests:**
+    - JavaScript: missing → `missing`, and Save sends nothing; the same after a load with 401, 500 or no answer; a file deleted elsewhere gives `conflict` on Save, then `missing`, then nothing; an `after` check over every request of the file: none has `If-None-Match`. The two tests that pinned creating are removed.
+    - End to end (`EditorEndToEndTest`, `editor-flow.mjs` with scenarios `edit`, `missing`, `deleted`, counting the `PUT`s): `aLinkToAMissingFileCreatesNothing` (no `PUT`, no file on disk), `aFileDeletedWhileOpenIsNotCreatedAgain` (one `PUT`, 412, no file on disk).
+    - Java, already pinned: `RepositoryWriterTest.ifMatchOnAMissingFileFails` (an `If-Match` on a missing file never creates).
+  - **Tools:**
+    - crapper (complexity only: JaCoCo does not cover JavaScript): highest CC 6 (`parseFileParam`).
+    - dryer over `ui/` and `src/test/js/`: nothing.
+    - mutator on `editor.js` with `node --test src/test/js/`: first 24 of 27 killed; the 3 survivors were in `languageFor` (step 39), two killed with the names `a.md` and `.md`; left, equivalent: `?? → ||` (no language name is empty). `page.js` has no unit tests by design (step 37: no decisions, only shows them).
+  - Until step 70 there is no way to create a file in the browser; the API (`PUT`) and MCP (`write_file`) still create files.
 
 ### 67. Uploads over HTTP: pinned and described  ☐
 - Tests pin what step 30 gives for binary content:
