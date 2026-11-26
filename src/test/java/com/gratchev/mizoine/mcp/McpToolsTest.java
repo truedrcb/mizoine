@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -19,6 +20,8 @@ import com.gratchev.mizoine.repositories.RepositoryFileParser;
 import com.gratchev.mizoine.repositories.RepositoryFiles;
 import com.gratchev.mizoine.repositories.RepositoryRegistry;
 import com.gratchev.mizoine.repositories.RepositoryWriter;
+import com.gratchev.mizoine.uploads.UploadLinkService;
+import com.gratchev.mizoine.uploads.UploadLinks;
 
 import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
@@ -38,6 +41,7 @@ class McpToolsTest {
 	private static final byte[] PDF = {'%', 'P', 'D', 'F', '-', '1', '.', '7', (byte) 0xe2};
 
 	private final Path base;
+	private final List<SyncToolSpecification> withoutPublicUrl;
 	private final List<SyncToolSpecification> tools;
 
 	McpToolsTest(@TempDir final Path base) throws IOException {
@@ -53,10 +57,21 @@ class McpToolsTest {
 		Files.writeString(base.resolve("tree.yaml"), "path: tree\naccess:\n  agent: [inbox, knowledge]\n");
 		final RepositoryFiles files = new RepositoryFiles(
 				new RepositoryRegistry(base, new RepositoryFileParser(), user -> true, null), new RepositoryWriter());
-		this.tools = new McpTools(files, LIMIT, new JacksonMcpJsonMapper(JsonMapper.builder().build()), Optional.empty()).all();
+		this.tools = tools(files, Optional.of("https://mizoine.example.org/"));
+		this.withoutPublicUrl = tools(files, Optional.empty());
+	}
+
+	private static List<SyncToolSpecification> tools(final RepositoryFiles files, final Optional<String> publicUrl) {
+		return new McpTools(files, LIMIT, new JacksonMcpJsonMapper(JsonMapper.builder().build()), Optional.empty(),
+				new UploadLinkService(files, new UploadLinks(Clock.systemUTC()), publicUrl, LIMIT)).all();
 	}
 
 	private CallToolResult call(final String tool, final Map<String, Object> arguments) {
+		return call(tools, tool, arguments);
+	}
+
+	private static CallToolResult call(final List<SyncToolSpecification> tools, final String tool,
+			final Map<String, Object> arguments) {
 		return tools.stream().filter(spec -> spec.tool().name().equals(tool)).findFirst().orElseThrow()
 				.callHandler().apply(McpTransportContext.create(Map.of(McpTools.USER, "agent")), TestMcp.request(tool, arguments));
 	}
@@ -147,6 +162,40 @@ class McpToolsTest {
 	}
 
 	// read_file, list_folder, arguments
+
+	// step 77 (D82, D87): upload links, for files the person has (a photo in the chat): the bytes never pass the chat
+
+	@Test
+	void anUploadLinkIsMadeWhereTheAgentMayWrite() {
+		final String answer = call("create_upload_link", "inbox/");
+
+		assertThat(answer).matches("(?s)Upload link for tree/inbox/, valid for 15 minutes and up to 10 files: "
+				+ "https://mizoine\\.example\\.org/\\.upload/[A-Za-z0-9_-]{43}/\n.*");
+		assertThat(answer).contains("Give it to the person: they open it (e.g. on their phone) and choose the photos or files.")
+				.contains("list_folder");
+		assertThat(TestMcp.text(call("create_upload_link", Map.of("repository", "tree", "path", "inbox/",
+				"name", "receipt.jpg")))).contains("for one file, receipt.jpg:");
+	}
+
+	@Test
+	void atMostTwentyOpenUploadLinks() {
+		for (int i = 0; i < UploadLinks.MAX_OPEN_PER_USER; i++) {
+			assertThat(call("create_upload_link", "inbox/")).startsWith("Upload link for");
+		}
+		assertThat(call("create_upload_link", "inbox/")).isEqualTo("error: Too many open upload links (20): wait until "
+				+ "some expire.");
+	}
+
+	@Test
+	void noUploadLinkWhereTheAgentMayNotWriteOrWithoutAPublicAddress() {
+		assertThat(call("create_upload_link", "private/")).isEqualTo("error: Not found: tree/private/");
+		assertThat(call("create_upload_link", "inbox/note.md")).isEqualTo("error: Upload links are for folders: a "
+				+ "folder's path ends with '/'.");
+		assertThat(TestMcp.text(call("create_upload_link", Map.of("repository", "tree", "path", "inbox/", "name", ".env"))))
+				.isEqualTo("error: Not a file name: .env");
+		assertThat(TestMcp.text(call(withoutPublicUrl, "create_upload_link", Map.of("repository", "tree", "path", "inbox/"))))
+				.isEqualTo("error: This Mizoine has no public address set, so it cannot make upload links.");
+	}
 
 	// step 74 (D80): binary files the standard MCP way: pictures as images, others as base64 resources
 

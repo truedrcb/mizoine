@@ -256,6 +256,26 @@ public class RepositoryFiles {
 		}
 	}
 
+	/**
+	 * Step 77: the user may create files in this existing folder, also when reached through a link (the target of an
+	 * upload link, D87).
+	 *
+	 * @throws NotVisibleException otherwise, as for a file write there
+	 */
+	public void checkWritableFolder(final String user, final String repository, final List<String> folder) {
+		final GrantedRepository granted = usable(user, repository, folder);
+		final Path root = granted.config().root();
+		if (RepositoryPaths.resolveFolder(root, folder).isEmpty()
+				|| !holds(granted.access()::canWriteIn, folder, RepositoryPaths.realSegments(root, folder))) {
+			throw new NotVisibleException(repository, folder);
+		}
+	}
+
+	/** Step 76: a plain name of a file in a folder (D3, D81): no path, not hidden. */
+	public static boolean isFileName(final String name) {
+		return FolderNames.isPlain(name);
+	}
+
 	public Result write(final String user, final String repository, final List<String> segments, final InputStream body,
 			final long maxBytes, final Precondition precondition) {
 		final GrantedRepository granted = writable(user, repository, segments);

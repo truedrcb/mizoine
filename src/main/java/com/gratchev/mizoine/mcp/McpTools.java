@@ -21,6 +21,8 @@ import com.gratchev.mizoine.repositories.RepositoryWriter.Result;
 import com.gratchev.mizoine.search.Search;
 import com.gratchev.mizoine.tags.Tags;
 import com.gratchev.mizoine.tags.TagsFile;
+import com.gratchev.mizoine.uploads.UploadLinkService;
+import com.gratchev.mizoine.uploads.UploadLinks;
 
 import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.json.McpJsonMapper;
@@ -42,6 +44,7 @@ final class McpTools {
 	private static final String REPOSITORY = "repository";
 	private static final String PATH = "path";
 	private static final String CONTENT = "content";
+	private static final String NAME = "name";
 	private static final String IF_MATCH = "if_match";
 	private static final String FROM = "from";
 	private static final String TO = "to";
@@ -60,12 +63,15 @@ final class McpTools {
 
 	private final RepositoryFiles files;
 	private final long maxFileSize;
+	private final UploadLinkService uploads;
 	private final McpJsonMapper json;
 	private final Optional<McpSearchTool> search;
 
 	/** @param search the search, if it is switched on: then agents get the tool {@code search} (step 59) */
-	McpTools(final RepositoryFiles files, final long maxFileSize, final McpJsonMapper json, final Optional<Search> search) {
+	McpTools(final RepositoryFiles files, final long maxFileSize, final McpJsonMapper json, final Optional<Search> search,
+			final UploadLinkService uploads) {
 		this.files = files;
+		this.uploads = uploads;
 		this.maxFileSize = maxFileSize;
 		this.json = json;
 		this.search = search.map(found -> new McpSearchTool(found, json));
@@ -101,6 +107,12 @@ final class McpTools {
 						+ "repository. The destination's folder must exist; an existing destination is never overwritten. "
 						+ "With if_match (the version from read_file), a file is moved only if nobody changed it since."
 						+ REVIEW, schema(REPOSITORY, FROM, TO, IF_MATCH), this::move),
+				tool("create_upload_link", "Make a link for the person to upload photos, scans or documents they have (e.g. "
+						+ "a photo in this chat) into a folder (path ending with '/'): they open it, e.g. on their phone, and "
+						+ "choose the files; the bytes go straight to the folder, not through the chat. Use this instead of "
+						+ "upload_file for files the person has. Valid for 15 minutes and up to 10 files; with name, for one "
+						+ "file that gets this name. Afterwards find the files with list_folder." + REVIEW,
+						uploadLinkSchema(), this::createUploadLink),
 				tool("set_tags", "Replace the tags of a folder (path ending with '/'); an empty list removes them. Tags "
 						+ "are words: letters, digits, -, _, /; statuses are key:value (status:open), one value per key. "
 						+ "list_folder shows the tags; list_tags the tags in use: keep to those where they fit. With "
@@ -298,6 +310,34 @@ final class McpTools {
 			TO, "Its new path, e.g. knowledge/note.md; the folder it goes into must exist");
 
 	/** JSON schema of the arguments; all but {@code if_match} are required. */
+	/** Step 77 (D82, D87): a link where the agent may write; the person uploads through it without login. */
+	private CallToolResult createUploadLink(final String user, final Map<String, Object> arguments) {
+		final String path = text(arguments, PATH);
+		if (!RepositoryFiles.isFolder(path)) {
+			return error("Upload links are for folders: a folder's path ends with '/'.");
+		}
+		final Optional<String> name = Optional.ofNullable(arguments.get(NAME)).map(String::valueOf);
+		return switch (uploads.create(user, text(arguments, REPOSITORY), RepositoryFiles.segments(path), name)) {
+			case UploadLinkService.Made.Link link -> ok("Upload link for " + where(arguments) + ", valid for 15 minutes and "
+					+ name.map(fixed -> "for one file, " + fixed).orElse("up to " + UploadLinks.MAX_FILES + " files") + ": "
+					+ link.url() + "\nGive it to the person: they open it (e.g. on their phone) and choose the photos or "
+					+ "files. Then find them with list_folder.");
+			case UploadLinkService.Made.TooMany many -> error("Too many open upload links (" + UploadLinks.MAX_OPEN_PER_USER
+					+ "): wait until some expire.");
+			case UploadLinkService.Made.NoPublicUrl none -> error(
+					"This Mizoine has no public address set, so it cannot make upload links.");
+		};
+	}
+
+	private static Map<String, Object> uploadLinkSchema() {
+		final Map<String, Object> properties = new LinkedHashMap<>();
+		properties.put(REPOSITORY, Map.of("type", "string", "description", DESCRIPTIONS.get(REPOSITORY)));
+		properties.put(PATH, Map.of("type", "string", "description", "The folder to upload into, ending with '/', e.g. inbox/"));
+		properties.put(NAME, Map.of("type", "string", "description",
+				"Optional: the one name the file gets, e.g. receipt-2026-11-26.jpg; without it files keep their own names"));
+		return Map.of("type", "object", "properties", properties, "required", List.of(REPOSITORY, PATH));
+	}
+
 	/** The arguments of upload_file: the content declared as base64 (JSON Schema {@code contentEncoding}). */
 	private static Map<String, Object> uploadSchema() {
 		final Map<String, Object> properties = new LinkedHashMap<>();

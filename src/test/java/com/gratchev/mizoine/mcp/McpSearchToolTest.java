@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -22,6 +23,8 @@ import com.gratchev.mizoine.search.Language;
 import com.gratchev.mizoine.search.Search;
 import com.gratchev.mizoine.search.SearchAnalysis;
 import com.gratchev.mizoine.search.SearchIndexes;
+import com.gratchev.mizoine.uploads.UploadLinkService;
+import com.gratchev.mizoine.uploads.UploadLinks;
 
 import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
@@ -64,7 +67,8 @@ class McpSearchToolTest {
 	}
 
 	private List<SyncToolSpecification> tools(final Optional<Search> search) {
-		return new McpTools(files, 1000, new JacksonMcpJsonMapper(JsonMapper.builder().build()), search).all();
+		return new McpTools(files, 1000, new JacksonMcpJsonMapper(JsonMapper.builder().build()), search,
+				new UploadLinkService(files, new UploadLinks(Clock.systemUTC()), Optional.empty(), 1000)).all();
 	}
 
 	private CallToolResult search(final Map<String, Object> arguments) {

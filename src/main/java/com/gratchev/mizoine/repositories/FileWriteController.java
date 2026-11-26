@@ -168,7 +168,11 @@ class FileWriteController {
 					+ "on POST. A folder moves with everything in it, in one atomic step. Never overwrites; the "
 					+ "destination's folder must exist. If-Match: <ETag> moves a file only if unchanged. Not the "
 					+ "repository root or a granted folder. API clients and the browser UI need no CSRF token for it "
-					+ "(a cross-site form cannot send a Destination header).")
+					+ "(a cross-site form cannot send a Destination header). "
+					+ "'?upload-link' on a folder makes an upload link instead: 201 with {\"url\", \"expires\"}, an address "
+					+ "that takes files into this folder without login, for 15 minutes and up to 10 files; send "
+					+ "Content-Type: application/json, the body may be empty or {\"name\": …} for one file of that name; 400 for a file or a name that is no file name, 404 where the "
+					+ "user may not write, 409 without a public address, 429 with too many open links.")
 	@ApiResponse(responseCode = "201", description = "Moved; Location of the new place", content = @Content)
 	@ApiResponse(responseCode = "400", description = "No Destination, or not a path in this repository, or a folder URL "
 			+ "for a file (or the other way round)", content = @Content)
@@ -180,6 +184,8 @@ class FileWriteController {
 			content = @Content)
 	@ApiResponse(responseCode = "412", description = "The destination exists (never overwritten), or If-Match not met",
 			content = @Content)
+	@ApiResponse(responseCode = "429", description = "?upload-link: too many open upload links",
+			content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE))
 	@ApiResponse(responseCode = "500", description = "Repository configured wrongly", content = @Content)
 	ResponseEntity<Void> move(
 			@PathVariable(REPOSITORY) @Parameter(description = "Repository name") final String repository,

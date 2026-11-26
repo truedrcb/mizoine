@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Configuration;
 import com.gratchev.mizoine.MizoineProperties;
 import com.gratchev.mizoine.repositories.RepositoryFiles;
 import com.gratchev.mizoine.search.Search;
+import com.gratchev.mizoine.uploads.UploadLinkService;
 
 import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.json.McpJsonMapper;
@@ -48,14 +49,15 @@ class McpConfig {
 
 	@Bean(destroyMethod = "close")
 	McpStatelessSyncServer mcpServer(final HttpServletStatelessServerTransport transport, final RepositoryFiles files,
-			final MizoineProperties properties, final ObjectProvider<Search> search) {
+			final MizoineProperties properties, final ObjectProvider<Search> search, final UploadLinkService uploads) {
 		return McpServer.sync(transport)
 				.jsonMapper(json)
 				.serverInfo("Mizoine", "1.0")
 				.instructions("Plain files in Git repositories. Store and retrieve knowledge in the folders you have "
 						+ "access to; a human reviews and commits your changes.")
 				.capabilities(McpSchema.ServerCapabilities.builder().tools(false).build())
-				.tools(new McpTools(files, properties.maxFileSize().toBytes(), json, Optional.ofNullable(search.getIfAvailable())).all())
+				.tools(new McpTools(files, properties.maxFileSize().toBytes(), json, Optional.ofNullable(search.getIfAvailable()),
+						uploads).all())
 				.build();
 	}
 }

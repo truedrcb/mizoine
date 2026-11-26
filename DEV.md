@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-26): steps 0–34, 37–48, 55–74 done (1149 Java and 118 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor, search with index state and reindexing on request, folder tags and statuses, uploads and editable files). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 49–54 (stable URLs, postponed), 75–78 (upload links; D82–D89 decided). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-27): steps 0–34, 37–48, 55–77 done (1171 Java and 118 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor, search with index state and reindexing on request, folder tags and statuses, uploads and editable files, upload links). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 49–54 (stable URLs, postponed), 78 (upload links live on the phone). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -1948,12 +1948,13 @@ The same link takes `curl -T photo.jpg <link>photo.jpg`, for any program that ha
 
 **Principles kept (BACKLOG):** plain files (the upload is an ordinary file in the folder, uncommitted, for `git diff`); one write path (`RepositoryFiles.write`, with its checks); the link only adds who may write, for a short time.
 
-### 75. Upload links: the model  ☐
+### 75. Upload links: the model  ☑
 - `UploadLink`: a token (256 random bits, base64url), the user who made it, repository, folder, an optional fixed file name, the expiry, files left. In memory (D85).
 - `UploadLinks`: create (limits of D84), find a valid one, count a use, forget expired ones. Time from a `Clock`, so tests need no waiting.
 - Plain unit tests: valid until the expiry, not after; used up after its files; a fixed name takes one file; at most 20 open links per user; an unknown token and an expired one are the same "no link"; tokens differ and are never logged (only a short id).
+- *Done 2026-11-27 (ub-mode):* package `uploads`: `UploadLink` (record; `toString` shows the id, never the token) and `UploadLinks` (in memory, every method synchronized: one writer). Token 32 random bytes in base64url (43 characters), a separate 8-hex id for logs. `reserve` takes a file before the write, `release` gives it back if the file is not written. **Found by its test:** a link was forgotten as soon as its last file was reserved, so a refused last upload could not give it back; now a used-up link stays until it expires, but is not found and does not count as open. 7 unit tests with a test clock.
 
-### 76. The upload page and endpoint  ☐
+### 76. The upload page and endpoint  ☑
 - `GET /.upload/{token}/`: a page with the target ("Upload to notes/receipts/"), time left, the file picker (several files, or one with a fixed name), a line per file; plain JavaScript as the folder page (`folder.js`'s name check and NFC, D78).
 - `PUT /.upload/{token}/{name}`: the body is the file, stored through `RepositoryFiles.write` **as the link's user**, so the grants are checked at upload time (D86); never over an existing file (412, as `If-None-Match: *`); `mizoine.max-file-size` as for every write (413).
 - No login; the token is the permission. CSRF is not needed there (nothing a session allows; a cross-site page would need the token): only `/.upload/**` is exempt.
@@ -1961,16 +1962,33 @@ The same link takes `curl -T photo.jpg <link>photo.jpg`, for any program that ha
 - An unknown, expired or used-up token, a name refused, a grant gone meanwhile: 404 with a page "This upload link is not valid (any more). Ask for a new one." Nothing is read or listed through a link: only the files uploaded with it are named on its page.
 - Tests: upload as the link's user; a folder outside the user's grants refused when the grant was removed after the link was made; never overwrite; fixed name; files left; expiry (with the test clock); 413; curl-style `PUT` without the page; CSRF exempt only here; headers; the page under the strict CSP; MockMvc and an end-to-end flow in Node as for the folder page.
 - OpenAPI: both endpoints.
+- *Done 2026-11-27 (ub-mode):*
+  - `UploadLinkController`: `GET /.upload/{token}/` (page `upload.html`, script `ui/upload/page.js` with `folder.js`'s `FolderActions` and `uploadOne`, never replacing) and `PUT /.upload/{token}/{name}` (201, 404, 412, 413). `UploadLinkService.upload` writes through `RepositoryFiles.write` as the link's user with `Precondition.CREATE_ONLY`; a refused file gives its use back.
+  - Security: `/.upload/**` permitted without login, CSRF not asked there (`PathPatternRequestMatcher`; the first try with `getServletPath()` did not match under MockMvc, where the servlet path is empty).
+  - **Gap found by a test:** without login, every other request below `/.upload/` (a `GET` of a file, `DELETE`, a move) fell through to the repository handlers with no user and failed with 500. A catch-all now answers 404: nothing is read, listed or changed through a link.
+  - Headers `Referrer-Policy: no-referrer`, `Cache-Control: no-store`, `X-Robots-Tag: noindex` on every answer below `/.upload/`.
+  - Tests: `UploadLinkPageTest` (8: no login, as its user; never overwrite or read; one name, a refused file does not count; a folder in the way, the folder gone; 15 minutes with a test clock; the grant checked again; only where the user may write; 20 per user) and `UploadLinkEndToEndTest` (`e2e/upload-link-flow.mjs`: link over HTTP Basic, then the real `folder.js` without cookie or token; asked to replace, still 412).
 
-### 77. Creating links: MCP and HTTP  ☐
+### 77. Creating links: MCP and HTTP  ☑
 - MCP tool `create_upload_link(repository, folder, name?)`: only where the agent may write (as `write_file`); the answer is the link, its expiry and a sentence to pass on ("Open this link on your phone and choose the photo"). The description says to use it for photos, scans and documents the person has, instead of `upload_file`.
 - HTTP `POST /{repository}/{folder}/?upload-link` (JSON `{"name": …}` optional) → `{"url", "expires"}`: the same rule, for API clients and tests (D87).
 - The absolute URL from `mizoine.public-url` (as for OAuth); without it, the tool says it cannot make links (D89).
 - Tests: as the agent only in its folders; no link above a grant; the URL from `public-url`; the limits of D84 answered with a message.
 - README: a section "Upload links"; the MCP tool list.
+- *Done 2026-11-27 (ub-mode):*
+  - `POST /{repository}/{folder}/?upload-link` (hidden: one operation per path and method, described on the move, pinned in `OpenApiDocumentationTest`). As every `POST` without a `Destination`, it needs `Content-Type: application/json` to be free of CSRF (a cross-site form cannot send it); the body may be empty.
+  - MCP `create_upload_link(repository, path, name?)`: the answer is the link and what to tell the person. `McpTools` gets the `UploadLinkService`.
+  - `RepositoryFiles.checkWritableFolder` (the folder exists and the user may write in it, also through a link) and `isFileName`.
+  - The URL from `mizoine.public-url` (trailing `/` removed); without it 409 / an error saying so.
+  - The tool was written test first together with its code (not run red on its own).
 
 ### 78. Live check on the phone  ☐
 - Claude on the phone, connected to Mizoine (step 35): "save this receipt in …", tap the link, take a photo, the agent finds it with `list_folder` and reads it. Notes in this step.
+- *Open (2026-11-27): to be done on the phone by the user.* Covered without the phone: the end-to-end flow on the real server (link as the agent's tool makes it, upload without login, never overwrite). To check: `mizoine.public-url` set on the server; reconnect the connector if Claude does not list `create_upload_link`; the camera picker on the phone; the photo found and shown by the agent.
+- *Tools for steps 75–77:*
+  - crapper: all below 10. `UploadLinkService.write` was 13.7 (CC 11, 72 %): the impossible results under one `default`, the name rule in `takes`, two tests (a folder in the way, the folder gone): now 8, 100 %.
+  - dryer: nothing new.
+  - mutator: no survivors (`UploadLinks`/`UploadLink` 26, the service and controller 16, `RepositoryFiles` 19, `McpTools` 124, `SecurityConfig` 17). Uncovered: annotation texts; `McpTools`' "too many" answer got a test, and so did the HTTP answer without a public address (409, no mutant there).
 
 ## Glossary
 
@@ -1983,6 +2001,7 @@ The same link takes `curl -T photo.jpg <link>photo.jpg`, for any program that ha
 | Hidden name | Starts with `.` or contains `%`: never listed, read or written (D3, `FolderNames`). The one exception is a folder's tags file `.tags`, a text file like any other; a folder may not have that name (D81). |
 | Text format | A file name the editor opens: a known extension or whole name in `ui/editor/text-formats.json`, the one list for the server and the editor (D73). Everything else is not editable. |
 | Editable / writable | In a folder listing: the files of a text format, and whether the user may write in the folder (steps 68, 71). |
+| Upload link | `/.upload/<token>/`: takes files into one folder without login, as the user who made it, for 15 minutes and at most 10 files; never reads or overwrites (D82–D89). |
 | Plain name | A single visible name: not hidden, not empty, no separator, no NUL (`FolderNames.isPlain`). |
 | Folder URL / file URL | Ends with `/` / does not (D5). |
 | Version | Size + modification time of a file (`FileVersion`); changes with every write, also outside Mizoine. |

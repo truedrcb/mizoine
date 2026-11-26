@@ -23,6 +23,7 @@ import org.springframework.security.web.authentication.www.BasicAuthenticationFi
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 
 import com.gratchev.mizoine.MizoineProperties;
 import com.gratchev.mizoine.WebConfig;
@@ -39,6 +40,9 @@ import jakarta.servlet.http.HttpServletRequest;
  */
 @Configuration
 public class SecurityConfig {
+
+	/** Step 76: the upload links' addresses (D86, D88). */
+	private static final String UPLOAD_LINKS = "/.upload/**";
 
 	/** Only own resources, no plugins, no framing, forms post only to this server. */
 	public static final String CONTENT_SECURITY_POLICY = contentSecurityPolicy(List.of());
@@ -77,12 +81,17 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, WebConfig.FAVICON_PATH).permitAll()
 						// public files of the user interface (logos, later scripts and styles)
 						.requestMatchers(HttpMethod.GET, WebConfig.UI_PATTERN).permitAll()
+						// step 76 (D86): an upload link is the permission itself, for its own folder only
+						.requestMatchers(UPLOAD_LINKS).permitAll()
 						.anyRequest().authenticated())
 				.requestCache(cache -> cache.requestCache(requestCache()))
 				// D27: the token also as cookie XSRF-TOKEN, readable by the static pages under /ui/, which send it back
 				// in the X-XSRF-TOKEN header (Spring Security's setup for single-page applications)
 				.csrf(csrf -> csrf.spa().csrfTokenRepository(csrfCookie())
-						.ignoringRequestMatchers(SecurityConfig::isApiClientWrite))
+						// step 76: an upload through a link needs no CSRF token: a session allows nothing there, and a page
+						// elsewhere would need the link's token, which is the permission
+						.ignoringRequestMatchers(SecurityConfig::isApiClientWrite,
+								PathPatternRequestMatcher.withDefaults().matcher(UPLOAD_LINKS)))
 				.formLogin(form -> form.permitAll().successHandler(loginSuccessHandler()))
 				.httpBasic(withDefaults())
 				.logout(logout -> logout.permitAll())

@@ -115,7 +115,8 @@ class OpenApiDocumentationTest {
 			"post /{repository}/.git/stage", "post /{repository}/.git/unstage", "post /{repository}/.git/commit",
 			"post /{repository}/.git/pull", "post /{repository}/.git/push", "get /{repository}/.search", "get /.search",
 			"get /{repository}/.search/index", "get /.search/index", "post /{repository}/.search/reindex",
-			"post /{repository}/.search/update", "get /{repository}/.tags/"})
+			"post /{repository}/.search/update", "get /{repository}/.tags/", "get /.upload/{token}/",
+			"put /.upload/{token}/{name}"})
 	void everyEndpointIsDocumented(final String endpoint) throws Exception {
 		final String[] methodAndPath = endpoint.split(" ");
 		mockMvc.perform(apiDocs(API_DOCS_PATH))
@@ -150,6 +151,9 @@ class OpenApiDocumentationTest {
 				.andExpect(jsonPath("$.paths['/{repository}/{path}'].put.operationId").value("put"))
 				.andExpect(jsonPath("$.paths['/{repository}/{path}'].get.description").value(containsString("?tags")))
 				.andExpect(jsonPath("$.paths['/{repository}/{path}'].put.description").value(containsString("?tags")))
+				// the same for ?upload-link on the move's POST (step 77)
+				.andExpect(jsonPath("$.paths['/{repository}/{path}'].post.operationId").value("move"))
+				.andExpect(jsonPath("$.paths['/{repository}/{path}'].post.description").value(containsString("?upload-link")))
 				.andExpect(jsonPath("$.paths['/{repository}/.search'].get.operationId").value("searchRepository"))
 				.andExpect(jsonPath("$.paths['/.search'].get.operationId").value("searchAllRepositories"))
 				.andExpect(jsonPath("$.paths['/{repository}/.search/reindex'].post.operationId").value("searchReindex"));

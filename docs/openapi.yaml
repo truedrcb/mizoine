@@ -20,6 +20,10 @@ servers:
   description: This Mizoine server
 security:
 - basicAuth: []
+tags:
+- name: Upload links
+  description: "Temporary addresses that take files into one folder without login,\
+    \ e.g. a photo from a phone"
 paths:
   /{repository}/{path}:
     get:
@@ -182,7 +186,13 @@ paths:
         \ with everything in it, in one atomic step. Never overwrites; the destination's\
         \ folder must exist. If-Match: <ETag> moves a file only if unchanged. Not\
         \ the repository root or a granted folder. API clients and the browser UI\
-        \ need no CSRF token for it (a cross-site form cannot send a Destination header)."
+        \ need no CSRF token for it (a cross-site form cannot send a Destination header).\
+        \ '?upload-link' on a folder makes an upload link instead: 201 with {\"url\"\
+        , \"expires\"}, an address that takes files into this folder without login,\
+        \ for 15 minutes and up to 10 files; send Content-Type: application/json,\
+        \ the body may be empty or {\"name\": …} for one file of that name; 400 for\
+        \ a file or a name that is no file name, 404 where the user may not write,\
+        \ 409 without a public address, 429 with too many open links."
       operationId: move
       parameters:
       - name: repository
@@ -229,6 +239,10 @@ paths:
         "412":
           description: "The destination exists (never overwritten), or If-Match not\
             \ met"
+        "429":
+          description: "?upload-link: too many open upload links"
+          content:
+            application/json: {}
         "500":
           description: Repository configured wrongly
     delete:
@@ -275,6 +289,54 @@ paths:
           description: Folder not empty; or the repository root or a granted folder
         "412":
           description: If-Match not met; nothing deleted
+        "500":
+          description: Repository configured wrongly
+  /.upload/{token}/{name}:
+    put:
+      tags:
+      - Upload links
+      summary: Upload a file through an upload link
+      description: "The request body is the file, stored exactly as sent under this\
+        \ name in the link's folder, e.g. curl -T photo.jpg <link>photo.jpg. No login\
+        \ and no CSRF token: the link is the permission. Never over an existing file.\
+        \ A file not stored does not count against the link."
+      operationId: uploadThroughLink
+      parameters:
+      - name: token
+        in: path
+        description: The link's secret part
+        required: true
+        schema:
+          type: string
+      - name: name
+        in: path
+        description: The file's name
+        required: true
+        schema:
+          type: string
+      responses:
+        "201":
+          description: Stored
+          content:
+            application/json: {}
+        "404":
+          description: "Not valid (any more), or a name the link does not take"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refusal"
+        "412":
+          description: "A file of that name exists already: nothing changed"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refusal"
+        "413":
+          description: Larger than the server's maximum file size
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refusal"
         "500":
           description: Repository configured wrongly
   /{repository}/.search/update:
@@ -866,6 +928,32 @@ paths:
           description: "Not logged in (non-browser clients): HTTP Basic challenge"
         "406":
           description: Neither text/html nor application/json accepted
+  /.upload/{token}/:
+    get:
+      tags:
+      - Upload links
+      summary: The page of an upload link
+      description: "A page with a file picker (on a phone: camera, gallery, files)\
+        \ that uploads into the link's folder. No login: the link is the permission,\
+        \ for 15 minutes and at most 10 files (1 if it was made for one name). Not\
+        \ valid (any more): 404 with a page saying so."
+      operationId: uploadLinkPage
+      parameters:
+      - name: token
+        in: path
+        description: The link's secret part
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: The page
+          content:
+            text/html: {}
+        "404":
+          description: Not valid (any more)
+          content:
+            text/html: {}
   /.search:
     get:
       tags:
@@ -974,6 +1062,12 @@ paths:
             \ be read"
 components:
   schemas:
+    Refusal:
+      type: object
+      properties:
+        message:
+          type: string
+          description: "Why, for the user"
     IndexReport:
       type: object
       description: "The search index of a repository, with the dates to judge whether\
@@ -1047,12 +1141,6 @@ components:
         total:
           type: integer
           format: int32
-    Refusal:
-      type: object
-      properties:
-        message:
-          type: string
-          description: "Why, for the user"
     SelectionRequest:
       type: object
       properties:

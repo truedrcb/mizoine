@@ -331,6 +331,29 @@ curl -u alice -H 'Accept: application/json' http://127.0.0.1:12013/notes/.tags/ 
 - **The tags in use**: `/notes/.tags/` (a page, statuses grouped by key, each linked to its search), from the search
   index. Agents: `list_tags`, so they keep to your tags, and `set_tags`.
 
+### Upload links
+
+A temporary address that takes files into one folder without login, for photos and documents an agent in a chat
+cannot pass on itself (a chat never gives it the bytes of an attached photo):
+
+1. In the chat: "save this receipt in receipts/". The agent calls `create_upload_link`.
+2. It shows the link, e.g. `https://mizoine.example.org/.upload/k3J9…/`.
+3. Open it on the phone, choose or take the photo: it goes straight to the folder. The agent finds it with
+   `list_folder`.
+
+```sh
+curl -u alice -X POST -H 'Content-Type: application/json' -d '{}' \
+     http://127.0.0.1:12013/notes/receipts/?upload-link        # {"url":"https://…/.upload/<token>/","expires":"…"}
+curl -T photo.jpg https://mizoine.example.org/.upload/<token>/photo.jpg   # no login needed
+```
+
+- **Only uploads** into that folder: nothing is read, listed or overwritten through a link (an existing name → 412).
+- **15 minutes, at most 10 files**; with `{"name": "receipt.jpg"}` one file of that name. At most 20 open links per
+  user. Links are kept in memory: a restart ends them.
+- **As the user who made it**, with that user's access checked again when the file comes; only where that user may
+  write. The person who opens it needs no login: treat the link like a key while it is valid.
+- Needs `mizoine.public-url` (the address in the link).
+
 ### Search
 
 `/<name>/.search?q=…` (the search box on every folder page) searches one repository, `/.search?q=…` (the search
@@ -399,7 +422,7 @@ curl -u alice -H 'Accept: application/json' 'http://127.0.0.1:12013/notes/.searc
 
 Agents (Claude, also on the phone, Claude Code, others) store and retrieve knowledge through the MCP endpoint
 `https://<host>/mcp`. Tools: `list_repositories`, `list_folder`, `read_file`, `write_file`, `upload_file`,
-`create_folder`, `delete`, `move`, `set_tags`, and with search on `search` and `list_tags`. `read_file` also gives the
+`create_upload_link`, `create_folder`, `delete`, `move`, `set_tags`, and with search on `search` and `list_tags`. `read_file` also gives the
 file's version; with it, `write_file`, `upload_file` and `move` change the file only if nobody else did in between.
 Binary files the standard MCP way, up to 10 MB: `read_file` gives a PNG, JPEG, GIF or WebP picture as an image and
 any other file as an embedded resource in base64; `upload_file` takes base64 (larger files over HTTP).

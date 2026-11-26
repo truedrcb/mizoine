@@ -4,9 +4,11 @@ import static com.gratchev.mizoine.TestUsers.ARTEM;
 import static com.gratchev.mizoine.TestUsers.GUEST;
 import static com.gratchev.mizoine.TestUsers.loggedInAs;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -130,6 +132,16 @@ class FileWriteTest {
 				.andExpect(status().isOk())
 				.andExpect(content().contentType("image/png"))
 				.andExpect(content().bytes(png));
+	}
+
+	/** Step 77 (D89): an upload link needs the public address for its URL; this test context has none. */
+	@Test
+	void noUploadLinkWithoutAPublicAddress() throws Exception {
+		mockMvc.perform(post(URI.create("/tree/public/?upload-link")).with(loggedInAs(GUEST))
+				.contentType("application/json"))
+				.andExpect(status().isConflict())
+				.andExpect(content().string(containsString(
+						"This Mizoine has no public address set, so it cannot make upload links.")));
 	}
 
 	@Test

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/head :: head('Mizoine – upload')}"></head>
+<body>
+	<h1>Upload</h1>
+	<th:block th:if="${target}">
+		<p th:text="|Upload to ${target}|">Upload to notes/inbox/</p>
+		<p><small th:text="|Valid until ${expires}, for ${filesLeft} ${filesLeft == 1 ? 'file' : 'files'}.|">Valid until …</small></p>
+		<!-- step 76 (D82): the phone's picker offers the camera, the gallery and files; shown by the script -->
+		<form id="upload-link" hidden th:data-name="${name}">
+			<label><th:block th:text="${name} ? |Choose the file for ${name}| : 'Choose files'">Choose files</th:block>
+				<input type="file" name="files" th:multiple="${name == null}"></label>
+			<ul class="uploads" role="status"></ul>
+		</form>
+		<script type="module" src="/ui/upload/page.js"></script>
+	</th:block>
+	<p th:if="${message}" class="refused" role="status" th:text="${message}">This upload link is not valid (any more).</p>
+</body>
+</html>
