@@ -300,7 +300,10 @@ curl -u alice -H 'Content-Type: application/json' -X POST http://127.0.0.1:12013
 curl -u alice -H 'Content-Type: application/json' -X POST http://127.0.0.1:12013/notes/.search/update
 ```
 
-- **The state** (also as a page: `/notes/.search/index`): `status`, `indexedAt` (the last reindexing),
+- **In the browser:** "Search indexes" on the start page and "Search index" on the search page lead to the state
+  pages `/.search/index` and `/notes/.search/index`; with the whole repository they have **Update** and
+  **Reindex** buttons. While one runs, reload the page to see how far it is.
+- **The state** (JSON): `status`, `mayReindex` (whether you may reindex and update), `indexedAt` (the last reindexing),
   `updatedAt` (the last change of the index), `newestFile` (the newest file in your folders) and `lastCommit` (with
   Git access). A `newestFile` later than `updatedAt` means: changes are not in the index yet. With the whole
   repository (`/`) also `files` and `unreadable` (what could not be read).

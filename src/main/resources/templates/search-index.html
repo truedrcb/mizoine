@@ -3,11 +3,15 @@
 <head th:replace="~{fragments/head :: head(${repository} ? |Mizoine – search index of ${repository}| : 'Mizoine – search indexes')}"></head>
 <body>
 	<h1 th:text="${repository} ? |Search index of ${repository}| : 'Search indexes'">Search indexes</h1>
-	<p th:if="${repository}"><a th:href="@{/{r}/.search(r=${repository})}">Search</a></p>
-	<p th:unless="${repository}"><a href="/.search">Search</a></p>
+	<p th:if="${repository}"><a th:href="@{/{r}/(r=${repository})}">Files</a> · <a th:href="@{/{r}/.search(r=${repository})}">Search</a>
+		· <a href="/.search/index">All search indexes</a></p>
+	<p th:unless="${repository}"><a href="/">All repositories</a> · <a href="/.search">Search</a></p>
+	<p th:if="${outcome != null}" class="outcome" role="status" th:text="${outcome}">Reindexing started.</p>
+	<p th:if="${reports.?[status.code() == 'reindexing' or updating].size() > 0}">Running in the background:
+		<a th:href="${repository} ? @{/{r}/.search/index(r=${repository})} : @{/.search/index}">reload</a> to see how far it is.</p>
 	<table>
 		<thead>
-			<tr><th>Repository</th><th>State</th><th>Built</th><th>Last change</th><th>Newest file</th><th>Last commit</th><th>Files</th></tr>
+			<tr><th>Repository</th><th>State</th><th>Built</th><th>Last change</th><th>Newest file</th><th>Last commit</th><th>Files</th><th></th></tr>
 		</thead>
 		<tbody>
 			<tr th:each="report : ${reports}">
@@ -18,9 +22,18 @@
 				<td th:text="${report.newestFile.orElse(null)}">–</td>
 				<td th:text="${report.lastCommit.orElse(null)}">–</td>
 				<td th:text="${report.files.orElse(null)}">–</td>
+				<td th:if="${report.mayReindex}" class="actions">
+					<form method="post" th:action="@{/{r}/.search/update(r=${report.repository})}"><input th:unless="${repository}"
+						type="hidden" name="back" value="all"><button type="submit" title="Index only new, changed and deleted files">Update</button></form>
+					<form method="post" th:action="@{/{r}/.search/reindex(r=${report.repository})}"><input th:unless="${repository}"
+						type="hidden" name="back" value="all"><button type="submit" title="Build the index anew from all files">Reindex</button></form>
+				</td>
+				<td th:unless="${report.mayReindex}"></td>
 			</tr>
 		</tbody>
 	</table>
+	<p>Update after changes by hand or a pull: when the newest file is later than the last change. Reindex for a first
+		index, after an upgrade, or when the state says so.</p>
 	<th:block th:each="report : ${reports}" th:if="${report.unreadable.isPresent() and !report.unreadable.get().isEmpty()}">
 		<p th:text="|Not readable in ${report.repository}, left out:|">Not readable:</p>
 		<ul><li th:each="path : ${report.unreadable.get()}" th:text="${path}">locked/</li></ul>

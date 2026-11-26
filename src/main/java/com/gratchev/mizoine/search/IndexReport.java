@@ -16,6 +16,7 @@ public record IndexReport(String repository,
 		@Schema(description = "Why: format or damaged (needs-reindexing), or what went wrong (failed)") Optional<String> reason,
 		@Schema(description = "Whether search answers from it: the current index, or an older one meanwhile") boolean searchable,
 		@Schema(description = "Whether an update runs") boolean updating,
+		@Schema(description = "Whether you may reindex and update it: with access to the whole repository") boolean mayReindex,
 		@Schema(description = "While a reindexing runs: files and folders done, and in all (0 while counting)")
 		Optional<IndexDetails.Progress> progress,
 		@Schema(description = "When the last reindexing finished") Optional<Instant> indexedAt,

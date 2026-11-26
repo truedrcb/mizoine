@@ -3,10 +3,8 @@ package com.gratchev.mizoine.git;
 import static com.gratchev.mizoine.TestUsers.ARTEM;
 import static com.gratchev.mizoine.TestUsers.GUEST;
 import static com.gratchev.mizoine.TestUsers.loggedInAs;
-import static com.gratchev.mizoine.TestUsers.password;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -17,8 +15,6 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,18 +27,15 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.mock.web.MockHttpServletResponse;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.util.FileSystemUtils;
 
+import com.gratchev.mizoine.TestBrowser;
 import com.gratchev.mizoine.TestRepositories;
 
-import jakarta.servlet.http.Cookie;
 
 /**
  * Steps 46–48 over HTTP: the page's forms (browser session, CSRF token, 303 back to the page with the result) and
@@ -89,8 +82,6 @@ class GitActionsPageTest {
 
 	private final MockMvc mockMvc;
 	private final Path real;
-	/** The browser's CSRF cookie, as the last response set it. */
-	private Cookie xsrf;
 
 	GitActionsPageTest(@Autowired final MockMvc mockMvc) {
 		this.mockMvc = mockMvc;
@@ -210,105 +201,67 @@ class GitActionsPageTest {
 
 	@Test
 	void theFormsStageAndUnstageAndThePageShowsTheResult() throws Exception {
-		final MockHttpSession session = browserSession();
+		final TestBrowser browser = TestBrowser.login(mockMvc, ARTEM);
 
-		final String page = page(session);
+		final String page = browser.page("/real/.git/");
 		assertThat(page).contains("name=\"path\"").contains("value=\"new ü.md\"");
-		mockMvc.perform(form("/real/.git/stage", session, page).param("path", "new ü.md"))
+		mockMvc.perform(browser.form("/real/.git/stage", page).param("path", "new ü.md"))
 				.andExpect(status().isSeeOther())
 				.andExpect(header().string(HttpHeaders.LOCATION, "/real/.git/"));
-		assertThat(page(session)).contains("Staged 1 file.");
+		assertThat(browser.page("/real/.git/")).contains("Staged 1 file.");
 		assertThat(GIT.git(real, "-c", "core.quotepath=false", "diff", "--cached", "--name-only")).isEqualTo("new ü.md\n");
 
-		mockMvc.perform(form("/real/.git/unstage", session, page(session)).param("all", "true"))
+		mockMvc.perform(browser.form("/real/.git/unstage", browser.page("/real/.git/")).param("all", "true"))
 				.andExpect(status().isSeeOther());
-		assertThat(page(session)).contains("Unstaged 1 file.");
+		assertThat(browser.page("/real/.git/")).contains("Unstaged 1 file.");
 	}
 
 	@Test
 	void theCommitForm() throws Exception {
-		final MockHttpSession session = browserSession();
-		mockMvc.perform(form("/real/.git/stage", session, page(session)).param("all", "true"));
+		final TestBrowser browser = TestBrowser.login(mockMvc, ARTEM);
+		mockMvc.perform(browser.form("/real/.git/stage", browser.page("/real/.git/")).param("all", "true"));
 
-		final String page = page(session);
+		final String page = browser.page("/real/.git/");
 		assertThat(page).contains("name=\"message\"");
-		mockMvc.perform(form("/real/.git/commit", session, page).param("message", "From the page"))
+		mockMvc.perform(browser.form("/real/.git/commit", page).param("message", "From the page"))
 				.andExpect(status().isSeeOther());
 
-		assertThat(page(session)).contains("Committed 2 files.").contains("Nothing to commit");
+		assertThat(browser.page("/real/.git/")).contains("Committed 2 files.").contains("Nothing to commit");
 		assertThat(GIT.git(real, "log", "-1", "--format=%an: %s")).isEqualTo("artem: From the page\n");
 	}
 
 	@Test
 	void thePushAndPullButtons() throws Exception {
 		remote();
-		final MockHttpSession session = browserSession();
-		final String page = page(session);
+		final TestBrowser browser = TestBrowser.login(mockMvc, ARTEM);
+		final String page = browser.page("/real/.git/");
 		assertThat(page).contains("/real/.git/pull").contains("/real/.git/push").contains("origin/main: up to date");
 
-		mockMvc.perform(form("/real/.git/push", session, page)).andExpect(status().isSeeOther());
-		assertThat(page(session)).contains("Pushed to origin/main.");
+		mockMvc.perform(browser.form("/real/.git/push", page)).andExpect(status().isSeeOther());
+		assertThat(browser.page("/real/.git/")).contains("Pushed to origin/main.");
 
 		GIT.git(real, "config", "remote.origin.uploadpack", "sleep 30; true");
-		mockMvc.perform(form("/real/.git/pull", session, page(session))).andExpect(status().isSeeOther());
-		assertThat(page(session)).contains("Git did not finish within 3 s");
+		mockMvc.perform(browser.form("/real/.git/pull", browser.page("/real/.git/"))).andExpect(status().isSeeOther());
+		assertThat(browser.page("/real/.git/")).contains("Git did not finish within 3 s");
 	}
 
 	@Test
 	void aFormThatSelectsNothingSaysSoOnThePage() throws Exception {
-		final MockHttpSession session = browserSession();
+		final TestBrowser browser = TestBrowser.login(mockMvc, ARTEM);
 
-		mockMvc.perform(form("/real/.git/stage", session, page(session))).andExpect(status().isSeeOther());
+		mockMvc.perform(browser.form("/real/.git/stage", browser.page("/real/.git/"))).andExpect(status().isSeeOther());
 
-		assertThat(page(session)).contains("Choose files, or all.");
+		assertThat(browser.page("/real/.git/")).contains("Choose files, or all.");
 	}
 
 	@Test
 	void aFormWithoutTheTokenIsRefused() throws Exception {
 		// D11: a cross-site form can post, but has no token
-		final MockHttpSession session = browserSession();
+		final TestBrowser browser = TestBrowser.login(mockMvc, ARTEM);
 
-		mockMvc.perform(post("/real/.git/stage").session(session).param("all", "true")).andExpect(status().isForbidden());
+		mockMvc.perform(browser.crossSiteForm("/real/.git/stage").param("all", "true")).andExpect(status().isForbidden());
 		mockMvc.perform(post("/real/.git/stage").with(loggedInAs(ARTEM)).param("all", "true"))
 				.andExpect(status().isForbidden());
 		assertThat(GIT.git(real, "-c", "core.quotepath=false", "diff", "--cached", "--name-only")).isEmpty();
-	}
-
-	// a browser
-
-	/** Logs in as a browser does (see EditorPageTest): login page, cookie and form token. */
-	private MockHttpSession browserSession() throws Exception {
-		final MvcResult login = remember(mockMvc.perform(get("/login")).andReturn());
-		final MvcResult loggedIn = remember(mockMvc.perform(post("/login").cookie(xsrf)
-						.param("username", ARTEM).param("password", password(ARTEM))
-						.param("_csrf", token(login.getResponse().getContentAsString())))
-				.andExpect(status().is3xxRedirection()).andReturn());
-		return (MockHttpSession) loggedIn.getRequest().getSession();
-	}
-
-	private String page(final MockHttpSession session) throws Exception {
-		return remember(mockMvc.perform(get("/real/.git/").session(session).cookie(xsrf).accept(MediaType.TEXT_HTML))
-				.andExpect(status().isOk()).andReturn()).getResponse().getContentAsString();
-	}
-
-	/** A form of the page as the browser sends it: its token and the cookie. */
-	private MockHttpServletRequestBuilder form(final String action, final MockHttpSession session, final String page) {
-		return post(action).session(session).cookie(xsrf).contentType(MediaType.APPLICATION_FORM_URLENCODED)
-				.param("_csrf", token(page));
-	}
-
-	private MvcResult remember(final MvcResult result) {
-		final MockHttpServletResponse response = result.getResponse();
-		if (response.getCookie("XSRF-TOKEN") != null && !response.getCookie("XSRF-TOKEN").getValue().isEmpty()) {
-			xsrf = response.getCookie("XSRF-TOKEN");
-		}
-		return result;
-	}
-
-	private static String token(final String page) {
-		final Matcher hidden = Pattern.compile("name=\"_csrf\"[^>]*value=\"([^\"]+)\"|value=\"([^\"]+)\"[^>]*name=\"_csrf\"")
-				.matcher(page);
-		assertThat(hidden.find()).as("CSRF field in the page").isTrue();
-		return hidden.group(1) != null ? hidden.group(1) : hidden.group(2);
 	}
 }

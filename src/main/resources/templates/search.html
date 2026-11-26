@@ -3,8 +3,8 @@
 <head th:replace="~{fragments/head :: head(${repository} ? |Mizoine – search in ${repository}| : 'Mizoine – search')}"></head>
 <body>
 	<h1>Search<th:block th:if="${repository}"> in <span th:text="${repository}">repository</span></th:block></h1>
-	<p th:if="${repository}"><a th:href="@{/{r}/(r=${repository})}">Files</a></p>
-	<p th:unless="${repository}"><a href="/">All repositories</a></p>
+	<p th:if="${repository}"><a th:href="@{/{r}/(r=${repository})}">Files</a> · <a th:href="@{/{r}/.search/index(r=${repository})}">Search index</a></p>
+	<p th:unless="${repository}"><a href="/">All repositories</a> · <a href="/.search/index">Search indexes</a></p>
 	<form method="get" th:action="@{${searchUrl}}" role="search">
 		<input type="search" name="q" th:value="${query}" maxlength="200" aria-label="Search for">
 		<button type="submit">Search</button>

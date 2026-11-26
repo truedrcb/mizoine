@@ -60,7 +60,7 @@ public class IndexReports {
 		final IndexState state = details.state();
 		final boolean whole = area.wholeRepository();
 		return new IndexReport(area.repository(), state.status(), state.reason(), state.searchable(), details.updating(),
-				details.progress(), details.indexedAt(), details.updatedAt(),
+				whole, details.progress(), details.indexedAt(), details.updatedAt(),
 				IndexDocuments.newest(area.root(), area.folders()),
 				gitRoot(user, area.repository()).flatMap(lastCommit),
 				whole ? Optional.of(details.files()) : Optional.empty(),

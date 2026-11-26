@@ -2,6 +2,7 @@ package com.gratchev.mizoine.search;
 
 import java.security.Principal;
 import java.util.List;
+import java.util.Locale;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -11,7 +12,10 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import org.springframework.web.servlet.view.RedirectView;
 
 import com.gratchev.mizoine.ApiTexts;
 
@@ -138,6 +142,33 @@ class SearchIndexController {
 		return updated.start() == RepositoryIndex.Start.NEEDS_REINDEXING
 				? json(HttpStatus.CONFLICT, new Refusal("The index needs a reindexing first.", updated.report()))
 				: json(HttpStatus.ACCEPTED, updated.report());
+	}
+
+	/**
+	 * The page's buttons: the same reindexing or update, then back to the page (Post/Redirect/Get, 303), which says
+	 * what happened. {@code back=all}: to the page of all repositories, else to the repository's.
+	 */
+	@PostMapping(value = "/{repository}/.search/{action:reindex|update}",
+			consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+	@Hidden // the browser's way to the operations documented above
+	RedirectView form(@PathVariable(REPOSITORY) final String repository, @PathVariable("action") final String action,
+			@RequestParam(name = "back", required = false) final String back, final Principal principal,
+			final RedirectAttributes redirect) {
+		final String user = principal.getName();
+		final String done;
+		if ("reindex".equals(action)) {
+			reports.reindex(user, repository);
+			done = "Reindexing started.";
+		} else {
+			done = reports.update(user, repository).start() == RepositoryIndex.Start.NEEDS_REINDEXING
+					? "The index needs a reindexing first." : "Update started.";
+		}
+		final boolean all = "all".equals(back);
+		redirect.addFlashAttribute("outcome", all ? repository + ": " + done.substring(0, 1).toLowerCase(Locale.ROOT)
+				+ done.substring(1) : done);
+		final RedirectView page = new RedirectView(all ? "/.search/index" : "/" + repository + "/.search/index");
+		page.setStatusCode(HttpStatus.SEE_OTHER);
+		return page;
 	}
 
 	/** Always JSON, also without an Accept header (the pages' default is HTML, D6). */

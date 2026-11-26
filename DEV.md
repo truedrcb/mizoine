@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-25): steps 0–34, 37–48 and 55–60 done (993 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor, search with index state and reindexing on request). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 49–54 (stable URLs, postponed), 61–65 (folder tags and statuses; D64–D71 decided, D72 postponed). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-25): steps 0–34, 37–48 and 55–60 done (996 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor, search with index state and reindexing on request). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 49–54 (stable URLs, postponed), 61–65 (folder tags and statuses; D64–D71 decided, D72 postponed). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -1641,7 +1641,11 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
   - `SearchIndexController`: `GET /{repository}/.search/index` (`searchIndexState`), `GET /.search/index` (`searchIndexStates`), HTML and JSON; `POST …/reindex` (`searchReindex`) and `POST …/update` (`searchUpdate`), JSON, 202, 409 for an update that needs a reindexing, 404 without the whole repository.
   - The startup warning names the request: `Search index of notes is not-indexed: reindex it (POST /notes/.search/reindex)`.
   - `TestGit` is public now, for tests of other packages with a real Git repository.
-  - **Untested branches:** `SearchIndexes.close` interrupted while waiting; an update that fails in the background (logged); `IndexReports`' Git failure (logged, no date): a missing or broken `git` program.
+  - *Added 2026-11-26 on request:* navigation and buttons in the browser.
+    - Links: "Search indexes" on the start page and on the search page of all repositories, "Search index" on a repository's search page; the state pages link back to the files and the search.
+    - The state pages have **Update** and **Reindex** buttons where `mayReindex` (new in the state: the whole repository). The buttons are forms (`POST /{repository}/.search/{reindex|update}`, form-encoded, with the CSRF token) beside the JSON endpoints, as on the Git page: 303 back to the page (`back=all`: to the page of all repositories), which says what happened ("Reindexing started.", "The index needs a reindexing first."). While one runs, the page says so, with a link to reload it.
+    - Tests as a browser sends them: the browser helpers of `GitActionsPageTest` became the shared test class `TestBrowser` (login form, session, CSRF cookie, the page's token, a cross-site form without it). `formLogin()` of spring-security-test is not used for this: it replaces the context's CSRF token store and broke later browsers in the same context.
+  - **Untested branches:** a form of a user without the whole repository (404, the same check as the JSON endpoints: no page gives that user a token for it); `SearchIndexes.close` interrupted while waiting; an update that fails in the background (logged); `IndexReports`' Git failure (logged, no date): a missing or broken `git` program.
 - *Tools for steps 59–60:*
   - crapper: all below 10 (highest of the new code `RepositoryIndex.update`, 8.0).
   - dryer: the search tool read its arguments and wrote its errors as `McpTools` does: now it uses `McpTools`' helpers. Left: the two `GitController` pairs (step 48).

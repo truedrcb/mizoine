@@ -924,6 +924,10 @@ components:
         updating:
           type: boolean
           description: Whether an update runs
+        mayReindex:
+          type: boolean
+          description: "Whether you may reindex and update it: with access to the\
+            \ whole repository"
         progress:
           $ref: "#/components/schemas/Progress"
           description: "While a reindexing runs: files and folders done, and in all\
