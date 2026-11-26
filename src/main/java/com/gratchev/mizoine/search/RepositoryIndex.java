@@ -29,6 +29,7 @@ import org.apache.lucene.search.PrefixQuery;
 import org.apache.lucene.search.SearcherManager;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.store.LockObtainFailedException;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.Version;
 import org.slf4j.Logger;
@@ -69,6 +70,8 @@ public final class RepositoryIndex {
 	private Directory directory;
 	/** Changes made while a reindexing walks the files: applied to the new index before it is used. */
 	private Set<List<String>> pending;
+	/** Changes made while an update reads the files: taken anew after it, so its older reading does not win. */
+	private Set<List<String>> touched;
 	private boolean updating;
 	private Optional<Instant> indexedAt = Optional.empty();
 	private Optional<Instant> updatedAt = Optional.empty();
@@ -117,6 +120,11 @@ public final class RepositoryIndex {
 			indexedAt = Optional.ofNullable(data.get(INDEXED_AT_KEY)).map(Instant::parse);
 			updatedAt = Optional.ofNullable(data.get(UPDATED_AT_KEY)).map(Instant::parse);
 			return IndexState.of(IndexStatus.INDEXED, true);
+		} catch (final LockObtainFailedException e) {
+			log.error("Search index of {} at {} is in use by another Mizoine: give each its own mizoine.search.index-dir",
+					repository, current);
+			closeQuietly();
+			return IndexState.needsReindexing(IndexState.IN_USE, false);
 		} catch (final IOException e) {
 			log.warn("Search index of {} at {} cannot be read: {}", repository, current, e.toString());
 			closeQuietly();
@@ -190,7 +198,7 @@ public final class RepositoryIndex {
 
 	/** @return whether a reindexing starts now: {@code false} while one runs, which counts instead */
 	public synchronized boolean begin() {
-		if (state.status() == IndexStatus.REINDEXING) {
+		if (state.status() == IndexStatus.REINDEXING || state.reason().filter(IndexState.IN_USE::equals).isPresent()) {
 			return false;
 		}
 		pending = new LinkedHashSet<>();
@@ -274,15 +282,30 @@ public final class RepositoryIndex {
 
 	/**
 	 * Indexes only what changed since the index's own record (by version): new, changed and deleted files. Unchanged
-	 * files are not read. The files are read without the lock; only the writing holds it.
+	 * files are not read. The files are read without the lock ({@link #readChanges}); only the writing holds it
+	 * ({@link #writeChanges}).
 	 */
 	public void update(final Path root) {
+		readChanges(root).ifPresent(update -> writeChanges(update, root));
+	}
+
+	/**
+	 * What an update read: the changed entries as documents, the paths it saw, what it could not read.
+	 *
+	 * @param known the paths the index held when the update began, with their versions
+	 */
+	record Update(Map<String, String> known, Set<String> seen, List<Document> changed, List<String> unreadable) {
+	}
+
+	/** @return what changed, read without the lock; empty if the index cannot take an update */
+	Optional<Update> readChanges(final Path root) {
 		final Map<String, String> known;
 		synchronized (this) {
 			if (state.status() != IndexStatus.INDEXED) {
-				return;
+				return Optional.empty();
 			}
 			known = known();
+			touched = new LinkedHashSet<>();
 		}
 		final Set<String> seen = new LinkedHashSet<>();
 		final List<Document> changed = new ArrayList<>();
@@ -293,24 +316,32 @@ public final class RepositoryIndex {
 				changed.add(IndexDocuments.document(repository, root, entry, analysis));
 			}
 		}, left::add);
-		synchronized (this) {
-			if (writer == null) {
-				return;
+		return Optional.of(new Update(known, seen, changed, left));
+	}
+
+	/** Writes what the update read, then takes anew what Mizoine changed meanwhile: the newest state wins. */
+	synchronized void writeChanges(final Update update, final Path root) {
+		final Set<List<String>> meanwhile = touched;
+		touched = null;
+		if (writer == null) {
+			return;
+		}
+		try {
+			for (final Document document : update.changed()) {
+				writer.updateDocument(new Term(IndexDocuments.PATH, document.get(IndexDocuments.PATH)), document);
 			}
-			try {
-				for (final Document document : changed) {
-					writer.updateDocument(new Term(IndexDocuments.PATH, document.get(IndexDocuments.PATH)), document);
+			for (final String gone : update.known().keySet()) {
+				if (!update.seen().contains(gone)) {
+					writer.deleteDocuments(new Term(IndexDocuments.PATH, gone));
 				}
-				for (final String gone : known.keySet()) {
-					if (!seen.contains(gone)) {
-						writer.deleteDocuments(new Term(IndexDocuments.PATH, gone));
-					}
-				}
-				commit(writer, false);
-				unreadable = List.copyOf(left);
-			} catch (final IOException e) {
-				throw new UncheckedIOException(e);
 			}
+			for (final List<String> path : meanwhile) {
+				apply(writer, root, path);
+			}
+			commit(writer, false);
+			unreadable = List.copyOf(update.unreadable());
+		} catch (final IOException e) {
+			throw new UncheckedIOException(e);
 		}
 	}
 
@@ -342,6 +373,9 @@ public final class RepositoryIndex {
 	public synchronized void changed(final Path root, final List<String> path) {
 		if (pending != null) {
 			pending.add(path);
+		}
+		if (touched != null) {
+			touched.add(path);
 		}
 		if (writer == null) {
 			return;

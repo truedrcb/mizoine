@@ -292,6 +292,59 @@ class RepositoryIndexTest {
 	}
 
 	@Test
+	void aWriteWhileAnUpdateReadsIsNotUndoneByIt() throws IOException {
+		final RepositoryIndex index = indexed();
+		write("projects/plan.md", "# Garden plan\n\nPlums by hand.");
+		Files.setLastModifiedTime(root.resolve("projects/plan.md"), FileTime.from(Instant.now().plusSeconds(5)));
+
+		// the update has read the file by hand; then Mizoine writes it again, before the update writes the index
+		final RepositoryIndex.Update update = index.readChanges(root).orElseThrow();
+		write("projects/plan.md", "# Garden plan\n\nCherries through Mizoine.");
+		index.changed(root, List.of("projects", "plan.md"));
+		index.writeChanges(update, root);
+
+		assertThat(found(index, SearchAnalysis.EXACT, "cherries")).containsExactly("projects/plan.md");
+		assertThat(found(index, SearchAnalysis.EXACT, "plums")).isEmpty();
+	}
+
+	@Test
+	void aFileMizoineDeletesWhileAnUpdateReadsStaysDeleted() throws IOException {
+		final RepositoryIndex index = indexed();
+		write("projects/plan.md", "# Garden plan\n\nPlums by hand.");
+		Files.setLastModifiedTime(root.resolve("projects/plan.md"), FileTime.from(Instant.now().plusSeconds(5)));
+
+		final RepositoryIndex.Update update = index.readChanges(root).orElseThrow();
+		Files.delete(root.resolve("projects/plan.md"));
+		index.changed(root, List.of("projects", "plan.md"));
+		index.writeChanges(update, root);
+
+		assertThat(found(index, SearchAnalysis.EXACT, "plums")).isEmpty();
+	}
+
+	@Test
+	void aFileMizoineCreatesWhileAnUpdateReadsIsKept() throws IOException {
+		final RepositoryIndex index = indexed();
+
+		final RepositoryIndex.Update update = index.readChanges(root).orElseThrow();
+		write("projects/new.md", "cherries");
+		index.changed(root, List.of("projects", "new.md"));
+		index.writeChanges(update, root);
+
+		assertThat(found(index, SearchAnalysis.EXACT, "cherries")).containsExactly("projects/new.md");
+	}
+
+	@Test
+	void aWriteThroughMizoineIsNoReindexingAlsoAfterARestart() throws IOException {
+		final RepositoryIndex index = indexed();
+		final Optional<Instant> built = index.details().indexedAt();
+		write("projects/new.md", "cherries");
+		index.changed(root, List.of("projects", "new.md"));
+		index.close();
+
+		assertThat(open(ANALYSIS).details().indexedAt()).isEqualTo(built);
+	}
+
+	@Test
 	void anUpdateReadsOnlyChangedFiles() throws IOException {
 		final RepositoryIndex index = indexed();
 		// unchanged in size and time, but no longer readable: an update that read it again would lose its words
@@ -421,6 +474,19 @@ class RepositoryIndexTest {
 		final RepositoryIndex index = open(ANALYSIS);
 
 		assertThat(index.state()).isEqualTo(new IndexState(IndexStatus.NEEDS_REINDEXING, Optional.of("format"), false));
+	}
+
+	@Test
+	void anIndexInUseByAnotherMizoineIsLeftAlone() {
+		final RepositoryIndex first = indexed();
+
+		// a second server started with the same index folder
+		final RepositoryIndex second = open(ANALYSIS);
+
+		assertThat(second.state()).isEqualTo(new IndexState(IndexStatus.NEEDS_REINDEXING, Optional.of("in use"), false));
+		assertThat(second.begin()).isFalse();
+		second.reindex(root);
+		assertThat(found(first, SearchAnalysis.EXACT, "apples")).containsExactly("projects/plan.md");
 	}
 
 	@Test

@@ -328,7 +328,8 @@ curl -u alice -H 'Accept: application/json' 'http://127.0.0.1:12013/notes/.searc
 - Answers: 200; 400 for a query that asks nothing (empty, too long, only `-leftout`); 404 for a repository you
   have no grant in; 503 when no searched repository has an index to answer from, with the states.
 - Every answer gives the state of each searched repository's index: `not-indexed`, `needs-reindexing` (made by
-  another version, `reason: format`, or `damaged`), `reindexing`, `indexed` or `failed`. While an older index can
+  another version, `reason: format`; `damaged`; or `in use` by another Mizoine started with the same
+  `mizoine.search.index-dir`, which is never reindexed from the second one), `reindexing`, `indexed` or `failed`. While an older index can
   still be read, it answers meanwhile (`searchable: true`).
 
 ## Connect an AI agent (MCP)
