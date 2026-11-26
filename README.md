@@ -268,6 +268,39 @@ curl -u alice -H 'Content-Type: application/json' -X POST http://127.0.0.1:12013
 Answers: the new status (200); 400 for a request that names nothing; 409 with `{"message": …}` when it is not
 done (nothing to do, a file not in the list, Git refused); 504 when the remote did not answer in time.
 
+### Tags
+
+A folder can have tags; statuses are tags of the form `key:value` (`status:open`, `prio:high`). They are kept in the
+folder itself, in a plain text file `.tags`, so they move with the folder, also when moved by hand, and Git versions
+them like any file:
+
+```
+# projects/mizoine/.tags
+project
+status:active
+```
+
+- **A tag** is a word of letters (any alphabet), digits, `-`, `_` and `/`, with at most one `:`; at most 50 characters
+  and 30 tags per folder. Compared without case. One value per key: setting `status:done` replaces `status:open`.
+- **Shown** on the folder page (its own and each subfolder's), in the folder's JSON (`tags`, `folderTags`), and in
+  search results. Folders above a granted folder show none.
+- **Changed** where you may write in the folder (the repository root only with `/`). In `.tags` by hand: separate
+  tags by spaces, commas or lines; a leading `#` is allowed; what is no tag is left out (logged).
+- **Deleting** a folder that holds only its `.tags` deletes both; any other content still keeps the folder.
+- Tags are for folders for now; tags of files may come later.
+
+```sh
+curl -u alice http://127.0.0.1:12013/notes/projects/mizoine/?tags              # {"tags":["project","status:active"]}, with ETag
+curl -u alice -X PUT -H 'Content-Type: application/json' -d '["project", "status:done"]' \
+     http://127.0.0.1:12013/notes/projects/mizoine/?tags                       # replace; [] removes them; If-Match honoured
+curl -u alice -H 'Accept: application/json' http://127.0.0.1:12013/notes/.tags/   # the tags in use, with counts
+```
+
+- **Search** finds folders by tag: `#status:open` in a query, or `tag=status:open` (repeatable) as a filter that
+  holds at every level of strictness. A plain word matches tags too.
+- **The tags in use**: `/notes/.tags/` (a page, statuses grouped by key, each linked to its search), from the search
+  index. Agents: `list_tags`, so they keep to your tags, and `set_tags`.
+
 ### Search
 
 `/<name>/.search?q=…` (the search box on every folder page) searches one repository, `/.search?q=…` (the search
@@ -336,7 +369,7 @@ curl -u alice -H 'Accept: application/json' 'http://127.0.0.1:12013/notes/.searc
 
 Agents (Claude, also on the phone, Claude Code, others) store and retrieve knowledge through the MCP endpoint
 `https://<host>/mcp`. Tools: `list_repositories`, `list_folder`, `read_file`, `write_file`, `create_folder`, `delete`,
-`move`, `search` (when search is on). `read_file` also gives the file's version; with it, `write_file` and `move` change the file only if nobody
+`move`, `set_tags`, and with search on `search` and `list_tags`. `read_file` also gives the file's version; with it, `write_file` and `move` change the file only if nobody
 else did in between.
 Files are given raw; the agent's writes are plain files that you review with `git diff` and commit.
 

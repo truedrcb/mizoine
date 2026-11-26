@@ -25,6 +25,8 @@
 			<li th:each="hit : ${results.hits}">
 				<a th:href="${hit.url}" th:text="${hit.title}">Garden plan</a>
 				<small th:text="|${hit.repository}/${hit.path}|">notes/plan.md</small>
+				<th:block th:each="tag : ${hit.tags}"> <a class="tag" th:href="@{/{r}/.search(r=${hit.repository},q=${'#' + tag})}"
+					th:text="${tag}">project</a></th:block>
 				<p th:each="snippet : ${hit.snippets}" class="snippet"><th:block th:each="part : ${snippet.parts}"><mark
 					th:if="${part.match}" th:text="${part.text}">apples</mark><th:block th:unless="${part.match}"
 					th:text="${part.text}">text</th:block></th:block></p>

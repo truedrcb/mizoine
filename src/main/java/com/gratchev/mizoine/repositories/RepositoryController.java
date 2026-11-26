@@ -61,7 +61,10 @@ class RepositoryController {
 			+ "'Content-Security-Policy: sandbox', and as download (attachment) unless its type cannot run in a browser. "
 			+ "Exception: a Markdown file (valid UTF-8, up to 2 MB) is a rendered HTML page when the request asks "
 			+ "explicitly for text/html (a browser), and neither '?raw' nor an OAuth token (Bearer) is given; "
-			+ "relative links and pictures work, headings have GitHub-style ids for '#topic'.";
+			+ "relative links and pictures work, headings have GitHub-style ids for '#topic'. "
+			+ "A folder's JSON also has its own tags (tags) and its subfolders' (folderTags); none above a granted "
+			+ "folder. '?tags' on a folder gives only its own tags, always as JSON {\"tags\": [...]}, with an ETag "
+			+ "for changing them; on a file it is 400.";
 	private static final String OK = "The folder page (HTML) or its subfolders and files (JSON); or the file's content";
 	private static final String REDIRECT = "Folder URL without trailing slash: redirect to the same URL with '/' "
 			+ "(only for folders the user may see); or " + ApiTexts.LOGIN_REDIRECT;

@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-25): steps 0–34, 37–48 and 55–60 done (1001 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor, search with index state and reindexing on request). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 49–54 (stable URLs, postponed), 61–65 (folder tags and statuses; D64–D71 decided, D72 postponed). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-26): steps 0–34, 37–48 and 55–65 done (1048 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor, search with index state and reindexing on request, folder tags and statuses). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 49–54 (stable URLs, postponed). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -1692,18 +1692,18 @@ prio:high
 
 - `?tags` on a file: 400 "Tags are for folders" until file tags come (D72).
 
-### 61. Tags: the model and the `.tags` file  ☐
+### 61. Tags: the model and the `.tags` file  ☑
 - `Tag` (a value type, checked once where it comes in; case kept, compared without case) and `Tags` (a set; one value per key for `key:value`).
 - `TagsFile`: reads and writes a folder's `.tags` in the plain format above; written atomically under the writer's lock, like any write (step 30). Comment lines are not part of the format: Mizoine writes only the tags.
 - Plain unit tests: spaces, commas, line breaks and `#` read alike; invalid tags (too long, two `:`, empty) refused with a message; `status:done` replaces `status:open`; `Projekt` = `projekt`; an unreadable file counts as no tags and is logged.
 
-### 62. Reading folder tags  ☐
+### 62. Reading folder tags  ☑
 - The folder listing (JSON and page) gives the folder's own tags and each visible subfolder's.
 - `GET /{repository}/{folder}/?tags`: `{"tags": [...]}` with an `ETag` (the version of the `.tags` file).
 - Tests: the permission matrix (read grant: visible; folder on the way to a grant (D4): no tags; not visible: 404); `GET …/.tags` stays 404 as a file; `?tags` on a file is 400.
 - OpenAPI for the new answers.
 
-### 63. Editing folder tags  ☐
+### 63. Editing folder tags  ☑
 - `PUT /{repository}/{folder}/?tags` with a JSON list replaces the tags; an empty list deletes the `.tags` file. With `If-Match` only if the file is unchanged (412 otherwise).
   - Only where the user may write in the folder; otherwise the same answer as a file write there.
   - CSRF as for file writes: the browser's session needs the token, HTTP Basic clients do not (D11).
@@ -1713,19 +1713,31 @@ prio:high
 - Tests: replace, remove, `If-Match`, a read-only place (above a grant) refused, the root needs `/`, a folder with only `.tags` deleted, a folder with `.tags` and a file not, a moved folder keeps its tags, two concurrent edits (one 412).
 - README: a section "Tags".
 
-### 64. Tags for agents (MCP)  ☐
+### 64. Tags for agents (MCP)  ☑
 - `list_folder` returns the folder's and its subfolders' tags.
 - `set_tags(repository, path, tags, if_match?)`: replaces a folder's tags.
 - `list_tags(repository)`: the vocabulary of step 65, so that an agent keeps to your tags instead of inventing new ones; the descriptions say so.
 - Tests: an agent sees and sets tags only in its folders.
 
-### 65. Searching by tags, and the vocabulary  ☐
+### 65. Searching by tags, and the vocabulary  ☑
 Builds on steps 55–60: the search index knows the tags, so the vocabulary is one of its answers (D71).
 - A field `tag` for folders in the index (normalized like `exact`, step 55). Mizoine's own tag edits update the index at once; a `.tags` edited by hand is taken up by the next update (D49): the update compares the versions of `.tags` files too.
 - Query: `#project` or `#status:open` finds folders with that tag (hashtag form; D53 stays: no other field syntax). A plain word also matches tags, ranked like a match in the name. API parameter `tag=` (repeatable) to filter; MCP `search` gets `tags`.
 - Results show the folders' tags.
 - `GET /{repository}/.tags/` (JSON or page): every tag in use among the folders the user may read, with counts, `key:value` tags grouped by key (all statuses together); each tag links to its search. The same in `list_tags`. With no usable index: 503 with the index state, as search (D59).
 - Tests: `#status:open` finds only open folders; tags of folders a user may not read are neither found nor counted; a tag edit is found at once; a hand edit after an update.
+
+- *Done 2026-11-26 (steps 61–65):*
+  - **Model (61), package `tags`, no dependencies:** `Tag` (checked once; case kept, compared without case; `#` is the hashtag form), `Tags` (each once, the first spelling kept; one value per key, the later wins; at most 30), `TagsFile` (reads `.tags`: missing, unreadable or not UTF-8 is no tags, logged; words that are no tags are left out and logged, the rest counts). `Tags.of` (API) is strict, `Tags.read` (a hand-edited file) lenient.
+  - **Reading (62):** `RepositoryFiles.listing` gives `tags` and `folderTags`, where the user may read inside (one rule, `readableFolder`, also used by the search's second check). `GET …/?tags` (always JSON, also without `Accept`), ETag of the `.tags` file. The folder page shows them.
+  - **Editing (63):** `PUT …/?tags` with a JSON list; `RepositoryFiles.setFolderTags` checks access as for a file write in the folder. The writer got two narrow methods, `writeTags` and `deleteTags`: the only ones that write a hidden name, so `write` still refuses every hidden name. A folder with only `.tags` counts as empty for a delete (D70). A tags change publishes a `RepositoryChange` for the `.tags` path.
+  - **OpenAPI:** one operation per path and method, so `?tags` would have replaced the folder's `GET` and the `PUT` (found by reading `docs/openapi.yaml`; now pinned in `OpenApiDocumentationTest`). The `?tags` handlers are `@Hidden`; the folder `GET` and the `PUT` describe `?tags`.
+  - **Search (65):** analysis version 2: field `tag` (whole, folded like a name), stored `tags`. A folder's entry has the version of its `.tags`, so an update sees hand edits; a change of `.tags` takes only the folder's own entry anew. `#tag` in a query (exact, never loosened to a similar spelling), plain words match tags too (weight 4), `tag=` filter at every level; hits show tags. `Search.vocabulary` from the index, lower case, sorted; `GET /{repository}/.tags/` (page grouped by key, links to the search). `search` and `vocabulary` share one way to lease the indexes (`withIndexes`).
+  - **MCP (64):** `list_folder` shows the tags (the listing); `set_tags`; with search on `list_tags` and a `tags` filter for `search`; folders' tags in the search text.
+  - **Left out, to decide:** the repository root has no entry in the index, so its tags show in the listing but are not searched or counted. A tag filter finds the tagged folders, not the files inside them (no inheritance).
+  - *Tools for steps 61–65:*
+    - crapper: all below 10. dryer: `Tag.equals`/`hashCode` and `Tags.equals`/`hashCode` are one line each on other fields: left, no shared decision.
+    - mutator: first run 292 killed, 32 survived (most in older code outside the group's tests). Killed with new tests: a `.tags` that is a folder or a link is never written (a link put there by hand would have been written through); the tags of a linked folder are not indexed; a tag changed twice leaves one entry; the vocabulary of an empty index; a lone `#` is a word. Removed as dead: a link check in `IndexDocuments.folder` (a link is no folder without following links). Changed: the tags page groups by `Tag.key()` instead of its own `indexOf(':')`. Left, equivalent: `Tag.key` and the old `indexOf` for a colon at index 0 (no tag starts with `:`); `IndexDocuments.indexable` (step 57); `RepositoryWriter` `isInside`, `isVersion`, `copy` (step 48); `McpTools.createFolder` (step 59). The survivors of `RepositoryFiles` were killed by the Git and index page tests.
 
 ## Glossary
 

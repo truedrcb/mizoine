@@ -41,6 +41,7 @@ final class SearchQueries {
 		weights.put(SearchAnalysis.NAME, 8f);
 		weights.put(SearchAnalysis.NAME_PARTS, 4f);
 		weights.put(SearchAnalysis.TITLE, 4f);
+		weights.put(SearchAnalysis.TAG, 4f);
 		weights.put(SearchAnalysis.TOKENS, 3f);
 		weights.put(SearchAnalysis.EXACT, 2f);
 		analysis.textFields().stream().skip(1).forEach(language -> weights.put(language, 1f));
@@ -64,8 +65,11 @@ final class SearchQueries {
 		return all.build();
 	}
 
-	/** One part in every field, each with its weight. */
+	/** One part in every field, each with its weight; a {@code #tag} only in the tags. */
 	private Optional<Query> match(final Item item) {
+		if (item.kind() == Kind.TAG) {
+			return Optional.of(tag(item.text()));
+		}
 		return any(weights.entrySet().stream()
 				.map(field -> field(field.getKey(), item).map(query -> (Query) new BoostQuery(query, field.getValue())))
 				.flatMap(Optional::stream));
@@ -78,6 +82,7 @@ final class SearchQueries {
 					? builder.createBooleanQuery(field, item.text(), Occur.MUST)
 					: builder.createPhraseQuery(field, item.text()));
 			case PREFIX -> single(field, item.text()).map(term -> new PrefixQuery(new Term(field, term)));
+			case TAG -> Optional.empty();
 		};
 	}
 
@@ -91,6 +96,11 @@ final class SearchQueries {
 						.filter(term -> term.length() >= SIMILAR_FROM)
 						.map(term -> (Query) new FuzzyQuery(new Term(field, term),
 								term.length() >= TWO_EDITS_FROM ? 2 : 1, 1))));
+	}
+
+	/** Folders with this tag, as the tags field keeps it (folded). */
+	Query tag(final String tag) {
+		return new TermQuery(new Term(SearchAnalysis.TAG, analysis.terms(SearchAnalysis.TAG, tag).getFirst()));
 	}
 
 	/** The word as this field keeps it, if it is one word there. */

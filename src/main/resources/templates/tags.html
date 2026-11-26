@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/head :: head(|Mizoine – tags in ${repository}|)}"></head>
+<body>
+	<h1>Tags in <span th:text="${repository}">notes</span></h1>
+	<p><a th:href="@{/{r}/(r=${repository})}">Files</a> · <a th:href="@{/{r}/.search(r=${repository})}">Search</a>
+		· <a th:href="@{/{r}/.search/index(r=${repository})}">Search index</a></p>
+	<p th:if="${message}" class="refused" role="status" th:text="${message}">No index.</p>
+	<ul th:if="${indexes}" class="indexes">
+		<li th:each="index : ${indexes}" th:text="|${index.repository}: ${index.status.code()}|">notes: not-indexed</li>
+	</ul>
+	<th:block th:if="${groups}">
+		<p th:if="${groups.size() == 1 and groups[''].isEmpty()}">No folder you may read has tags yet.</p>
+		<th:block th:each="group : ${groups}" th:unless="${group.value.isEmpty()}">
+			<h2 th:unless="${group.key.isEmpty()}" th:text="${group.key}">status</h2>
+			<ul>
+				<li th:each="tag : ${group.value}"><a th:href="@{/{r}/.search(r=${repository},q=${'#' + tag.tag})}"
+					th:text="${tag.tag}">project</a> <span th:text="|(${tag.count})|">(2)</span></li>
+			</ul>
+		</th:block>
+	</th:block>
+</body>
+</html>

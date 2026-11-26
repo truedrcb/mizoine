@@ -36,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.gratchev.mizoine.files.FileVersion;
+import com.gratchev.mizoine.tags.TagsFile;
 
 /**
  * The search index of one repository (step 56, D58–D61), in its own folder per format below
@@ -389,6 +390,13 @@ public final class RepositoryIndex {
 	}
 
 	private void apply(final IndexWriter target, final Path root, final List<String> path) throws IOException {
+		if (!path.isEmpty() && TagsFile.NAME.equals(path.getLast())) {
+			// a folder's tags: only the folder's own entry is taken anew, not everything below it
+			final List<String> folder = path.subList(0, path.size() - 1);
+			target.deleteDocuments(new Term(IndexDocuments.PATH, IndexDocuments.path(folder, true)));
+			IndexDocuments.folder(root, folder).ifPresent(entry -> add(target, root, entry));
+			return;
+		}
 		target.deleteDocuments(new Term(IndexDocuments.PATH, IndexDocuments.path(path, false)));
 		target.deleteDocuments(new PrefixQuery(new Term(IndexDocuments.PATH, IndexDocuments.path(path, true))));
 		final List<IndexDocuments.Entry> entries = new ArrayList<>();

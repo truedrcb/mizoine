@@ -256,6 +256,81 @@ class SearchTest {
 				.snippets().getFirst().parts()).contains(new Snippet.Part("Häuser", true));
 	}
 
+	private void tags(final String folder, final String tags) throws IOException {
+		Files.createDirectories(repositories.resolve(folder));
+		write(folder + "/.tags", tags);
+	}
+
+	@Test
+	void foldersByTheirTags() throws IOException {
+		tags("notes/public/garden", "project status:open");
+		tags("notes/public/kitchen", "project status:done");
+		tags("notes/private/secret", "project status:open");
+		reindex("notes");
+
+		assertThat(paths(inNotes("guest", "#status:open"))).containsExactly("notes/public/garden/");
+		assertThat(paths(inNotes("guest", "#project"))).containsExactlyInAnyOrder("notes/public/garden/",
+				"notes/public/kitchen/");
+		assertThat(inNotes("guest", "#project").total()).isEqualTo(2);
+		assertThat(paths(inNotes("artem", "#project"))).hasSize(3);
+		// a plain word finds tags too
+		assertThat(paths(inNotes("guest", "status:done"))).containsExactly("notes/public/kitchen/");
+		// the results show the tags
+		assertThat(inNotes("guest", "#status:open").hits().getFirst().tags()).containsExactly("project", "status:open");
+		// a tag is exact: no similar spelling
+		assertThat(inNotes("guest", "#projekt").strictness()).isEqualTo(Strictness.NONE);
+		assertThatThrownBy(() -> SearchQuery.parse("#two:colons:here")).isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("Not a tag");
+	}
+
+	@Test
+	void aTagFilterHoldsAtEveryLevel() throws IOException {
+		tags("notes/public/garden", "project status:open");
+		tags("notes/public/kitchen", "project status:done");
+		write("notes/public/garden/beds.md", "Apples here.");
+		reindex("notes");
+
+		final SearchResults filtered = search.search("guest", Optional.of("notes"), SearchQuery.parse("garden"),
+				Page.FIRST, List.of(com.gratchev.mizoine.tags.Tag.of("status:open")));
+		assertThat(paths(filtered)).containsExactly("notes/public/garden/");
+		// also when nothing has all words: the filter is never loosened
+		assertThat(paths(search.search("guest", Optional.of("notes"), SearchQuery.parse("kitchen zebra"), Page.FIRST,
+				List.of(com.gratchev.mizoine.tags.Tag.of("status:open"))))).isEmpty();
+	}
+
+	@Test
+	void theTagsInUseWithHowOften() throws IOException {
+		tags("notes/public/garden", "project status:open");
+		tags("notes/public/kitchen", "Project status:done");
+		tags("notes/private/secret", "secret status:open");
+		reindex("notes");
+
+		assertThat(search.vocabulary("guest", "notes").tags()).containsExactly(
+				new TagCount("project", 2), new TagCount("status:done", 1), new TagCount("status:open", 1));
+		assertThat(search.vocabulary("artem", "notes").tags()).containsExactly(
+				new TagCount("project", 2), new TagCount("secret", 1), new TagCount("status:done", 1),
+				new TagCount("status:open", 2));
+	}
+
+	@Test
+	void theVocabularyOfAnEmptyRepository() throws IOException {
+		repository("empty", "path: empty\naccess:\n  guest: [\"/\"]\n");
+		Files.createDirectories(repositories.resolve("empty"));
+		reindex("empty");
+
+		assertThat(search.vocabulary("guest", "empty").tags()).isEmpty();
+	}
+
+	@Test
+	void aLoneHashIsAWordNotAnEmptyTag() {
+		assertThat(SearchQuery.parse("#").items()).containsExactly(new SearchQuery.Item("#", SearchQuery.Kind.WORD, false));
+	}
+
+	@Test
+	void theVocabularyNeedsAnIndex() {
+		assertThatThrownBy(() -> search.vocabulary("guest", "notes")).isInstanceOf(NotSearchableException.class);
+	}
+
 	@Test
 	void pages() {
 		reindex("notes");

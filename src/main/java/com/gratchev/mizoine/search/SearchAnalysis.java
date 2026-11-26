@@ -44,6 +44,7 @@ import org.apache.lucene.analysis.util.ElisionFilter;
  * <li>{@link #NAME}: a file or folder name whole; {@link #NAME_PARTS}: in its parts (at {@code -}, {@code _},
  * {@code .}, spaces, camelCase, digits).</li>
  * <li>{@link #TITLE}: as {@link #EXACT}, for its own weight.</li>
+ * <li>{@link #TAG}: each tag of a folder whole, folded as a name (version 2).</li>
  * </ul>
  */
 public final class SearchAnalysis {
@@ -52,11 +53,13 @@ public final class SearchAnalysis {
 	 * Raised with every change of the fields or of their analysis: an index of another version is built anew (D58).
 	 * {@code SearchAnalysisTest.theAnalysisOfThisVersion} fails as a reminder.
 	 */
-	public static final int ANALYSIS_VERSION = 1;
+	public static final int ANALYSIS_VERSION = 2;
 
 	public static final String EXACT = "exact";
 	public static final String TOKENS = "tokens";
 	public static final String NAME = "name";
+	/** A folder's tags (step 65), each whole and folded like a name. */
+	public static final String TAG = "tag";
 	public static final String NAME_PARTS = "nameparts";
 	public static final String TITLE = "title";
 
@@ -83,6 +86,7 @@ public final class SearchAnalysis {
 		fields.put(TOKENS, analyzer(WhitespaceTokenizer::new, stream -> folded(new LengthFilter(
 				new PatternReplaceFilter(stream, PUNCTUATION_AT_ENDS, "", true), 1, Integer.MAX_VALUE))));
 		fields.put(NAME, analyzer(KeywordTokenizer::new, SearchAnalysis::folded));
+		fields.put(TAG, analyzer(KeywordTokenizer::new, SearchAnalysis::folded));
 		fields.put(NAME_PARTS, analyzer(WhitespaceTokenizer::new,
 				stream -> folded(new FlattenGraphFilter(new WordDelimiterGraphFilter(stream, WORD_PARTS, null)))));
 		this.analyzer = new PerFieldAnalyzerWrapper(fields.get(EXACT), fields);

@@ -5,9 +5,11 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.gratchev.mizoine.tags.Tag;
+
 /**
  * A search as the user wrote it, read once where it comes in (step 57, D53): words, {@code "a phrase"},
- * {@code -without}, {@code prefix*}. No other syntax: everything else is a word.
+ * {@code -without}, {@code prefix*}, {@code #tag}. No other syntax: everything else is a word.
  *
  * @param items the parts, in order; at least one is not left out
  */
@@ -28,7 +30,9 @@ public record SearchQuery(String text, List<Item> items) {
 	}
 
 	public enum Kind {
-		WORD, PHRASE, PREFIX
+		WORD, PHRASE, PREFIX,
+		/** {@code #tag}: a folder's tag, exact (step 65). */
+		TAG
 	}
 
 	/** @throws IllegalArgumentException with a message for the user: empty, too long, or only left-out parts */
@@ -58,7 +62,11 @@ public record SearchQuery(String text, List<Item> items) {
 		return new SearchQuery(query, List.copyOf(items));
 	}
 
+	/** @throws IllegalArgumentException for {@code #…} that is no tag */
 	private static Item word(final String word, final boolean left) {
+		if (word.length() > 1 && word.startsWith("#")) {
+			return new Item(Tag.of(word).text(), Kind.TAG, left);
+		}
 		// a lone "*" is a word: as an empty prefix it would find everything
 		return word.length() > 1 && word.endsWith("*")
 				? new Item(word.substring(0, word.length() - 1), Kind.PREFIX, left)

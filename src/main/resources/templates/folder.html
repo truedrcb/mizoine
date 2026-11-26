@@ -10,8 +10,11 @@
 		<input type="search" name="q" maxlength="200" aria-label="Search in this repository">
 		<button type="submit">Search</button>
 	</form>
+	<p th:unless="${listing.tags.isEmpty()}" class="tags">Tags:
+		<th:block th:each="tag : ${listing.tags}"><span class="tag" th:text="${tag}">project</span> </th:block></p>
 	<ul th:unless="${links.isEmpty()}">
-		<li th:each="link : ${links}"><a th:href="${link.href}" th:text="${link.name}">folder</a></li>
+		<li th:each="link : ${links}"><a th:href="${link.href}" th:text="${link.name}">folder</a><th:block
+			th:each="tag : ${listing.folderTags.getOrDefault(link.name, {})}"> <span class="tag" th:text="${tag}">project</span></th:block></li>
 	</ul>
 	<ul th:unless="${fileLinks.isEmpty()}">
 		<li th:each="link : ${fileLinks}"><a th:href="${link.href}" th:text="${link.name}">file</a></li>

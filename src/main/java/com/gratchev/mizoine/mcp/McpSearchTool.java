@@ -15,6 +15,8 @@ import com.gratchev.mizoine.search.SearchQuery;
 import com.gratchev.mizoine.search.SearchResults;
 import com.gratchev.mizoine.search.Snippet;
 import com.gratchev.mizoine.search.Strictness;
+import com.gratchev.mizoine.search.Vocabulary;
+import com.gratchev.mizoine.tags.Tag;
 
 import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.json.McpJsonMapper;
@@ -36,7 +38,8 @@ final class McpSearchTool {
 	private static final String DESCRIPTION = "Search the files you may read: by name, and text files by content, best "
 			+ "first. Words are found in every spelling of a letter (ä = ae = a, ß = ss, accents) and in their word forms. "
 			+ "The query: words (all must be found), \"a phrase\", -leftout, prefix*; at most 200 characters. If no file "
-			+ "has all words, files with any of them; then words of a similar spelling: the answer says which. Results "
+			+ "has all words, files with any of them; then words of a similar spelling: the answer says which. #tag "
+			+ "finds folders with that tag (list_tags shows the tags in use). Results "
 			+ "are only in the folders you may read. Read a result with read_file.";
 	private static final TypeRef<Map<String, Object>> MAP = new TypeRef<>() {
 	};
@@ -49,12 +52,59 @@ final class McpSearchTool {
 		this.json = json;
 	}
 
+	/** The tools that need the search index: {@code search} and {@code list_tags} (steps 59, 64). */
+	List<SyncToolSpecification> specifications() {
+		return List.of(specification(), listTags());
+	}
+
+	private SyncToolSpecification listTags() {
+		return SyncToolSpecification.builder()
+				.tool(McpSchema.Tool.builder("list_tags", Map.of("type", "object", "properties", Map.of(REPOSITORY,
+								Map.of("type", "string", "description", "Repository name, from list_repositories")),
+						"required", List.of(REPOSITORY)))
+						.description("The tags in use on the folders you may read in a repository, with how often. Use "
+								+ "these when you tag a folder (set_tags), instead of inventing new ones; statuses are "
+								+ "key:value tags such as status:open. Find tagged folders with search: #tag.").build())
+				.callHandler((final McpTransportContext context, final CallToolRequest request) -> listTags(
+						(String) context.get(McpTools.USER), request.arguments() == null ? Map.of() : request.arguments()))
+				.build();
+	}
+
+	private CallToolResult listTags(final String user, final Map<String, Object> arguments) {
+		try {
+			final String repository = McpTools.text(arguments, REPOSITORY);
+			final Vocabulary vocabulary = search.vocabulary(user, repository);
+			return CallToolResult.builder()
+					.addTextContent(vocabulary.tags().isEmpty() ? "No tags in use in " + repository + " yet."
+							: "Tags in use in " + repository + ": " + vocabulary.tags().stream()
+									.map(tag -> tag.tag() + " (" + tag.count() + ")").collect(Collectors.joining(", "))
+							+ ". Keep to these where they fit.")
+					.structuredContent(json.convertValue(vocabulary, MAP))
+					.isError(false)
+					.build();
+		} catch (final RepositoryFiles.NotVisibleException e) {
+			return McpTools.error("Not found: " + arguments.get(REPOSITORY));
+		} catch (final NotSearchableException e) {
+			return McpTools.error(notSearched(e));
+		} catch (final IllegalArgumentException | RepositoryFiles.MisconfiguredException e) {
+			return McpTools.error(e.getMessage());
+		}
+	}
+
+	private static String notSearched(final NotSearchableException e) {
+		return "Not searched: no search index yet for "
+				+ e.indexes().stream().map(IndexInfo::repository).collect(Collectors.joining(", "))
+				+ ". A person with access to the whole repository can build it.";
+	}
+
 	SyncToolSpecification specification() {
 		final Map<String, Object> properties = new LinkedHashMap<>();
 		properties.put(QUERY, Map.of("type", "string", "description", "What to find"));
 		properties.put(REPOSITORY, Map.of("type", "string", "description",
 				"Optional: only in this repository, from list_repositories; else in all"));
 		properties.put(LIMIT, Map.of("type", "integer", "description", "Optional: how many results, 1 to 100 (default 20)"));
+		properties.put(McpTools.TAGS, Map.of("type", "array", "items", Map.of("type", "string"),
+				"description", "Optional: only folders with all these tags"));
 		return SyncToolSpecification.builder()
 				.tool(McpSchema.Tool.builder("search", Map.of("type", "object", "properties", properties,
 						"required", List.of(QUERY))).description(DESCRIPTION).build())
@@ -67,7 +117,8 @@ final class McpSearchTool {
 		final Optional<String> repository = Optional.ofNullable(arguments.get(REPOSITORY)).map(String::valueOf);
 		try {
 			final SearchResults results = search.search(user, repository, SearchQuery.parse(McpTools.text(arguments, QUERY)),
-					new Page(0, limit(arguments)));
+					new Page(0, limit(arguments)), arguments.containsKey(McpTools.TAGS)
+							? McpTools.texts(arguments, McpTools.TAGS).stream().map(Tag::of).toList() : List.of());
 			return CallToolResult.builder()
 					.addTextContent(text(results))
 					.structuredContent(json.convertValue(results, MAP))
@@ -76,9 +127,7 @@ final class McpSearchTool {
 		} catch (final RepositoryFiles.NotVisibleException e) {
 			return McpTools.error("Not found: " + repository.orElse(""));
 		} catch (final NotSearchableException e) {
-			return McpTools.error("Not searched: no search index yet for "
-					+ e.indexes().stream().map(IndexInfo::repository).collect(Collectors.joining(", "))
-					+ ". A person with access to the whole repository can build it.");
+			return McpTools.error(notSearched(e));
 		} catch (final IllegalArgumentException | RepositoryFiles.MisconfiguredException e) {
 			return McpTools.error(e.getMessage());
 		}
@@ -105,6 +154,9 @@ final class McpSearchTool {
 				.append(" for \"").append(results.query()).append("\" (").append(level(results.strictness())).append("):");
 		for (final SearchResults.Hit hit : results.hits()) {
 			text.append("\n- ").append(hit.repository()).append('/').append(hit.path()).append(": ").append(hit.title());
+			if (!hit.tags().isEmpty()) {
+				text.append(" [").append(String.join(", ", hit.tags())).append(']');
+			}
 			hit.snippets().stream().findFirst().ifPresent(snippet -> text.append("\n  ").append(passage(snippet)));
 		}
 		return text.append("\nRead a file with read_file.").append(notSearched(results)).toString();

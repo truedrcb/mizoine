@@ -7,13 +7,13 @@ info:
     \ (logos etc.). Those under /ui/ are not listed as operations: they are plain\
     \ files, not API methods. AI agents connect to the MCP endpoint /mcp (Model Context\
     \ Protocol, Streamable HTTP, POST with JSON-RPC): tools list_repositories, list_folder,\
-    \ read_file, write_file, create_folder, delete, move, search, with the same grants\
-    \ as this API. It is not listed as an operation either. Where the server has OAuth\
-    \ set up, /mcp also takes Bearer tokens from Mizoine's own OAuth server for chat\
-    \ apps: /.well-known/oauth-protected-resource/mcp (RFC 9728), /.well-known/oauth-authorization-server,\
-    \ /oauth2/authorize and /oauth2/token (authorization code with PKCE, one registered\
-    \ client per chat app). These are standard OAuth endpoints, not listed as operations\
-    \ either."
+    \ read_file, write_file, create_folder, delete, move, search, set_tags, list_tags,\
+    \ with the same grants as this API. It is not listed as an operation either. Where\
+    \ the server has OAuth set up, /mcp also takes Bearer tokens from Mizoine's own\
+    \ OAuth server for chat apps: /.well-known/oauth-protected-resource/mcp (RFC 9728),\
+    \ /.well-known/oauth-authorization-server, /oauth2/authorize and /oauth2/token\
+    \ (authorization code with PKCE, one registered client per chat app). These are\
+    \ standard OAuth endpoints, not listed as operations either."
   version: "1.0"
 servers:
 - url: /
@@ -38,7 +38,10 @@ paths:
         \ a Markdown file (valid UTF-8, up to 2 MB) is a rendered HTML page when the\
         \ request asks explicitly for text/html (a browser), and neither '?raw' nor\
         \ an OAuth token (Bearer) is given; relative links and pictures work, headings\
-        \ have GitHub-style ids for '#topic'."
+        \ have GitHub-style ids for '#topic'. A folder's JSON also has its own tags\
+        \ (tags) and its subfolders' (folderTags); none above a granted folder. '?tags'\
+        \ on a folder gives only its own tags, always as JSON {\"tags\": [...]}, with\
+        \ an ETag for changing them; on a file it is 400."
       operationId: folder
       parameters:
       - name: repository
@@ -100,7 +103,13 @@ paths:
         \ never a part. The folder must exist (folders are created explicitly). If-Match:\
         \ <ETag> writes only if the file is unchanged since it was read; If-None-Match:\
         \ * creates only. API clients with an Authorization header need no CSRF token;\
-        \ the browser UI (session cookie) sends X-XSRF-TOKEN."
+        \ the browser UI (session cookie) sends X-XSRF-TOKEN. '?tags' on a folder\
+        \ replaces its own tags instead: the body a JSON list of tags, an empty list\
+        \ removes them; 200 with the tags as they are now. A tag is a word of letters,\
+        \ digits, -, _ and /, with one ':' for key:value tags such as statuses (one\
+        \ value per key, the later wins); at most 30 tags of 50 characters; a word\
+        \ that is no tag is 400. If-Match: the ETag of the tags. Only where the user\
+        \ may write; the repository root only with access to the whole repository."
       operationId: put
       parameters:
       - name: repository
@@ -128,6 +137,16 @@ paths:
         schema:
           type: string
       responses:
+        "200":
+          description: "?tags: the folder's tags as they are now; ETag when any are\
+            \ left"
+          content:
+            application/json: {}
+        "400":
+          description: "?tags: not a folder, not a list of tags, or a word that is\
+            \ no tag"
+          content:
+            application/json: {}
         "201":
           description: Created; Location (and for files the ETag)
         "204":
@@ -592,6 +611,44 @@ paths:
           description: "Not logged in (non-browser clients): HTTP Basic challenge"
         "404":
           description: Not a valid repository name
+  /{repository}/.tags/:
+    get:
+      tags:
+      - Folder tags
+      summary: The tags in use in a repository
+      description: "Every tag in use among the folders the user may read, in lower\
+        \ case, sorted, with on how many folders; key:value tags such as statuses\
+        \ grouped by their key on the page, each linked to its search. From the search\
+        \ index: as current as the index."
+      operationId: tagsInUse
+      parameters:
+      - name: repository
+        in: path
+        description: Repository name
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: "The tags: an HTML page, or JSON"
+          content:
+            text/html: {}
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vocabulary"
+        "302":
+          description: "Browser not logged in: redirect to the login page"
+        "401":
+          description: "Not logged in (non-browser clients): HTTP Basic challenge"
+        "404":
+          description: "Unknown repository, or one the user has no grant in"
+        "503":
+          description: No search index to answer from yet; the state says why
+          content:
+            text/html: {}
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unavailable"
   /{repository}/.search:
     get:
       tags:
@@ -601,12 +658,12 @@ paths:
         \ content, among those the user may read; best first. Words are found in every\
         \ spelling of a letter (German ä = ae = a, ß = ss, accents, French elision,\
         \ Russian ё = е) and in their word forms (English, German, French, Russian\
-        \ by default). A query: words, \"a phrase\", -leftout, prefix*; at most 200\
-        \ characters. All words first; if nothing is found, any of them; then words\
-        \ of a similar spelling: strictness says which. Email addresses and file names\
-        \ are found whole and by their parts. An HTML page (default; without q the\
-        \ search box) or JSON when asked for. Every answer gives the state of each\
-        \ searched repository's index."
+        \ by default). A query: words, \"a phrase\", -leftout, prefix*, #tag (a folder's\
+        \ tag); at most 200 characters. All words first; if nothing is found, any\
+        \ of them; then words of a similar spelling: strictness says which. Email\
+        \ addresses and file names are found whole and by their parts. An HTML page\
+        \ (default; without q the search box) or JSON when asked for. Every answer\
+        \ gives the state of each searched repository's index."
       operationId: searchRepository
       parameters:
       - name: repository
@@ -617,7 +674,7 @@ paths:
           type: string
       - name: q
         in: query
-        description: "What to find: words, \"a phrase\", -leftout, prefix*"
+        description: "What to find: words, \"a phrase\", -leftout, prefix*, #tag"
         required: false
         schema:
           type: string
@@ -637,6 +694,15 @@ paths:
           type: integer
           format: int32
           default: 0
+      - name: tag
+        in: query
+        description: "Only folders with this tag (repeatable: all of them), at every\
+          \ level of strictness"
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
       responses:
         "200":
           description: "The results: an HTML page, or JSON"
@@ -807,18 +873,18 @@ paths:
         \ content, among those the user may read; best first. Words are found in every\
         \ spelling of a letter (German ä = ae = a, ß = ss, accents, French elision,\
         \ Russian ё = е) and in their word forms (English, German, French, Russian\
-        \ by default). A query: words, \"a phrase\", -leftout, prefix*; at most 200\
-        \ characters. All words first; if nothing is found, any of them; then words\
-        \ of a similar spelling: strictness says which. Email addresses and file names\
-        \ are found whole and by their parts. An HTML page (default; without q the\
-        \ search box) or JSON when asked for. Every answer gives the state of each\
-        \ searched repository's index. Searches every repository the user may read\
-        \ in, results of all in one order."
+        \ by default). A query: words, \"a phrase\", -leftout, prefix*, #tag (a folder's\
+        \ tag); at most 200 characters. All words first; if nothing is found, any\
+        \ of them; then words of a similar spelling: strictness says which. Email\
+        \ addresses and file names are found whole and by their parts. An HTML page\
+        \ (default; without q the search box) or JSON when asked for. Every answer\
+        \ gives the state of each searched repository's index. Searches every repository\
+        \ the user may read in, results of all in one order."
       operationId: searchAllRepositories
       parameters:
       - name: q
         in: query
-        description: "What to find: words, \"a phrase\", -leftout, prefix*"
+        description: "What to find: words, \"a phrase\", -leftout, prefix*, #tag"
         required: false
         schema:
           type: string
@@ -838,6 +904,15 @@ paths:
           type: integer
           format: int32
           default: 0
+      - name: tag
+        in: query
+        description: "Only folders with this tag (repeatable: all of them), at every\
+          \ level of strictness"
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
       responses:
         "200":
           description: "The results: an HTML page, or JSON"
@@ -1094,6 +1169,18 @@ components:
             \ a granted folder"
           items:
             type: string
+        tags:
+          type: array
+          description: The folder's own tags; none in folders above a granted folder
+          items:
+            type: string
+        folderTags:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          description: "The tags of each subfolder that has any, by its name"
     RepositoryProblem:
       type: object
       description: A repository that is configured wrongly
@@ -1113,27 +1200,6 @@ components:
           description: What is wrong; only for users with access to the whole repository
           items:
             type: string
-    Hit:
-      type: object
-      description: A found file or folder
-      properties:
-        repository:
-          type: string
-        path:
-          type: string
-        url:
-          type: string
-          description: Its page
-        kind:
-          type: string
-          description: file or folder
-        title:
-          type: string
-        snippets:
-          type: array
-          description: Up to 3 passages of a text file with the found words
-          items:
-            $ref: "#/components/schemas/Snippet"
     IndexInfo:
       type: object
       description: The search index of a searched repository
@@ -1157,6 +1223,64 @@ components:
           type: boolean
           description: "Whether its results are in the answer: from the current index,\
             \ or an older one"
+    TagCount:
+      type: object
+      description: "A tag in use, in lower case, and on how many folders"
+      properties:
+        tag:
+          type: string
+        count:
+          type: integer
+          format: int32
+    Vocabulary:
+      type: object
+      description: "The tags in use among the folders you may read, sorted, with how\
+        \ often"
+      properties:
+        repository:
+          type: string
+        tags:
+          type: array
+          items:
+            $ref: "#/components/schemas/TagCount"
+        index:
+          $ref: "#/components/schemas/IndexInfo"
+          description: The state of the search index
+    Unavailable:
+      type: object
+      properties:
+        message:
+          type: string
+        indexes:
+          type: array
+          items:
+            $ref: "#/components/schemas/IndexInfo"
+    Hit:
+      type: object
+      description: A found file or folder
+      properties:
+        repository:
+          type: string
+        path:
+          type: string
+        url:
+          type: string
+          description: Its page
+        kind:
+          type: string
+          description: file or folder
+        title:
+          type: string
+        snippets:
+          type: array
+          description: Up to 3 passages of a text file with the found words
+          items:
+            $ref: "#/components/schemas/Snippet"
+        tags:
+          type: array
+          description: A folder's tags
+          items:
+            type: string
     Part:
       type: object
       properties:
@@ -1206,15 +1330,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Part"
-    Unavailable:
-      type: object
-      properties:
-        message:
-          type: string
-        indexes:
-          type: array
-          items:
-            $ref: "#/components/schemas/IndexInfo"
     Repository:
       type: object
       properties:

@@ -1,9 +1,11 @@
 package com.gratchev.mizoine.repositories;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.FileAlreadyExistsException;
@@ -21,6 +23,7 @@ import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import com.gratchev.mizoine.files.FileVersion;
+import com.gratchev.mizoine.tags.TagsFile;
 
 /**
  * Writes repository files (step 30). Paths are checked like reading ({@link RepositoryPaths}); access (grants)
@@ -198,6 +201,41 @@ public class RepositoryWriter {
 		return target.map(file -> writeFile(file, body, maxBytes, precondition)).orElseGet(Result.NotFound::new);
 	}
 
+	/**
+	 * Step 63: a folder's {@code .tags} file, written as any file (atomically, with the precondition). The one hidden
+	 * name Mizoine writes, and only here: {@link #write} refuses every hidden name.
+	 *
+	 * @param folder an existing folder, checked by the caller
+	 */
+	public Result writeTags(final Path root, final List<String> folder, final String tags, final Precondition precondition) {
+		final Optional<Path> target = RepositoryPaths.resolveFolder(root, folder).map(found -> found.resolve(TagsFile.NAME))
+				.filter(file -> !Files.isDirectory(file, LinkOption.NOFOLLOW_LINKS) && !Files.isSymbolicLink(file));
+		return target.map(file -> writeFile(file, new ByteArrayInputStream(tags.getBytes(StandardCharsets.UTF_8)),
+				Long.MAX_VALUE, precondition)).orElseGet(Result.NotFound::new);
+	}
+
+	/** Step 63: removes a folder's {@code .tags} file, with {@code If-Match} only at that version. */
+	public DeleteResult deleteTags(final Path root, final List<String> folder, final Optional<String> ifMatch) {
+		final Optional<Path> file = RepositoryPaths.resolveFolder(root, folder).map(found -> found.resolve(TagsFile.NAME))
+				.filter(found -> Files.isRegularFile(found, LinkOption.NOFOLLOW_LINKS));
+		if (file.isEmpty()) {
+			return new DeleteResult.NotFound();
+		}
+		lock.lock();
+		try {
+			final Optional<DeleteResult> refused = refuseFile(file.get(), ifMatch);
+			if (refused.isPresent()) {
+				return refused.get();
+			}
+			Files.deleteIfExists(file.get());
+			return new DeleteResult.Deleted();
+		} catch (final IOException e) {
+			throw new UncheckedIOException(e);
+		} finally {
+			lock.unlock();
+		}
+	}
+
 	/** @param createOnly {@code If-None-Match: *}: an existing folder is a failed precondition */
 	public FolderResult createFolder(final Path root, final List<String> segments, final boolean createOnly) {
 		final Optional<Path> parent = parentOf(root, segments);
@@ -246,6 +284,10 @@ public class RepositoryWriter {
 			if (refused.isPresent()) {
 				return refused.get();
 			}
+			if (folder && !Files.isSymbolicLink(path)) {
+				// D70: a folder's own tags go with it
+				Files.deleteIfExists(path.resolve(TagsFile.NAME));
+			}
 			Files.delete(path);
 			return new DeleteResult.Deleted();
 		} catch (final DirectoryNotEmptyException e) {
@@ -257,7 +299,10 @@ public class RepositoryWriter {
 		}
 	}
 
-	/** D15: a folder with content, visible or hidden, is not deleted; a link to a folder is just a link. */
+	/**
+	 * D15: a folder with content, visible or hidden, is not deleted; a link to a folder is just a link. Its own tags
+	 * are no content (D70): otherwise a tagged folder could never be deleted through Mizoine.
+	 */
 	private static Optional<DeleteResult> refuseFolder(final Path folder) throws IOException {
 		return !Files.isSymbolicLink(folder) && hasEntries(folder) ? Optional.of(new DeleteResult.NotEmpty()) : Optional.empty();
 	}
@@ -346,7 +391,8 @@ public class RepositoryWriter {
 
 	private static boolean hasEntries(final Path folder) throws IOException {
 		try (Stream<Path> entries = Files.list(folder)) {
-			return entries.findAny().isPresent();
+			return entries.anyMatch(entry -> !entry.getFileName().toString().equals(TagsFile.NAME)
+					|| !Files.isRegularFile(entry, LinkOption.NOFOLLOW_LINKS));
 		}
 	}
 

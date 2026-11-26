@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import com.gratchev.mizoine.files.FileVersion;
 import com.gratchev.mizoine.repositories.FolderNames;
 import com.gratchev.mizoine.repositories.TextFile;
+import com.gratchev.mizoine.tags.TagsFile;
 
 /**
  * What the index holds of a repository (step 56, D50): every file and folder by name and path, and the content of
@@ -41,6 +42,8 @@ final class IndexDocuments {
 	static final String PATH = "path";
 	static final String KIND = "kind";
 	static final String VERSION = "version";
+	/** A folder's tags as written, for showing them. */
+	static final String TAGS = "tags";
 	static final String FILE = "file";
 	static final String FOLDER = "folder";
 
@@ -48,12 +51,13 @@ final class IndexDocuments {
 	/** The first heading of a Markdown file: {@code # Title}. */
 	private static final Pattern HEADING = Pattern.compile("(?m)^#{1,6}[ \\t]+(.+?)[ \\t#]*$");
 
-	/** A file or folder as it is now; {@code version} only for files. */
-	record Entry(List<String> segments, Optional<FileVersion> version) {
-
-		boolean folder() {
-			return version.isEmpty();
-		}
+	/**
+	 * A file or folder as it is now.
+	 *
+	 * @param version of a file its own; of a folder that of its {@code .tags} file, if it has one, so that an update
+	 *            sees tags changed by hand
+	 */
+	record Entry(List<String> segments, boolean folder, Optional<FileVersion> version) {
 
 		String path() {
 			return IndexDocuments.path(segments, folder());
@@ -98,7 +102,7 @@ final class IndexDocuments {
 						return FileVisitResult.SKIP_SUBTREE;
 					}
 					if (!dir.equals(root)) {
-						entries.accept(new Entry(segments(root, dir), Optional.empty()));
+						entries.accept(folder(root, dir));
 					}
 					return FileVisitResult.CONTINUE;
 				}
@@ -106,7 +110,7 @@ final class IndexDocuments {
 				@Override
 				public FileVisitResult visitFile(final Path file, final BasicFileAttributes attributes) {
 					if (attributes.isRegularFile() && !FolderNames.isHidden(file.getFileName().toString())) {
-						FileVersion.of(file).ifPresent(version -> entries.accept(new Entry(segments(root, file),
+						FileVersion.of(file).ifPresent(version -> entries.accept(new Entry(segments(root, file), false,
 								Optional.of(version))));
 					}
 					return FileVisitResult.CONTINUE;
@@ -138,6 +142,29 @@ final class IndexDocuments {
 		return times.stream().max(Comparator.naturalOrder());
 	}
 
+	private static Entry folder(final Path root, final Path dir) {
+		return new Entry(segments(root, dir), true, FileVersion.of(dir.resolve(TagsFile.NAME)));
+	}
+
+	/**
+	 * A folder's own entry, without what is below it: after its tags changed (step 65).
+	 *
+	 * @return empty for the root (no entry), or a folder the index does not hold
+	 */
+	static Optional<Entry> folder(final Path repositoryRoot, final List<String> segments) {
+		if (segments.isEmpty()) {
+			return Optional.empty();
+		}
+		try {
+			final Path root = repositoryRoot.toRealPath();
+			// a link to a folder is no folder here: the index follows no link
+			return indexable(root, segments) && Files.isDirectory(resolve(root, segments), LinkOption.NOFOLLOW_LINKS)
+					? Optional.of(folder(root, resolve(root, segments))) : Optional.empty();
+		} catch (final IOException e) {
+			return Optional.empty();
+		}
+	}
+
 	/** No part hidden, none on the way a link (the walk does not follow the last one either), and it exists. */
 	private static boolean indexable(final Path root, final List<String> segments) {
 		if (segments.stream().anyMatch(FolderNames::isHidden)) {
@@ -167,12 +194,19 @@ final class IndexDocuments {
 
 	static Document document(final String repository, final Path root, final Entry entry, final SearchAnalysis analysis) {
 		final String name = entry.segments().getLast();
-		final Optional<String> text = entry.folder() ? Optional.empty() : TextFile.read(resolve(root, entry.segments()));
+		final Path path = resolve(root, entry.segments());
+		final Optional<String> text = entry.folder() ? Optional.empty() : TextFile.read(path);
 		final Document document = new Document();
 		document.add(new StringField(REPOSITORY, repository, Field.Store.YES));
 		document.add(new StringField(PATH, entry.path(), Field.Store.YES));
 		document.add(new StringField(KIND, entry.folder() ? FOLDER : FILE, Field.Store.YES));
 		entry.version().ifPresent(version -> document.add(new StoredField(VERSION, version.etag())));
+		if (entry.folder()) {
+			TagsFile.read(path).list().forEach(tag -> {
+				document.add(new TextField(SearchAnalysis.TAG, tag.text(), Field.Store.NO));
+				document.add(new StoredField(TAGS, tag.text()));
+			});
+		}
 		document.add(new TextField(SearchAnalysis.NAME, name, Field.Store.NO));
 		document.add(new TextField(SearchAnalysis.NAME_PARTS, name, Field.Store.NO));
 		document.add(new TextField(SearchAnalysis.TITLE, text.flatMap(content -> title(name, content)).orElse(name),

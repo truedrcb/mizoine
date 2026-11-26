@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import com.gratchev.mizoine.ApiTexts;
+import com.gratchev.mizoine.tags.Tag;
 
 import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,7 +22,6 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 
 /**
@@ -31,14 +31,14 @@ import jakarta.servlet.http.HttpServletResponse;
  */
 @Controller
 @SearchEnabled
-@Tag(name = "Search")
+@io.swagger.v3.oas.annotations.tags.Tag(name = "Search")
 class SearchController {
 
 	private static final String REPOSITORY = "repository";
 	private static final String DESCRIPTION = "Finds files and folders by their names, and text files by their content, "
 			+ "among those the user may read; best first. Words are found in every spelling of a letter (German ä = ae "
 			+ "= a, ß = ss, accents, French elision, Russian ё = е) and in their word forms (English, German, French, "
-			+ "Russian by default). A query: words, \"a phrase\", -leftout, prefix*; at most 200 characters. All words "
+			+ "Russian by default). A query: words, \"a phrase\", -leftout, prefix*, #tag (a folder's tag); at most 200 characters. All words "
 			+ "first; if nothing is found, any of them; then words of a similar spelling: strictness says which. "
 			+ "Email addresses and file names are found whole and by their parts. An HTML page (default; without q "
 			+ "the search box) or JSON when asked for. Every answer gives the state of each searched repository's index.";
@@ -49,9 +49,10 @@ class SearchController {
 			+ "the states say why (e.g. not-indexed: to be built)";
 	private static final String NOT_FOUND = "Unknown repository, or one the user has no grant in";
 	private static final String PROBLEM = "The repository is configured wrongly, or the index could not be read";
-	private static final String Q = "What to find: words, \"a phrase\", -leftout, prefix*";
+	private static final String Q = "What to find: words, \"a phrase\", -leftout, prefix*, #tag";
 	private static final String LIMIT = "How many results, 1 to 100";
 	private static final String OFFSET = "From which result, from 0";
+	private static final String TAG = "Only folders with this tag (repeatable: all of them), at every level of strictness";
 
 	private final Search search;
 
@@ -84,8 +85,9 @@ class SearchController {
 			@RequestParam(name = "q", required = false) @Parameter(description = Q) final String q,
 			@RequestParam(name = "limit", defaultValue = "20") @Parameter(description = LIMIT) final int limit,
 			@RequestParam(name = "offset", defaultValue = "0") @Parameter(description = OFFSET) final int offset,
+			@RequestParam(name = "tag", required = false) @Parameter(description = TAG) final List<String> tags,
 			final Principal principal, final Model model, final HttpServletResponse response) {
-		return page(principal, Optional.of(repository), q, limit, offset, model, response);
+		return page(principal, Optional.of(repository), new Asked(q, limit, offset, tags), model, response);
 	}
 
 	@GetMapping(value = "/{repository}/.search", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -93,8 +95,10 @@ class SearchController {
 	ResponseEntity<Object> repositoryJson(@PathVariable(REPOSITORY) final String repository,
 			@RequestParam(name = "q", required = false) final String q,
 			@RequestParam(name = "limit", defaultValue = "20") final int limit,
-			@RequestParam(name = "offset", defaultValue = "0") final int offset, final Principal principal) {
-		return json(principal, Optional.of(repository), q, limit, offset);
+			@RequestParam(name = "offset", defaultValue = "0") final int offset,
+			@RequestParam(name = "tag", required = false) final List<String> tags,
+			final Principal principal) {
+		return json(principal, Optional.of(repository), new Asked(q, limit, offset, tags));
 	}
 
 	@GetMapping(value = "/.search", produces = MediaType.TEXT_HTML_VALUE)
@@ -113,21 +117,35 @@ class SearchController {
 	String allPage(@RequestParam(name = "q", required = false) @Parameter(description = Q) final String q,
 			@RequestParam(name = "limit", defaultValue = "20") @Parameter(description = LIMIT) final int limit,
 			@RequestParam(name = "offset", defaultValue = "0") @Parameter(description = OFFSET) final int offset,
+			@RequestParam(name = "tag", required = false) @Parameter(description = TAG) final List<String> tags,
 			final Principal principal, final Model model, final HttpServletResponse response) {
-		return page(principal, Optional.empty(), q, limit, offset, model, response);
+		return page(principal, Optional.empty(), new Asked(q, limit, offset, tags), model, response);
 	}
 
 	@GetMapping(value = "/.search", produces = MediaType.APPLICATION_JSON_VALUE)
 	@Hidden // documented together with the HTML variant on allPage(...)
 	ResponseEntity<Object> allJson(@RequestParam(name = "q", required = false) final String q,
 			@RequestParam(name = "limit", defaultValue = "20") final int limit,
-			@RequestParam(name = "offset", defaultValue = "0") final int offset, final Principal principal) {
-		return json(principal, Optional.empty(), q, limit, offset);
+			@RequestParam(name = "offset", defaultValue = "0") final int offset,
+			@RequestParam(name = "tag", required = false) final List<String> tags,
+			final Principal principal) {
+		return json(principal, Optional.empty(), new Asked(q, limit, offset, tags));
+	}
+
+	/** The request's search parameters, as given. */
+	private record Asked(String q, int limit, int offset, List<String> tags) {
+
+		/** @throws IllegalArgumentException with a message for the user */
+		SearchResults search(final Search search, final String user, final Optional<String> repository) {
+			return search.search(user, repository, SearchQuery.parse(q), new Page(offset, limit),
+					tags == null ? List.of() : tags.stream().map(Tag::of).toList());
+		}
 	}
 
 	/** Without a query, the page is the search box. */
-	private String page(final Principal principal, final Optional<String> repository, final String q, final int limit,
-			final int offset, final Model model, final HttpServletResponse response) {
+	private String page(final Principal principal, final Optional<String> repository, final Asked asked,
+			final Model model, final HttpServletResponse response) {
+		final String q = asked.q();
 		model.addAttribute(REPOSITORY, repository.orElse(null));
 		model.addAttribute("query", q == null ? "" : q);
 		model.addAttribute("searchUrl", repository.map(name -> "/" + name + "/.search").orElse("/.search"));
@@ -135,8 +153,7 @@ class SearchController {
 			return "search";
 		}
 		try {
-			final SearchResults results = search.search(principal.getName(), repository, SearchQuery.parse(q),
-					new Page(offset, limit));
+			final SearchResults results = asked.search(search, principal.getName(), repository);
 			model.addAttribute("results", results);
 			model.addAttribute("indexes", results.indexes());
 		} catch (final IllegalArgumentException e) {
@@ -151,11 +168,9 @@ class SearchController {
 	}
 
 	/** Always JSON, also without an Accept header (the pages' default is HTML, D6). */
-	private ResponseEntity<Object> json(final Principal principal, final Optional<String> repository, final String q,
-			final int limit, final int offset) {
+	private ResponseEntity<Object> json(final Principal principal, final Optional<String> repository, final Asked asked) {
 		try {
-			return json(HttpStatus.OK, search.search(principal.getName(), repository,
-					SearchQuery.parse(q), new Page(offset, limit)));
+			return json(HttpStatus.OK, asked.search(search, principal.getName(), repository));
 		} catch (final IllegalArgumentException e) {
 			return json(HttpStatus.BAD_REQUEST, new Refusal(e.getMessage()));
 		} catch (final NotSearchableException e) {

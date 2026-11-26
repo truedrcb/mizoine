@@ -7,15 +7,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.gratchev.mizoine.repositories.RepositoryFiles;
-import com.gratchev.mizoine.search.Search;
 import com.gratchev.mizoine.repositories.RepositoryWriter.DeleteResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.FolderResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.MoveResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.Precondition;
 import com.gratchev.mizoine.repositories.RepositoryWriter.Result;
+import com.gratchev.mizoine.search.Search;
+import com.gratchev.mizoine.tags.Tag;
+import com.gratchev.mizoine.tags.Tags;
+import com.gratchev.mizoine.tags.TagsFile;
 
 import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.json.McpJsonMapper;
@@ -40,6 +44,7 @@ final class McpTools {
 	private static final String IF_MATCH = "if_match";
 	private static final String FROM = "from";
 	private static final String TO = "to";
+	static final String TAGS = "tags";
 	private static final String REVIEW = " Files are plain files in a Git working folder: a human reviews them with git diff "
 			+ "and commits; nothing is versioned until then.";
 
@@ -57,7 +62,7 @@ final class McpTools {
 	}
 
 	List<SyncToolSpecification> all() {
-		return Stream.concat(fileTools().stream(), search.map(McpSearchTool::specification).stream()).toList();
+		return Stream.concat(fileTools().stream(), search.stream().flatMap(tool -> tool.specifications().stream())).toList();
 	}
 
 	private List<SyncToolSpecification> fileTools() {
@@ -79,7 +84,47 @@ final class McpTools {
 				tool("move", "Move or rename a file, or a folder with everything in it (paths ending with '/'), within the "
 						+ "repository. The destination's folder must exist; an existing destination is never overwritten. "
 						+ "With if_match (the version from read_file), a file is moved only if nobody changed it since."
-						+ REVIEW, schema(REPOSITORY, FROM, TO, IF_MATCH), this::move));
+						+ REVIEW, schema(REPOSITORY, FROM, TO, IF_MATCH), this::move),
+				tool("set_tags", "Replace the tags of a folder (path ending with '/'); an empty list removes them. Tags "
+						+ "are words: letters, digits, -, _, /; statuses are key:value (status:open), one value per key. "
+						+ "list_folder shows the tags; list_tags the tags in use: keep to those where they fit. With "
+						+ "if_match (the folder's tags version), only if nobody changed them since." + REVIEW,
+						tagsSchema(), this::setTags));
+	}
+
+	/** Step 64: a folder's tags, as the HTTP API sets them. */
+	private CallToolResult setTags(final String user, final Map<String, Object> arguments) {
+		final String path = text(arguments, PATH);
+		if (!RepositoryFiles.isFolder(path)) {
+			return error(TagsFile.FOLDERS_ONLY);
+		}
+		final String where = where(arguments);
+		return switch (files.setFolderTags(user, text(arguments, REPOSITORY), RepositoryFiles.segments(path),
+				Tags.of(texts(arguments, TAGS)), version(arguments))) {
+			case RepositoryFiles.TagsResult.Written written -> ok("Tags of " + where + ": " + (written.tags().isEmpty()
+					? "none" : written.tags().list().stream().map(Tag::text).collect(Collectors.joining(", "))
+							+ written.version().map(version -> " (version " + version + ")").orElse("")));
+			case RepositoryFiles.TagsResult.PreconditionFailed failed -> error("Not changed: the tags of " + where
+					+ " were changed since that version. Read them again first (list_folder).");
+		};
+	}
+
+	private static Map<String, Object> tagsSchema() {
+		final Map<String, Object> properties = new LinkedHashMap<>();
+		properties.put(REPOSITORY, Map.of("type", "string", "description", DESCRIPTIONS.get(REPOSITORY)));
+		properties.put(PATH, Map.of("type", "string", "description", "The folder, ending with '/'"));
+		properties.put(TAGS, Map.of("type", "array", "items", Map.of("type", "string"),
+				"description", "The folder's new tags, e.g. [\"project\", \"status:open\"]"));
+		properties.put(IF_MATCH, Map.of("type", "string", "description", DESCRIPTIONS.get(IF_MATCH)));
+		return Map.of("type", "object", "properties", properties, "required", List.of(REPOSITORY, PATH, TAGS));
+	}
+
+	/** A list of texts; anything else is the agent's error, said in the answer. */
+	static List<String> texts(final Map<String, Object> arguments, final String name) {
+		if (!(arguments.get(name) instanceof final List<?> list) || !list.stream().allMatch(String.class::isInstance)) {
+			throw new IllegalArgumentException("Not a list of texts: " + name);
+		}
+		return list.stream().map(String.class::cast).toList();
 	}
 
 	private CallToolResult listRepositories(final String user, final Map<String, Object> arguments) {

@@ -27,6 +27,7 @@ public record SearchResults(String query,
 			@Schema(description = "Its page") String url,
 			@Schema(description = "file or folder") String kind,
 			String title,
-			@Schema(description = "Up to 3 passages of a text file with the found words") List<Snippet> snippets) {
+			@Schema(description = "Up to 3 passages of a text file with the found words") List<Snippet> snippets,
+			@Schema(description = "A folder's tags") List<String> tags) {
 	}
 }

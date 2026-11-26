@@ -137,9 +137,41 @@ class McpSearchToolTest {
 		assertThat(TestMcp.text(search(Map.of("query", "apples", "limit", "ten")))).isEqualTo("error: Not a number: limit");
 	}
 
+	private CallToolResult tool(final String name, final Map<String, Object> arguments) {
+		return tools(Optional.of(new Search(files, indexes))).stream().filter(spec -> spec.tool().name().equals(name))
+				.findFirst().orElseThrow()
+				.callHandler().apply(McpTransportContext.create(Map.of(McpTools.USER, "agent")), TestMcp.request(name, arguments));
+	}
+
+	@Test
+	void theTagsInUseOnlyInTheAgentsFolders() throws IOException {
+		write("tree/knowledge/topic/.tags", "project status:open");
+		write("tree/inbox/new/.tags", "project");
+		write("tree/private/secret/.tags", "secret");
+		reindex();
+
+		assertThat(TestMcp.text(tool("list_tags", Map.of("repository", "tree"))))
+				.isEqualTo("Tags in use in tree: project (2), status:open (1). Keep to these where they fit.");
+		assertThat(TestMcp.text(tool("list_tags", Map.of("repository", "other")))).isEqualTo("error: Not found: other");
+	}
+
+	@Test
+	void searchByTag() throws IOException {
+		write("tree/knowledge/topic/.tags", "project status:open");
+		write("tree/inbox/new/.tags", "project");
+		reindex();
+
+		assertThat(TestMcp.text(search(Map.of("query", "#status:open")))).contains("- tree/knowledge/topic/: topic [project, status:open]");
+		assertThat(TestMcp.text(search(Map.of("query", "#project", "tags", List.of("status:open")))))
+				.startsWith("1 result for \"#project\"");
+		assertThat(TestMcp.text(search(Map.of("query", "#project", "tags", "status:open"))))
+				.isEqualTo("error: Not a list of texts: tags");
+	}
+
 	@Test
 	void withoutSearchThereIsNoTool() {
-		assertThat(tools(Optional.empty())).noneMatch(spec -> spec.tool().name().equals("search"));
+		assertThat(tools(Optional.empty())).noneMatch(spec -> spec.tool().name().equals("search")
+				|| spec.tool().name().equals("list_tags"));
 		assertThat(tools(Optional.of(new Search(files, indexes))).stream().filter(spec -> spec.tool().name().equals("search"))
 				.findFirst().orElseThrow().tool().description())
 				.contains("\"a phrase\"", "-leftout", "prefix*", "only in the folders you may read");

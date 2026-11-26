@@ -105,8 +105,10 @@ class SearchAnalysisTest {
 	 */
 	@Test
 	void theAnalysisOfThisVersion() {
-		assertThat(SearchAnalysis.ANALYSIS_VERSION).isEqualTo(1);
-		assertThat(analysis.format()).isEqualTo("a1-de-en-fr-ru");
+		assertThat(SearchAnalysis.ANALYSIS_VERSION).isEqualTo(2);
+		assertThat(analysis.format()).isEqualTo("a2-de-en-fr-ru");
+		// version 2: folder tags, whole and folded like names
+		assertThat(analysis.terms(SearchAnalysis.TAG, "Status:Erledigt-Ä")).containsExactly("status:erledigt-a");
 		final String text = "Die Häuser von l'École: Ёлки, cœur! Meetings at artem@example.org (bericht-2026.pdf).";
 		assertThat(Map.of(
 				SearchAnalysis.EXACT, analysis.terms(SearchAnalysis.EXACT, text),

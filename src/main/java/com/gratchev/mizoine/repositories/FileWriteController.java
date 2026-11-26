@@ -9,6 +9,7 @@ import java.util.Optional;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -63,7 +64,16 @@ class FileWriteController {
 					+ "or the new content, never a part. The folder must exist (folders are created explicitly). "
 					+ "If-Match: <ETag> writes only if the file is unchanged since it was read; If-None-Match: * "
 					+ "creates only. API clients with an Authorization header need no CSRF token; the browser UI "
-					+ "(session cookie) sends X-XSRF-TOKEN.")
+					+ "(session cookie) sends X-XSRF-TOKEN. "
+					+ "'?tags' on a folder replaces its own tags instead: the body a JSON list of tags, an empty list "
+					+ "removes them; 200 with the tags as they are now. A tag is a word of letters, digits, -, _ and /, "
+					+ "with one ':' for key:value tags such as statuses (one value per key, the later wins); at most "
+					+ "30 tags of 50 characters; a word that is no tag is 400. If-Match: the ETag of the tags. Only "
+					+ "where the user may write; the repository root only with access to the whole repository.")
+	@ApiResponse(responseCode = "200", description = "?tags: the folder's tags as they are now; ETag when any are left",
+			content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE))
+	@ApiResponse(responseCode = "400", description = "?tags: not a folder, not a list of tags, or a word that is no tag",
+			content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE))
 	@ApiResponse(responseCode = "201", description = "Created; Location (and for files the ETag)", content = @Content)
 	@ApiResponse(responseCode = "204", description = "File replaced (ETag of the new content), or folder exists already",
 			content = @Content)

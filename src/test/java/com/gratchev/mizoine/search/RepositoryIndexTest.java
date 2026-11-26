@@ -110,6 +110,51 @@ class RepositoryIndexTest {
 	}
 
 	@Test
+	void foldersAreFoundByTheirTags() throws IOException {
+		write("projects/archive/.tags", "old status:Done");
+
+		final RepositoryIndex index = indexed();
+
+		assertThat(found(index, SearchAnalysis.TAG, "status:done")).containsExactly("projects/archive/");
+		assertThat(found(index, SearchAnalysis.TAG, "Old")).containsExactly("projects/archive/");
+		// the hidden file itself is no entry
+		assertThat(found(index, SearchAnalysis.NAME_PARTS, "tags")).isEmpty();
+	}
+
+	@Test
+	void tagsChangedByMizoineAtOnceByHandAfterAnUpdate() throws IOException {
+		final RepositoryIndex index = indexed();
+
+		write("projects/archive/.tags", "status:open");
+		index.changed(root, List.of("projects", "archive", ".tags"));
+		write("projects/archive/.tags", "status:done");
+		index.changed(root, List.of("projects", "archive", ".tags"));
+		assertThat(found(index, SearchAnalysis.TAG, "status:done")).containsExactly("projects/archive/");
+		// the folder's entry once: the old one was replaced, not kept beside it
+		assertThat(found(index, SearchAnalysis.NAME, "archive")).containsExactly("projects/archive/");
+		// only the folder was taken anew, its content stays
+		assertThat(found(index, SearchAnalysis.EXACT, "apples")).containsExactly("projects/plan.md");
+
+		write("projects/.tags", "project");
+		assertThat(found(index, SearchAnalysis.TAG, "project")).isEmpty();
+		index.update(root);
+		assertThat(found(index, SearchAnalysis.TAG, "project")).containsExactly("projects/");
+	}
+
+	@Test
+	void theTagsOfALinkedFolderAreNotIndexed() throws IOException {
+		final Path outside = Files.createDirectories(root.getParent().resolve("outside"));
+		Files.writeString(outside.resolve(".tags"), "elsewhere");
+		Files.createSymbolicLink(root.resolve("link"), outside);
+		final RepositoryIndex index = indexed();
+
+		index.changed(root, List.of("link", ".tags"));
+
+		assertThat(found(index, SearchAnalysis.TAG, "elsewhere")).isEmpty();
+		assertThat(found(index, SearchAnalysis.NAME, "link")).isEmpty();
+	}
+
+	@Test
 	void linksAreNotFollowed() throws IOException {
 		final Path outside = Files.createDirectories(root.getParent().resolve("outside"));
 		Files.writeString(outside.resolve("other.md"), "elsewhere");

@@ -62,6 +62,36 @@ class McpToolsTest {
 		return TestMcp.text(call("write_file", Map.of("repository", "tree", "path", path, "content", content)));
 	}
 
+	// tags (step 64)
+
+	private String setTags(final String path, final Object tags) {
+		return TestMcp.text(call("set_tags", Map.of("repository", "tree", "path", path, "tags", tags)));
+	}
+
+	@Test
+	void setTagsAndSeeThemInTheListing() throws IOException {
+		assertThat(setTags("inbox/", List.of("project", "status:open"))).startsWith(
+				"Tags of tree/inbox/: project, status:open (version \"");
+		assertThat(Files.readString(base.resolve("tree/inbox/.tags"))).isEqualTo("project\nstatus:open\n");
+
+		assertThat(call("list_folder", "inbox/")).contains("\"tags\":[\"project\",\"status:open\"]");
+		assertThat(call("list_folder", "/")).contains("\"folderTags\":{\"inbox\":[\"project\",\"status:open\"]}");
+		assertThat(setTags("inbox/", List.of())).isEqualTo("Tags of tree/inbox/: none");
+	}
+
+	@Test
+	void setTagsExplainsWhyNot() {
+		assertThat(setTags("inbox/", List.of("two words"))).isEqualTo(
+				"error: Not a tag: \"two words\" (letters, digits, -, _, / and one : only).");
+		assertThat(setTags("inbox/", "project")).isEqualTo("error: Not a list of texts: tags");
+		assertThat(setTags("inbox/note.md", List.of("a"))).isEqualTo(
+				"error: Tags are for folders: a folder's path ends with '/'.");
+		assertThat(setTags("private/", List.of("a"))).isEqualTo("error: Not found: tree/private/");
+		assertThat(TestMcp.text(call("set_tags", Map.of("repository", "tree", "path", "inbox/", "tags", List.of("a"),
+				"if_match", "\"0-0\"")))).isEqualTo("error: Not changed: the tags of tree/inbox/ were changed since that "
+						+ "version. Read them again first (list_folder).");
+	}
+
 	// write_file
 
 	@Test

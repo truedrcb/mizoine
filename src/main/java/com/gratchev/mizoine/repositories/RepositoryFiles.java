@@ -2,7 +2,9 @@ package com.gratchev.mizoine.repositories;
 
 import java.io.InputStream;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -19,6 +21,9 @@ import com.gratchev.mizoine.repositories.RepositoryWriter.FolderResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.MoveResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.Precondition;
 import com.gratchev.mizoine.repositories.RepositoryWriter.Result;
+import com.gratchev.mizoine.tags.Tag;
+import com.gratchev.mizoine.tags.Tags;
+import com.gratchev.mizoine.tags.TagsFile;
 
 /**
  * What a user may do with repository files, the same for every way in: the HTTP file API, the MCP tools for agents.
@@ -173,11 +178,30 @@ public class RepositoryFiles {
 		}
 		final RepositoryConfig config = granted.get().config();
 		final RepositoryAccess access = granted.get().access();
-		if (!folder) {
-			return readable(config, access, segments);
+		return folder ? readableFolder(config, access, segments) : readable(config, access, segments);
+	}
+
+	/**
+	 * Step 62: a folder's own tags (D64, D68), with the version of its {@code .tags} file, if there is one.
+	 *
+	 * @param version the ETag of the {@code .tags} file; empty if it does not exist, or the folder shows no tags
+	 */
+	public record FolderTags(Tags tags, Optional<String> version) {
+	}
+
+	/**
+	 * @return the tags of a folder the user may read in; none for a folder only on the way to a grant (D4)
+	 * @throws NotVisibleException for a folder the user may not enter
+	 */
+	public FolderTags folderTags(final String user, final String repository, final List<String> segments) {
+		final GrantedRepository granted = usable(user, repository, segments);
+		if (!mayEnter(granted.config(), granted.access(), segments)) {
+			throw new NotVisibleException(repository, segments);
 		}
-		return RepositoryPaths.resolveFolder(config.root(), segments)
-				.filter(found -> holds(access::canReadIn, segments, RepositoryPaths.realSegments(config.root(), segments)));
+		return readableFolder(granted.config(), granted.access(), segments)
+				.map(folder -> new FolderTags(TagsFile.read(folder),
+						FileVersion.of(folder.resolve(TagsFile.NAME)).map(FileVersion::etag)))
+				.orElse(new FolderTags(Tags.NONE, Optional.empty()));
 	}
 
 	/** The URL of a file or folder (folders end with '/', D5), fully encoded. */
@@ -265,15 +289,86 @@ public class RepositoryFiles {
 		changes.accept(new RepositoryChange(granted.config().name(), granted.config().root(), real));
 	}
 
-	/** The subfolders and files the user may see in a folder already checked. */
+	/** What changing a folder's tags did (step 63). */
+	public sealed interface TagsResult {
+
+		/** @param version the ETag of the new {@code .tags} file; empty when no tags are left (the file is gone) */
+		record Written(Tags tags, Optional<String> version) implements TagsResult {
+		}
+
+		/** {@code If-Match} names another version, or there is no tags file yet. */
+		record PreconditionFailed() implements TagsResult {
+		}
+	}
+
+	/**
+	 * Step 63: replaces a folder's own tags, atomically, in its {@code .tags} file; no tags remove the file. Only
+	 * where the user may write in the folder (the root needs the whole repository, D68).
+	 *
+	 * @throws NotVisibleException elsewhere, as for a file write there (D2)
+	 */
+	public TagsResult setFolderTags(final String user, final String repository, final List<String> folder,
+			final Tags tags, final Optional<String> ifMatch) {
+		final List<String> file = child(folder, TagsFile.NAME);
+		final GrantedRepository granted = writable(user, repository, file);
+		final Path root = granted.config().root();
+		if (RepositoryPaths.resolveFolder(root, folder).isEmpty()) {
+			throw new NotVisibleException(repository, folder);
+		}
+		final TagsResult result = tags.isEmpty() ? removeTags(root, folder, ifMatch) : writeTags(repository, root, folder, tags, ifMatch);
+		changed(granted, RepositoryPaths.realSegments(root, file));
+		return result;
+	}
+
+	private TagsResult removeTags(final Path root, final List<String> folder, final Optional<String> ifMatch) {
+		return writer.deleteTags(root, folder, ifMatch) instanceof DeleteResult.PreconditionFailed
+				? new TagsResult.PreconditionFailed()
+				: new TagsResult.Written(Tags.NONE, Optional.empty());
+	}
+
+	private TagsResult writeTags(final String repository, final Path root, final List<String> folder, final Tags tags,
+			final Optional<String> ifMatch) {
+		return switch (writer.writeTags(root, folder, tags.format(), new Precondition(ifMatch, false))) {
+			case Result.Created created -> new TagsResult.Written(tags, Optional.of(created.etag()));
+			case Result.Replaced replaced -> new TagsResult.Written(tags, Optional.of(replaced.etag()));
+			case Result.PreconditionFailed failed -> new TagsResult.PreconditionFailed();
+			// a folder named .tags, or a link in its place: no tags file of this folder
+			default -> throw new NotVisibleException(repository, folder);
+		};
+	}
+
+	/**
+	 * The subfolders and files the user may see in a folder already checked, with the tags of the folder and of its
+	 * subfolders where the user may read inside them (step 62).
+	 */
 	static FolderListing listing(final RepositoryConfig config, final RepositoryAccess access, final List<String> segments) {
 		final Path root = config.root();
 		final String path = segments.isEmpty() ? "/" : "/" + String.join("/", segments) + "/";
-		return new FolderListing(config.name(), path,
-				access.visibleChildren(segments, RepositoryPaths.childFolders(root, segments)).stream()
-						.filter(name -> mayEnter(config, access, child(segments, name))).toList(),
+		final List<String> folders = access.visibleChildren(segments, RepositoryPaths.childFolders(root, segments)).stream()
+				.filter(name -> mayEnter(config, access, child(segments, name))).toList();
+		final Map<String, List<String>> folderTags = new LinkedHashMap<>();
+		folders.forEach(name -> tags(config, access, child(segments, name))
+				.filter(tags -> !tags.isEmpty()).ifPresent(tags -> folderTags.put(name, texts(tags))));
+		return new FolderListing(config.name(), path, folders,
 				access.visibleFiles(segments, RepositoryPaths.childFiles(root, segments)).stream()
-						.filter(name -> readable(config, access, child(segments, name)).isPresent()).toList());
+						.filter(name -> readable(config, access, child(segments, name)).isPresent()).toList(),
+				tags(config, access, segments).map(RepositoryFiles::texts).orElse(List.of()), folderTags);
+	}
+
+	private static Optional<Tags> tags(final RepositoryConfig config, final RepositoryAccess access,
+			final List<String> folder) {
+		return readableFolder(config, access, folder).map(TagsFile::read);
+	}
+
+	private static List<String> texts(final Tags tags) {
+		return tags.list().stream().map(Tag::text).toList();
+	}
+
+	/** An existing folder the user may read in: inside a grant, also where it really is (links followed). */
+	static Optional<Path> readableFolder(final RepositoryConfig config, final RepositoryAccess access,
+			final List<String> segments) {
+		return RepositoryPaths.resolveFolder(config.root(), segments)
+				.filter(found -> holds(access::canReadIn, segments, RepositoryPaths.realSegments(config.root(), segments)));
 	}
 
 	/*
