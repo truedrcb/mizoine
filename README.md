@@ -401,8 +401,8 @@ Agents (Claude, also on the phone, Claude Code, others) store and retrieve knowl
 `https://<host>/mcp`. Tools: `list_repositories`, `list_folder`, `read_file`, `write_file`, `upload_file`,
 `create_folder`, `delete`, `move`, `set_tags`, and with search on `search` and `list_tags`. `read_file` also gives the
 file's version; with it, `write_file`, `upload_file` and `move` change the file only if nobody else did in between.
-Binary files the standard MCP way, up to 10 MB: `read_file` gives a picture as an image and any other file as an
-embedded resource in base64; `upload_file` takes base64 (larger files over HTTP).
+Binary files the standard MCP way, up to 10 MB: `read_file` gives a PNG, JPEG, GIF or WebP picture as an image and
+any other file as an embedded resource in base64; `upload_file` takes base64 (larger files over HTTP).
 Files are given raw; the agent's writes are plain files that you review with `git diff` and commit.
 
 1. **An agent user** in `users.yaml` (password hash from `hash-password`), with grants only to its folders in

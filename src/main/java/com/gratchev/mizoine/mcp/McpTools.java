@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.stream.Stream;
 
@@ -47,6 +48,11 @@ final class McpTools {
 	static final String TAGS = "tags";
 	/** Step 74 (D80): the largest file read or uploaded as base64 through MCP; HTTP takes up to the file size limit. */
 	static final int MAX_BINARY_BYTES = 10 * 1024 * 1024;
+	/**
+	 * The pictures read as MCP image content, the types models take; any other picture is a base64 resource, as
+	 * other files (an image of a type the client does not take would make it refuse the whole answer).
+	 */
+	private static final Set<String> IMAGES = Set.of("image/png", "image/jpeg", "image/gif", "image/webp");
 	/** Base64 of {@link #MAX_BINARY_BYTES}: a longer text is refused before it is decoded. */
 	private static final int MAX_BASE64 = (MAX_BINARY_BYTES + 2) / 3 * 4;
 	private static final String REVIEW = " Files are plain files in a Git working folder: a human reviews them with git diff "
@@ -74,8 +80,8 @@ final class McpTools {
 				tool("list_repositories", "List the repositories you have access to.", schema(), this::listRepositories),
 				tool("list_folder", "List the subfolders and files of a folder you may see. Path '/' is the repository root.",
 						schema(REPOSITORY, PATH), this::listFolder),
-				tool("read_file", "Read a file exactly as stored: a text file (UTF-8, up to 2 MB) as text; a picture as an "
-						+ "image; any other file (PDF, office document, …) as an embedded resource with its bytes in base64; "
+				tool("read_file", "Read a file exactly as stored: a text file (UTF-8, up to 2 MB) as text; a PNG, JPEG, GIF "
+						+ "or WebP picture as an image; any other file (PDF, office document, …) as an embedded resource with its bytes in base64; "
 						+ "binary files up to 10 MB. The structured result also has its version: pass it as if_match when "
 						+ "writing the file back.", schema(REPOSITORY, PATH), this::readFile),
 				tool("write_file", "Create or replace a text file with exactly this content. The folder must exist "
@@ -161,7 +167,7 @@ final class McpTools {
 				yield CallToolResult.builder()
 						.addTextContent(where(arguments) + ": " + file.mimeType() + ", " + file.content().length
 								+ " bytes, version " + file.version())
-						.addContent(file.mimeType().startsWith("image/")
+						.addContent(IMAGES.contains(file.mimeType())
 								? McpSchema.ImageContent.builder(data, file.mimeType()).build()
 								: McpSchema.EmbeddedResource.builder(McpSchema.BlobResourceContents.builder(url(arguments), data)
 										.mimeType(file.mimeType()).build()).build())

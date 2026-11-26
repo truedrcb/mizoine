@@ -163,6 +163,21 @@ class McpToolsTest {
 				.containsKey("version");
 	}
 
+	/** Only the picture types models take as images; any other picture would make the client refuse the answer. */
+	@Test
+	void onlyCommonPictureTypesAreImages() throws IOException {
+		for (final String name : new String[] {"a.jpg", "a.jpeg", "a.gif", "a.webp"}) {
+			Files.write(base.resolve("tree/inbox/" + name), PNG);
+			assertThat(call("read_file", Map.of("repository", "tree", "path", "inbox/" + name)).content().get(1))
+					.as(name).isInstanceOf(McpSchema.ImageContent.class);
+		}
+		for (final String name : new String[] {"a.bmp", "a.tiff", "a.ico"}) {
+			Files.write(base.resolve("tree/inbox/" + name), PNG);
+			assertThat(call("read_file", Map.of("repository", "tree", "path", "inbox/" + name)).content().get(1))
+					.as(name).isInstanceOf(McpSchema.EmbeddedResource.class);
+		}
+	}
+
 	@Test
 	void otherFilesAreReadAsBase64Resources() {
 		for (final String[] file : new String[][] {{"inbox/doc.pdf", "application/pdf"},

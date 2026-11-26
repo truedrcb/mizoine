@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-26): steps 0–34, 37–48, 55–74 done (1148 Java and 118 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor, search with index state and reindexing on request, folder tags and statuses, uploads and editable files). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 49–54 (stable URLs, postponed). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-26): steps 0–34, 37–48, 55–74 done (1149 Java and 118 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor, search with index state and reindexing on request, folder tags and statuses, uploads and editable files). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 49–54 (stable URLs, postponed), 75–78 (upload links; D82–D89 decided). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -1931,6 +1931,47 @@ In the standard MCP way (D80):
   - dryer: nothing new (the `GitController` pairs, step 48; `Tag`/`Tags` `equals`/`hashCode`, step 65).
   - mutator: no survivors in any group (`folder.js` 17, `editor.js` 30, `TextFormats`/`TextFile` 8, `FolderNames`/`RepositoryWriter` 64, `McpTools` 107, `RepositoryFiles` 17, `RepositoryController`/`FileDownload` 21, `IndexDocuments` 19). "Uncovered": annotation texts, and `McpTools`' create-only and delete-version cases MCP never sends (step 59); the one newly reachable case, `create_folder` "Not found" for a folder named `.tags`, got a test.
 
+- *Review with the tools (2026-11-26, after the commit):*
+  - **Fixed:** `read_file` gave every `image/*` as MCP image content. Clients take only the types models read (Claude: PNG, JPEG, GIF, WebP); a BMP, TIFF or icon there can make the client refuse the whole answer. Now only those four are images, every other picture a base64 resource like any file (`McpToolsTest.onlyCommonPictureTypesAreImages`, red first at `a.bmp`). Tool description and README say which.
+  - crapper all below 10; dryer nothing new; mutator on `McpTools` 107 of 108 killed, the survivor is the known equivalent of step 59 (`create_folder`'s create-only `false`).
+  - **Found in use (2026-11-26):** an agent in a chat app cannot upload a photo through `upload_file`: it would have to write the photo's base64 itself, millions of characters, and the chat app does not give it the bytes of an attached photo anyway. Planned: upload links (steps 75–78).
+## Upload links (planned 2026-11-26)
+*Requested 2026-11-26:* agents in a chat app (Claude on the phone) cannot upload photos or documents over MCP (base64 is no way for a model, and it never has the bytes of a photo attached in the chat). MCP is not for binary uploads; the workaround: Mizoine gives a temporary HTTP upload address.
+
+**How it is used:**
+1. In the chat: "save this photo of the receipt in receipts/". The agent calls `create_upload_link(repository, folder, name?)`.
+2. Mizoine answers with a link, e.g. `https://mizoine.example.org/.upload/k3J9…/`, valid 15 minutes. The agent shows it in the chat.
+3. The person taps it on the phone: a small page with one button (the phone's picker: camera, gallery, files), no login. The photo goes straight from the phone to Mizoine, never through the chat.
+4. The agent sees the file with `list_folder` and works with it (`read_file` shows a picture to the model, step 74).
+
+The same link takes `curl -T photo.jpg <link>photo.jpg`, for any program that has the file (e.g. a code sandbox of the chat app, where its network allows Mizoine).
+
+**Principles kept (BACKLOG):** plain files (the upload is an ordinary file in the folder, uncommitted, for `git diff`); one write path (`RepositoryFiles.write`, with its checks); the link only adds who may write, for a short time.
+
+### 75. Upload links: the model  ☐
+- `UploadLink`: a token (256 random bits, base64url), the user who made it, repository, folder, an optional fixed file name, the expiry, files left. In memory (D85).
+- `UploadLinks`: create (limits of D84), find a valid one, count a use, forget expired ones. Time from a `Clock`, so tests need no waiting.
+- Plain unit tests: valid until the expiry, not after; used up after its files; a fixed name takes one file; at most 20 open links per user; an unknown token and an expired one are the same "no link"; tokens differ and are never logged (only a short id).
+
+### 76. The upload page and endpoint  ☐
+- `GET /.upload/{token}/`: a page with the target ("Upload to notes/receipts/"), time left, the file picker (several files, or one with a fixed name), a line per file; plain JavaScript as the folder page (`folder.js`'s name check and NFC, D78).
+- `PUT /.upload/{token}/{name}`: the body is the file, stored through `RepositoryFiles.write` **as the link's user**, so the grants are checked at upload time (D86); never over an existing file (412, as `If-None-Match: *`); `mizoine.max-file-size` as for every write (413).
+- No login; the token is the permission. CSRF is not needed there (nothing a session allows; a cross-site page would need the token): only `/.upload/**` is exempt.
+- Headers: `Referrer-Policy: no-referrer`, `Cache-Control: no-store`, `X-Robots-Tag: noindex`; the strict CSP as everywhere.
+- An unknown, expired or used-up token, a name refused, a grant gone meanwhile: 404 with a page "This upload link is not valid (any more). Ask for a new one." Nothing is read or listed through a link: only the files uploaded with it are named on its page.
+- Tests: upload as the link's user; a folder outside the user's grants refused when the grant was removed after the link was made; never overwrite; fixed name; files left; expiry (with the test clock); 413; curl-style `PUT` without the page; CSRF exempt only here; headers; the page under the strict CSP; MockMvc and an end-to-end flow in Node as for the folder page.
+- OpenAPI: both endpoints.
+
+### 77. Creating links: MCP and HTTP  ☐
+- MCP tool `create_upload_link(repository, folder, name?)`: only where the agent may write (as `write_file`); the answer is the link, its expiry and a sentence to pass on ("Open this link on your phone and choose the photo"). The description says to use it for photos, scans and documents the person has, instead of `upload_file`.
+- HTTP `POST /{repository}/{folder}/?upload-link` (JSON `{"name": …}` optional) → `{"url", "expires"}`: the same rule, for API clients and tests (D87).
+- The absolute URL from `mizoine.public-url` (as for OAuth); without it, the tool says it cannot make links (D89).
+- Tests: as the agent only in its folders; no link above a grant; the URL from `public-url`; the limits of D84 answered with a message.
+- README: a section "Upload links"; the MCP tool list.
+
+### 78. Live check on the phone  ☐
+- Claude on the phone, connected to Mizoine (step 35): "save this receipt in …", tap the link, take a photo, the agent finds it with `list_folder` and reads it. Notes in this step.
+
 ## Glossary
 
 | Term | Meaning |
@@ -2091,4 +2132,14 @@ Details of T5 in [docs/technology-decisions.md](docs/technology-decisions.md).
   - Not chosen: an `encoding` parameter on `write_file` (one tool doing two things is easier to get wrong); Mizoine downloading a URL the agent names (Mizoine would reach addresses on the server's own network for whoever controls the agent).
 
 - **D81 — `.tags` visible and editable:** **Decided 2026-11-26 (proposed by the user, with these details):** `FolderNames` treats exactly `.tags` as not hidden, the one exception; so it is listed, read, written, edited and moved like any text file. It stays special only where it already is: not as a folder name; not a file of its own in the search index (its words are the folder's tags); served as `text/plain`; `?tags`/`set_tags` remain the checked way, an edit of the file counts as an edit by hand (D65). Not chosen: a separate "show hidden files" switch (shows `.git`, `.env`, …: D3); an editor page of its own for tags (a second editor).
+### Upload links (steps 75–78) — decided 2026-11-26
+- **D82 — how a file from a chat gets into Mizoine:** **Decided 2026-11-26 as proposed:** a temporary upload link that the person opens in the browser (or a program sends the file to with `PUT`). Not chosen: base64 through MCP (`upload_file`, step 74: stays for agents that have the bytes, e.g. Claude Code; impossible from a chat); Mizoine downloading a URL the agent names (D80: it would reach the server's own network); email to Mizoine (a mail server of its own).
+- **D83 — what a link allows:** **Decided 2026-11-26 as proposed:** uploading into one folder, nothing else: no reading, no listing, no overwriting (an existing name → 412). Files keep their own names (NFC, D78), or the one name the agent gave (then exactly one file). Alternative: a link per single file always.
+- **D84 — lifetime and limits:** **Decided 2026-11-26 as proposed:** 15 minutes, at most 10 files per link (1 with a fixed name), each up to `mizoine.max-file-size`; at most 20 open links per user. Used up or expired, it is gone. Alternatives: single use always (a second photo needs a new link); longer (the link stays in the chat history).
+- **D85 — where links are kept:** **Decided 2026-11-26 as proposed:** in memory, as the OAuth tokens (D18): no database; a restart ends all links (the agent makes a new one). Not chosen: signed links without state (they need a secret key file, and cannot count uses or be ended early).
+- **D86 — as whom the file is written:** **Decided 2026-11-26 as proposed:** as the user who made the link (usually the agent), with that user's grants checked again at upload time; the person who taps the link needs no login. In Git the file is an uncommitted change like any agent write.
+- **D87 — who may make links:** **Decided 2026-11-26 as proposed:** any user, where that user may write; through MCP (`create_upload_link`) and HTTP (`POST …/?upload-link`). Alternative: MCP only. Note: a person can also hand a link to someone else (a drop box for 15 minutes); the limits of D84 hold.
+- **D88 — the token:** **Decided 2026-11-26 as proposed:** 256 random bits in base64url in the path (`/.upload/{token}/`); never written to logs (a short id instead); `Referrer-Policy: no-referrer`, `Cache-Control: no-store`. The link is in the chat's history: the short lifetime is what protects it.
+- **D89 — the link's address:** **Decided 2026-11-26 as proposed:** from `mizoine.public-url` (set already where OAuth is used); without it, no links (the tool says so). Not chosen: the request's host (behind a proxy it may be wrong, as for OAuth).
+
 - **Later, not planned yet:** copy, live Markdown preview in the editor, Obsidian `[[wiki links]]`, links relative to the repository root (`/…`), syntax highlighting of code blocks in the page, per-grant read-only permissions.
