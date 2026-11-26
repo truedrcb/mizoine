@@ -43,7 +43,9 @@ final class FileDownload {
 			YAML);
 	/** Text formats of a knowledge base that Spring's type table does not know. */
 	private static final Map<String, MediaType> OWN_TYPES = Map.of(
-			"md", MediaType.TEXT_MARKDOWN, "markdown", MediaType.TEXT_MARKDOWN, "yaml", YAML, "yml", YAML);
+			"md", MediaType.TEXT_MARKDOWN, "markdown", MediaType.TEXT_MARKDOWN, "yaml", YAML, "yml", YAML,
+			// a folder's tags (step 70), later also the sidecar files of files (D72)
+			"tags", MediaType.TEXT_PLAIN);
 
 	private FileDownload() {
 	}

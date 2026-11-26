@@ -95,7 +95,10 @@ class EditorPageTest {
 		mockMvc.perform(get("/ui/vendor/codemirror.js")).andExpect(status().isOk())
 				.andExpect(content().contentTypeCompatibleWith("text/javascript"));
 		mockMvc.perform(get("/ui/vendor/codemirror.LICENSE.txt")).andExpect(status().isOk())
-				.andExpect(content().string(containsString("MIT License")));
+				.andExpect(content().string(containsString("MIT License")));		// step 69: the list of text formats, which the page needs before it opens anything
+		mockMvc.perform(get("/ui/editor/text-formats.json")).andExpect(status().isOk())
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+				.andExpect(content().string(containsString("\"maxBytes\"")));
 	}
 
 	@Test

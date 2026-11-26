@@ -238,7 +238,7 @@ public class RepositoryWriter {
 
 	/** @param createOnly {@code If-None-Match: *}: an existing folder is a failed precondition */
 	public FolderResult createFolder(final Path root, final List<String> segments, final boolean createOnly) {
-		final Optional<Path> parent = parentOf(root, segments);
+		final Optional<Path> parent = folderParentOf(root, segments);
 		if (parent.isEmpty()) {
 			return isMissingParent(root, segments) ? new FolderResult.ParentMissing() : new FolderResult.NotFound();
 		}
@@ -328,7 +328,7 @@ public class RepositoryWriter {
 		if (folder && isInside(to, from)) {
 			return new MoveResult.IntoItself();
 		}
-		final Optional<Path> targetParent = parentOf(root, to);
+		final Optional<Path> targetParent = folder ? folderParentOf(root, to) : parentOf(root, to);
 		if (targetParent.isEmpty()) {
 			return isMissingParent(root, to) ? new MoveResult.DestinationParentMissing() : new MoveResult.NotFound();
 		}
@@ -381,6 +381,11 @@ public class RepositoryWriter {
 			return Optional.empty();
 		}
 		return RepositoryPaths.resolveFolder(root, segments.subList(0, segments.size() - 1));
+	}
+
+	/** As {@link #parentOf}, for a folder of that name: never {@code .tags}, which would hide its folder's tags (D81). */
+	private static Optional<Path> folderParentOf(final Path root, final List<String> segments) {
+		return parentOf(root, segments).filter(parent -> FolderNames.isPlainFolder(segments.getLast()));
 	}
 
 	/** The parent folder does not exist at all, so the path is not hidden or outside, just missing (D14 → 409). */

@@ -99,8 +99,10 @@ paths:
       summary: "Create or replace a file, or create a folder"
       description: "A folder URL (ending with '/', empty body) creates the folder;\
         \ it exists already → 204. A file URL: the request body is the new content,\
-        \ stored exactly as sent. Atomic: readers see the old or the new content,\
-        \ never a part. The folder must exist (folders are created explicitly). If-Match:\
+        \ any file, text or binary (pictures, PDFs, documents), stored exactly as\
+        \ sent; its Content-Type is not used, the file's type comes from its name\
+        \ when it is read. Atomic: readers see the old or the new content, never a\
+        \ part. The folder must exist (folders are created explicitly). If-Match:\
         \ <ETag> writes only if the file is unchanged since it was read; If-None-Match:\
         \ * creates only. API clients with an Authorization header need no CSRF token;\
         \ the browser UI (session cookie) sends X-XSRF-TOKEN. '?tags' on a folder\
@@ -1181,6 +1183,16 @@ components:
             items:
               type: string
           description: "The tags of each subfolder that has any, by its name"
+        editable:
+          type: array
+          description: "The files of a known text format, which can be edited in the\
+            \ browser"
+          items:
+            type: string
+        writable:
+          type: boolean
+          description: "Whether the user may write in this folder: create, replace,\
+            \ move and delete files in it"
     RepositoryProblem:
       type: object
       description: A repository that is configured wrongly

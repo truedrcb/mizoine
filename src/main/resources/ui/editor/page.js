@@ -1,6 +1,6 @@
 // The editor page (DEV.md step 37): connects editor.js to /ui/editor.html. All decisions are in editor.js
 // (tested); this file only shows them.
-import { parseFileParam, csrfToken, FileSession, languageFor } from './editor.js';
+import { parseFileParam, csrfToken, FileSession, textFormat } from './editor.js';
 
 /** The editing part, behind a small interface: step 39 replaces the textarea with CodeMirror. */
 export function textareaField(textarea) {
@@ -15,13 +15,13 @@ export function textareaField(textarea) {
  * Step 39: CodeMirror with syntax highlighting, in place of the textarea. If the bundle cannot be loaded,
  * the textarea stays: editing still works, without highlighting.
  */
-async function editingField(textarea, fileName) {
+async function editingField(textarea, language) {
 	try {
 		const { codeMirrorField } = await import('../vendor/codemirror.js');
 		const host = document.createElement('div');
 		host.id = 'code';
 		textarea.replaceWith(host);
-		return codeMirrorField(host, languageFor(fileName));
+		return codeMirrorField(host, language);
 	} catch (error) {
 		console.error('Syntax highlighting not available, plain text field:', error);
 		return textareaField(textarea);
@@ -31,6 +31,7 @@ async function editingField(textarea, fileName) {
 const MESSAGES = {
 	loaded: '',
 	missing: 'This file does not exist. The editor does not create files.',
+	'not-text': 'This file does not hold text: open it from its folder.',
 	'not-loaded': 'Nothing loaded: nothing to save.',
 	saved: 'Saved.',
 	login: 'Not logged in. Log in (opens a new tab), then press Save again, or Reload if nothing was loaded. Your text stays here.',
@@ -47,15 +48,15 @@ function show(result) {
 	element('login-link').hidden = result.state !== 'login';
 	element('reload').hidden = result.state !== 'conflict' && result.state !== 'login';
 	// step 66: nothing to edit at a path that does not exist (the text field is CodeMirror's or the textarea)
-	(element('code') ?? element('text')).hidden = result.state === 'missing';
+	(element('code') ?? element('text')).hidden = result.state === 'missing' || result.state === 'not-text';
 }
 
-async function start(file, field) {
+async function start(file, field, maxBytes) {
 	document.title = `${file.name} – Mizoine`;
 	element('file-name').textContent = file.name;
 	element('page-link').href = file.url;
 	element('folder-link').href = file.folderUrl;
-	const session = new FileSession(file.url, (url, options) => fetch(url, options));
+	const session = new FileSession(file.url, (url, options) => fetch(url, options), maxBytes);
 	const changed = () => session.isChanged(field.getText());
 	const update = () => { element('save').disabled = !changed(); };
 
@@ -82,10 +83,31 @@ async function start(file, field) {
 	await load();
 }
 
+/** Step 69: the one list of text formats (D73), also read by the server; without it, nothing is opened. */
+async function textFormats() {
+	try {
+		const response = await fetch('editor/text-formats.json');
+		return response.ok ? await response.json() : null;
+	} catch {
+		return null;
+	}
+}
+
+function refuse(message) {
+	element('status').textContent = message;
+	element('text').hidden = true;
+}
+
 const file = parseFileParam(window.location.search);
-if (file) {
-	start(file, await editingField(element('text'), file.name));
+const formats = file ? await textFormats() : null;
+const language = formats ? textFormat(formats, file.name) : null;
+if (!file) {
+	refuse('No file given: open the editor from a folder (Edit).');
+} else if (!formats) {
+	refuse('The list of text formats could not be loaded: reload the page.');
+} else if (language === null) {
+	element('folder-link').href = file.folderUrl;
+	refuse(`Not a text format: ${file.name} is not opened in the editor. Open it from its folder.`);
 } else {
-	element('status').textContent = 'No file given: open the editor from a document page (Edit).';
-	element('text').disabled = true;
+	start(file, await editingField(element('text'), language), formats.maxBytes);
 }

@@ -154,7 +154,8 @@ class RepositoryController {
 				final FolderListing listing = listing(folder);
 				model.addAttribute("listing", listing);
 				model.addAttribute("links", links(listing.folders(), "/"));
-				model.addAttribute("fileLinks", links(listing.files(), ""));
+				model.addAttribute("fileLinks", fileLinks(listing, folder.segments()));
+				model.addAttribute("folderUrl", RepositoryUrls.url(listing.repository(), folder.segments(), true));
 				model.addAttribute("root", folder.segments().isEmpty());
 				// step 43: the way to the Git page, from the repository's root
 				model.addAttribute("git", folder.segments().isEmpty() && folder.access().canUseGit());
@@ -186,8 +187,12 @@ class RepositoryController {
 		throw new ResponseStatusException(HttpStatus.NOT_ACCEPTABLE);
 	}
 
-	/** A link in the HTML page: the name as text, the URL-encoded name as relative link. */
-	record Link(String name, String href) {
+	/**
+	 * A link in the HTML page: the name as text, the URL-encoded name as relative link.
+	 *
+	 * @param edit the editor for this file (step 71), or null: only for editable files where the user may write
+	 */
+	record Link(String name, String href, String edit) {
 	}
 
 	private Target target(final String repository, final String path, final Principal principal) {
@@ -223,8 +228,7 @@ class RepositoryController {
 		response.addHeader(HttpHeaders.VARY, HttpHeaders.ACCEPT);
 		model.addAttribute("document", document);
 		model.addAttribute("rawHref", UriUtils.encodePathSegment(name, StandardCharsets.UTF_8) + "?" + RAW);
-		model.addAttribute("editHref", EDITOR + UriUtils.encodeQueryParam(
-				RepositoryUrls.url(file.config().name(), file.segments(), false), StandardCharsets.UTF_8));
+		model.addAttribute("editHref", editor(file.config().name(), file.segments()));
 		return "document";
 	}
 
@@ -238,9 +242,23 @@ class RepositoryController {
 	}
 
 	private static List<Link> links(final List<String> names, final String suffix) {
-		return names.stream()
-				.map(name -> new Link(name, UriUtils.encodePathSegment(name, StandardCharsets.UTF_8) + suffix))
-				.toList();
+		return names.stream().map(name -> new Link(name, href(name) + suffix, null)).toList();
+	}
+
+	/** Step 71 (D74): the files, each with its editor where it is editable and the user may write. */
+	private static List<Link> fileLinks(final FolderListing listing, final List<String> folder) {
+		return listing.files().stream().map(name -> new Link(name, href(name),
+				listing.writable() && listing.editable().contains(name)
+						? editor(listing.repository(), RepositoryFiles.child(folder, name)) : null)).toList();
+	}
+
+	private static String href(final String name) {
+		return UriUtils.encodePathSegment(name, StandardCharsets.UTF_8);
+	}
+
+	/** The editor of a file (D28): its URL, encoded as a path, then as the one parameter. */
+	private static String editor(final String repository, final List<String> segments) {
+		return EDITOR + UriUtils.encodeQueryParam(RepositoryUrls.url(repository, segments, false), StandardCharsets.UTF_8);
 	}
 
 	private static FolderListing listing(final Target.Folder target) {

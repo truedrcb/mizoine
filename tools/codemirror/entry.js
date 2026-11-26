@@ -1,6 +1,6 @@
 // Entry of the CodeMirror 6 bundle (DEV.md step 39, T3.1). Built by `npm run build` (see README.md) into
 // src/main/resources/ui/vendor/codemirror.js. It offers the same field interface as the textarea of step 37:
-// { getText, setText, onChange }. Which language a file gets is decided in ui/editor/editor.js (languageFor, tested).
+// { getText, setText, onChange }. Which language a file gets is decided in ui/editor/editor.js (textFormat, from ui/editor/text-formats.json, tested).
 import { EditorView, basicSetup } from 'codemirror';
 import { EditorState } from '@codemirror/state';
 import { StreamLanguage } from '@codemirror/language';
@@ -33,7 +33,7 @@ const LANGUAGES = {
  * (adoptedStyleSheets). In the document itself it would insert a <style> element, which Mizoine's strict CSP
  * (no inline styles) blocks.
  *
- * @param language a name from languageFor(); unknown names ('text') get no highlighting
+ * @param language a name from textFormat() (text-formats.json); unknown names ('text') get no highlighting
  */
 export function codeMirrorField(host, language) {
 	const listeners = [];

@@ -109,7 +109,9 @@ final class IndexDocuments {
 
 				@Override
 				public FileVisitResult visitFile(final Path file, final BasicFileAttributes attributes) {
-					if (attributes.isRegularFile() && !FolderNames.isHidden(file.getFileName().toString())) {
+					// a folder's tags file is no entry of its own: its words are the folder's tags (step 70)
+					final String name = file.getFileName().toString();
+					if (attributes.isRegularFile() && !FolderNames.isHidden(name) && !TagsFile.NAME.equals(name)) {
 						FileVersion.of(file).ifPresent(version -> entries.accept(new Entry(segments(root, file), false,
 								Optional.of(version))));
 					}

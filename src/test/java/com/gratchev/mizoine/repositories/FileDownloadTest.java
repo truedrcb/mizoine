@@ -189,7 +189,7 @@ class FileDownloadTest {
 	@ParameterizedTest
 	@ValueSource(strings = {"note.md:text/markdown", "data.yaml:application/yaml", "x.yml:application/yaml",
 			"list.csv:text/csv", "a.txt:text/plain", "photo.JPG:image/jpeg", "doc.pdf:application/pdf",
-			"no-extension:application/octet-stream"})
+			"no-extension:application/octet-stream", ".tags:text/plain", "plan.md.tags:text/plain"})
 	void typeFromTheFileName(final String nameAndType) {
 		final String[] parts = nameAndType.split(":");
 		assertThat(FileDownload.type(parts[0])).isEqualTo(MediaType.parseMediaType(parts[1]));

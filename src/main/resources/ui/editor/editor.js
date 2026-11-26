@@ -4,7 +4,16 @@
 // Tests: src/test/js/editor.test.mjs (node --test).
 
 /** Marks requests of this script: no Basic login dialog on 401, and no "page to return to" after login. */
-const SCRIPT = { 'X-Requested-With': 'XMLHttpRequest' };
+export const SCRIPT = { 'X-Requested-With': 'XMLHttpRequest' };
+
+/** One request of the browser UI: no answer at all (network down, server stopped) counts as status 0, never silence. */
+export async function send(fetch, url, options) {
+	try {
+		return await fetch(url, options);
+	} catch {
+		return { status: 0, ok: false };
+	}
+}
 
 /**
  * The `file` parameter of /ui/editor.html (D28): the file's URL path on this server, as in a link.
@@ -49,21 +58,30 @@ const toLf = text => text.replace(/\r\n/g, '\n');
 
 const SAVE_RESULTS = { 401: 'login', 403: 'login', 412: 'conflict', 413: 'too-large' };
 
+/** Strict: a file that is not UTF-8 is no text (D21); a byte order mark is kept, so it is saved back as it was. */
+const UTF8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+
 /** One file being edited: what was loaded or last saved, and its ETag. */
 export class FileSession {
 
 	#url;
 	#fetch;
+	#maxBytes;
 	/** The file's content as stored, or null while no existing file is loaded: then there is nothing to save. */
 	#stored = null;
 	#etag = null;
 
-	constructor(url, fetch) {
+	/** @param maxBytes the largest text file the editor opens (the list of text formats, D21) */
+	constructor(url, fetch, maxBytes) {
 		this.#url = url;
 		this.#fetch = fetch;
+		this.#maxBytes = maxBytes;
 	}
 
-	/** @returns {Promise<{state: 'loaded', text: string} | {state: 'missing'|'login'} | {state: 'error', status: number}>} */
+	/**
+	 * @returns {Promise<{state: 'loaded', text: string} | {state: 'missing'|'not-text'|'login'}
+	 *     | {state: 'error', status: number}>}
+	 */
 	async load() {
 		// '*/*': the raw file, never the rendered page (D22)
 		const response = await this.#request({ headers: { Accept: '*/*', ...SCRIPT }, cache: 'no-store' });
@@ -78,9 +96,16 @@ export class FileSession {
 		if (!response.ok) {
 			return { state: 'error', status: response.status };
 		}
-		this.#stored = await response.text();
+		const text = decodeText(new Uint8Array(await response.arrayBuffer()), this.#maxBytes);
+		if (text === null) {
+			// a guard (step 69): a text name on something else; nothing loaded, so it is never saved over
+			this.#stored = null;
+			this.#etag = null;
+			return { state: 'not-text' };
+		}
+		this.#stored = text;
 		this.#etag = response.headers.get('ETag');
-		return { state: 'loaded', text: toLf(this.#stored) };
+		return { state: 'loaded', text: toLf(text) };
 	}
 
 	/**
@@ -107,13 +132,8 @@ export class FileSession {
 		return { state: 'saved' };
 	}
 
-	/** No answer at all (network down, server stopped) counts as status 0: an error, never silence. */
-	async #request(options) {
-		try {
-			return await this.#fetch(this.#url, options);
-		} catch {
-			return { status: 0, ok: false };
-		}
+	#request(options) {
+		return send(this.#fetch, this.#url, options);
 	}
 
 	/** Only a loaded file can have changes. */
@@ -122,15 +142,29 @@ export class FileSession {
 	}
 }
 
-/** Step 39: file extension → language for syntax highlighting (the names the CodeMirror bundle knows). */
-const LANGUAGES = {
-	md: 'markdown', markdown: 'markdown', json: 'json', yaml: 'yaml', yml: 'yaml', html: 'html', htm: 'html',
-	css: 'css', js: 'javascript', mjs: 'javascript', ts: 'javascript', xml: 'xml', svg: 'xml', java: 'java',
-	properties: 'properties', sh: 'shell',
-};
+/** @returns {string | null} the text, if the bytes are valid UTF-8 without a NUL and not larger than maxBytes (D21) */
+function decodeText(bytes, maxBytes) {
+	if (bytes.length > maxBytes) {
+		return null;
+	}
+	try {
+		const text = UTF8.decode(bytes);
+		return text.includes('\0') ? null : text;
+	} catch {
+		return null;
+	}
+}
 
-/** @returns {string} a language name, or 'text' for plain text */
-export function languageFor(fileName) {
+/**
+ * Step 69 (D73, D75): the editor opens only known text formats, by name, from the one list
+ * (/ui/editor/text-formats.json, also read by the server): a whole name, else the extension in any case.
+ * @returns {string | null} the highlighting ('text' for none), or null for a file the editor does not open
+ */
+export function textFormat(formats, fileName) {
+	if (Object.hasOwn(formats.names, fileName)) {
+		return formats.names[fileName];
+	}
 	const dot = fileName.lastIndexOf('.');
-	return dot > 0 ? LANGUAGES[fileName.substring(dot + 1).toLowerCase()] ?? 'text' : 'text';
+	const extension = dot > 0 ? fileName.substring(dot + 1).toLowerCase() : '';
+	return Object.hasOwn(formats.extensions, extension) ? formats.extensions[extension] : null;
 }

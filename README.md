@@ -157,7 +157,8 @@ list their subfolders and files. Folder URLs end with `/`. These pages are HTML 
 
 ```sh
 curl -u alice -H 'Accept: application/json' http://127.0.0.1:12013/notes/projects/
-# {"repository":"notes","path":"/projects/","folders":["shared"],"files":["README.md"]}
+# {"repository":"notes","path":"/projects/","folders":["shared"],"files":["README.md"],"tags":[],"folderTags":{},
+#  "editable":["README.md"],"writable":true}
 ```
 
 Without access to a repository or folder the answer is 404, the same as for one that does not exist.
@@ -168,14 +169,27 @@ files of the user interface); with OAuth also its endpoints for chat apps (`/.we
 Above a granted folder (for `guest` in the example above: `/` and `projects/`) only the way down to it
 is shown, no files.
 
+Where you may write, the folder page also has:
+
+- **Edit** next to each text file (see the editor below);
+- **New file**: a name and a button; it creates the empty file, then opens it in the editor. Only names of a
+  known text format;
+- **Upload**: the browser's file picker, several files at once (on the phone: camera, gallery, files). A name
+  that exists is replaced only after you say yes;
+- **Rename** and **Delete** for each file. Rename never overwrites; Delete asks first.
+
+These need JavaScript; without it the page still lists and links everything.
+
 ### Files
 
 Plain HTTP on the file's own URL. A grant allows reading and writing inside its folder; folders above a grant
-stay read-only. Hidden names (`.git`, …) can never be read or written.
+stay read-only. Hidden names (`.git`, …) can never be read or written; the one exception is a folder's tags
+file `.tags`, a text file like any other.
 
 ```sh
 curl -u alice http://127.0.0.1:12013/notes/projects/README.md                 # download
 curl -u alice -T plan.md http://127.0.0.1:12013/notes/projects/plan.md        # upload: create or replace (PUT)
+curl -u alice -T photo.jpg http://127.0.0.1:12013/notes/projects/photo.jpg    # any file: pictures, PDFs, …
 curl -u alice -X PUT http://127.0.0.1:12013/notes/projects/drafts/            # create a folder (URL ends with /)
 curl -u alice -X DELETE http://127.0.0.1:12013/notes/projects/plan.md         # delete a file
 curl -u alice -X DELETE http://127.0.0.1:12013/notes/projects/drafts/         # delete an empty folder
@@ -185,6 +199,8 @@ curl -u alice -X POST -H 'Destination: /notes/archive/plan.md' \
 
 - **Folders are created and deleted explicitly.** Writing into a missing folder gives 409, and a folder with
   content (also hidden content such as `.git`) is never deleted.
+- **Any file can be uploaded**, text or binary, up to `mizoine.max-file-size` (100 MB). It is stored exactly as
+  sent; the type it is served with comes from its name, not from the upload's `Content-Type`.
 - **Writes are atomic.** Readers and Git see the old or the new content, never a part.
 - **Lost updates:** every download has an `ETag`. `-H 'If-Match: "<etag>"'` writes or deletes only if the file
   is unchanged since then (else 412); `-H 'If-None-Match: *'` creates only.
@@ -212,15 +228,25 @@ agents with an OAuth token always get the file itself.
 
 ### Editor
 
-`/ui/editor.html?file=/notes/projects/plan.md` (the **Edit** link of a document page): a text editor in the
-browser that loads and saves through the same file API.
+`/ui/editor.html?file=/notes/projects/plan.md` (the **Edit** link of a folder or a document page): a text editor in
+the browser that loads and saves through the same file API.
+
+- **Only known text formats** open, by name:
+  - with highlighting: Markdown, JSON, YAML, HTML, CSS, JavaScript/TypeScript, XML (also SVG, XSD, XSLT, XHTML),
+    Java, properties and shell;
+  - as plain text: e.g. `txt`, `csv`, `log`, `bat`, `cmd`, `ps1`, `py`, `toml`, `ini`, `conf`, `sql`, `c`, `cs`, `go`,
+    `rs`, `Dockerfile`, `Makefile` and `.tags`.
+
+  The list is [src/main/resources/ui/editor/text-formats.json](src/main/resources/ui/editor/text-formats.json); the
+  folder listing reads the same file. A file of a text name that holds no text (not UTF-8, or over 2 MB) opens
+  without Save, so it is never saved over.
 
 - **Save** writes only if nobody changed the file since it was opened; otherwise it says so and keeps your text
   (Reload shows the other version).
 - The editor only edits files that exist; it never creates one. A link to a path that does not exist shows
-  "does not exist", with nothing to save. Create a file with the API (`PUT`, above) or MCP `write_file`.
-- Syntax highlighting (CodeMirror 6) for Markdown, JSON, YAML, HTML, CSS, JavaScript, XML, Java, properties
-  and shell, chosen by the file name. The bundle in `src/main/resources/ui/vendor/` is built by
+  "does not exist", with nothing to save. Create a file with **New file** on the folder page, the API (`PUT`,
+  above) or MCP `write_file`.
+- Highlighting is CodeMirror 6. The bundle in `src/main/resources/ui/vendor/` is built by
   [tools/codemirror/](tools/codemirror/README.md), which also describes how to upgrade its libraries with npm.
 - Line endings and non-ASCII text are kept exactly.
 - Not logged in: "Log in" opens a new tab; your text stays, then press Save again (or Reload, if the file was not
@@ -286,8 +312,10 @@ status:active
   and 30 tags per folder. Compared without case. One value per key: setting `status:done` replaces `status:open`.
 - **Shown** on the folder page (its own and each subfolder's), in the folder's JSON (`tags`, `folderTags`), and in
   search results. Folders above a granted folder show none.
-- **Changed** where you may write in the folder (the repository root only with `/`). In `.tags` by hand: separate
-  tags by spaces, commas or lines; a leading `#` is allowed; what is no tag is left out (logged).
+- **Changed** where you may write in the folder (the repository root only with `/`): checked with `?tags` or MCP
+  `set_tags`, or by editing the file `.tags` itself (in the editor, or by hand). In the file, separate tags by spaces,
+  commas or lines; a leading `#` is allowed; what is no tag is left out when read (logged). A folder cannot be named
+  `.tags`.
 - **Deleting** a folder that holds only its `.tags` deletes both; any other content still keeps the folder.
 - Tags are for folders for now; tags of files may come later.
 
@@ -370,9 +398,11 @@ curl -u alice -H 'Accept: application/json' 'http://127.0.0.1:12013/notes/.searc
 ## Connect an AI agent (MCP)
 
 Agents (Claude, also on the phone, Claude Code, others) store and retrieve knowledge through the MCP endpoint
-`https://<host>/mcp`. Tools: `list_repositories`, `list_folder`, `read_file`, `write_file`, `create_folder`, `delete`,
-`move`, `set_tags`, and with search on `search` and `list_tags`. `read_file` also gives the file's version; with it, `write_file` and `move` change the file only if nobody
-else did in between.
+`https://<host>/mcp`. Tools: `list_repositories`, `list_folder`, `read_file`, `write_file`, `upload_file`,
+`create_folder`, `delete`, `move`, `set_tags`, and with search on `search` and `list_tags`. `read_file` also gives the
+file's version; with it, `write_file`, `upload_file` and `move` change the file only if nobody else did in between.
+Binary files the standard MCP way, up to 10 MB: `read_file` gives a picture as an image and any other file as an
+embedded resource in base64; `upload_file` takes base64 (larger files over HTTP).
 Files are given raw; the agent's writes are plain files that you review with `git diff` and commit.
 
 1. **An agent user** in `users.yaml` (password hash from `hash-password`), with grants only to its folders in

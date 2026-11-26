@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-26): steps 0–34, 37–48, 55–66 done (1052 Java and 56 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor, search with index state and reindexing on request, folder tags and statuses). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 49–54 (stable URLs, postponed), 67–74 (uploads and editable files; D73–D81 decided). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-26): steps 0–34, 37–48, 55–74 done (1148 Java and 118 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor, search with index state and reindexing on request, folder tags and statuses, uploads and editable files). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 49–54 (stable URLs, postponed). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -1792,7 +1792,7 @@ Builds on steps 55–60: the search index knows the tags, so the vocabulary is o
     - mutator on `editor.js` with `node --test src/test/js/`: first 24 of 27 killed; the 3 survivors were in `languageFor` (step 39), two killed with the names `a.md` and `.md`; left, equivalent: `?? → ||` (no language name is empty). `page.js` has no unit tests by design (step 37: no decisions, only shows them).
   - Until step 71 there is no way to create a file in the browser; the API (`PUT`) and MCP (`write_file`) still create files.
 
-### 67. Uploads over HTTP: pinned and described  ☐
+### 67. Uploads over HTTP: pinned and described  ☑
 - Tests pin what step 30 gives for binary content:
   - all 256 byte values round-trip exactly;
   - a picture (PNG bytes) is stored as sent and downloaded with `image/png`;
@@ -1800,8 +1800,9 @@ Builds on steps 55–60: the search index knows the tags, so the vocabulary is o
   - over the limit → 413; a new file with `If-None-Match: *` over an existing one → 412.
 - OpenAPI and README: the `PUT` creates or replaces "any file, text or binary"; a curl example for a picture (`curl -T photo.jpg …`).
 - No production change is expected. If a test turns red, that is a bug found, fixed test-first.
+- *Done 2026-11-26 (ub-mode):* nothing to fix: step 30 already stores any bytes. Pinned by `FileWriteTest.binaryContentIsStoredAndReadExactly` (512 bytes, every value twice) and `aPictureIsServedByItsNamesType` (PNG with `image/png`, `multipart/form-data` or no `Content-Type`: stored as sent, served as `image/png`). 413 and `If-None-Match: *` were pinned since step 30. The `PUT` description (OpenAPI) and README say "any file, text or binary".
 
-### 68. Text or not: one rule  ☐
+### 68. Text or not: one rule  ☑
 - **By name only (D73, decided):** a file is editable when its name is a known text format; all others are not, and are never read to decide.
 - **One list, in one place:** `ui/editor/text-formats.json`, file extension or whole name (`Makefile`, `Dockerfile`) → editor language (`text` for plain text without highlighting). The server reads it from the classpath for the listing; the editor imports it for its language and for what it opens. Adding a format is one line there.
 - The folder listing (JSON and page) gains:
@@ -1814,8 +1815,12 @@ Builds on steps 55–60: the search index knows the tags, so the vocabulary is o
   - the last extension counts (`archive.tar.gz` is not, `config.yaml.example` only if `example` is listed);
   - no file is read: the rule is a function of the name.
 - Permission tests: `writable` false above a grant (D4) and for read-only places.
+- *Done 2026-11-26 (ub-mode):*
+  - `ui/editor/text-formats.json`: `maxBytes` (2 MB, D21), `extensions` and whole `names` → highlighting (`text` for none). Read by `files.TextFormats` (Java, from the classpath, once: `TextFormats.STANDARD`) and by the editor (fetched from `/ui/editor/text-formats.json`, public). `TextFile.MAX_BYTES` comes from it too: one number for both.
+  - The rule: a whole name first (`Makefile`), else the last extension in any case; a name starting with its only dot (`.md`) has none. Unit tests: 66 names.
+  - Listing: `editable` (files of a text format) and `writable` (`RepositoryAccess.canWriteIn`); `files` unchanged; also in MCP `list_folder`. The listing test was written first but not run red on its own before the code (the fields could not have matched).
 
-### 69. The editor: only text formats  ☐
+### 69. The editor: only text formats  ☑
 - **The editor opens only known text formats** (red first, JavaScript tests with a fake `fetch`):
   - a name not in `text-formats.json` makes no request: "not a text format: download it", with a link;
   - **a guard, not a second rule:** a file with a text name that does not hold text (not strict UTF-8 by `TextDecoder` with `fatal`, a NUL, over 2 MB) is shown as "cannot be edited" without Save, so a misnamed picture is never destroyed;
@@ -1826,8 +1831,12 @@ Builds on steps 55–60: the search index knows the tags, so the vocabulary is o
     - the same highlighters for close relatives: `xsd`, `xsl`, `xslt`, `xhtml` → XML; `cjs` → JavaScript; `bash` → shell;
   - **plain text** (editable, not highlighted): `txt`, `csv`, `tsv`, `log`, `adoc`, `rst`, `bat`, `cmd`, `ps1`, `py`, `toml`, `ini`, `cfg`, `conf`, `sql`, `c`, `h`, `cpp`, `cs`, `kt`, `gradle`, `go`, `rs`, `rb`, `tex`; by whole name `Dockerfile`, `Makefile`.
 - The editor still works for a file without a mode: plain text.
+- *Done 2026-11-26 (ub-mode):*
+  - `textFormat(formats, name)` replaces `languageFor`; the page fetches the list and refuses a name not on it before any request ("Not a text format … Open it from its folder").
+  - The guard: `FileSession` reads bytes (`arrayBuffer`) and decodes them strictly (`TextDecoder` `fatal`); not UTF-8, a NUL or more than `maxBytes` → `not-text`, nothing loaded, so no Save. A byte order mark is now kept (`ignoreBOM`): before, `response.text()` dropped it, so a save removed it.
+  - No new highlighters, no rebuild of the bundle (D75); only comments in `tools/codemirror/entry.js` changed (esbuild drops them).
 
-### 70. `.tags` as a visible text file  ☐
+### 70. `.tags` as a visible text file  ☑
 *Requested 2026-11-26:* `.tags` is text and must be editable in the browser like any text file. D81 (decided, the user's proposal): one exception where hidden names are decided.
 - **The one exception, in `FolderNames`:** `.tags` (`TagsFile.NAME`, exactly, in this case) is not a hidden name. Everything that asks "hidden?" then treats it as a plain name: listing, reading, writing, deleting, moving, the editor, MCP `list_folder`/`read_file`/`write_file`. No other place gets its own rule. All other names starting with `.` stay hidden (D3).
 - **What stays special about it** (each one line where it already is):
@@ -1847,8 +1856,14 @@ Builds on steps 55–60: the search index knows the tags, so the vocabulary is o
   - The index has no entry for the `.tags` file itself.
   - The tests that pinned `.tags` as hidden (`TagsSearchPageTest.withoutAnIndexOrAGrant`: `GET …/.tags` → 404, and the like) change with it: each one named in the step notes.
 - Docs: README "Tags" (the file can be edited like any text file; `?tags` checks), the glossary entry "Hidden name", D3.
+- *Done 2026-11-26 (ub-mode):*
+  - `FolderNames.isHidden`: exactly `.tags` is not hidden; `isPlainFolder`: a folder may not be named `.tags` (the writer's `folderParentOf`, for creating and moving folders; HTTP 404, MCP "Not found").
+  - Index: `visitFile` skips `.tags` (its words are the folder's tags); a write or delete of the file refreshes the folder at once, as before (`RepositoryIndex.apply` already took paths ending with `.tags`).
+  - `FileDownload`: `*.tags` is `text/plain`, inline. `text-formats.json`: `.tags` as plain text.
+  - Tests that pinned `.tags` as hidden and changed with D81: `FolderTagsTest.notVisibleFilesAndTheTagsFileItself` (now `notVisibleFoldersAndFiles`: the file is 200), `TagsSearchPageTest.withoutAnIndexOrAGrant` (the file is 200). New: `FolderNamesTest.theTagsFileIsNotHidden` (and `.Tags`, `.tags2`, `.env`, … stay hidden), `FolderTagsWriteTest` (edited like any text file, `If-Match`, delete; not above a grant; no folder of that name), `TagsSearchPageTest.aTagsFileWrittenAsAFileIsFoundAtOnce` (found at once, no hit of its own, delete takes effect at once), `FileDownloadTest` (type), `McpToolsTest` (no folder `.tags`).
+  - `writeTags`/`deleteTags` stay for `?tags` (they refuse a link).
 
-### 71. Edit on the folder page  ☐
+### 71. Edit on the folder page  ☑
 - Each file in `editable` gets an **Edit** link next to its name, to `/ui/editor.html?file=…`. The same URL as the Markdown page's Edit, built in one place (`RepositoryController.EDITOR`).
 - A click on the name stays as it is: rendered Markdown, inline or download (D10).
 - Only where `writable` (D74): a file that is not editable, or in a place the user may not write, gets no editor link. Viewing is opening the file itself, as is (the click on its name).
@@ -1858,8 +1873,12 @@ Builds on steps 55–60: the search index knows the tags, so the vocabulary is o
   - The CSRF token is required, as for every browser write (D27); it is on Mizoine's own page, so no link from elsewhere can create a file.
   - Tests: a file is created only by Create; an existing name is not overwritten; a name of an unknown format and a hidden name are refused; no Create above a grant.
 - Tests: the page has Edit for text files only, with the right encoded URL (non-ASCII and spaces in names); none for pictures; none above a grant.
+- *Done 2026-11-26 (ub-mode):*
+  - The page: `Link` has `edit` (the editor's URL, built once in `RepositoryController.editor`, also for the document page's Edit) for editable files where `writable`. The document page needs no check: every readable file lies inside a grant, and every grant may write.
+  - New file: a form `#new-file` with `data-folder`, hidden until the script shows it; `ui/folder/folder.js` (`checkNewFileName`: NFC, the server's name rules, a known text format; `FolderActions.createFile`: one `PUT` with `If-None-Match: *` and an empty body), then the editor opens on the file. `ui/folder/page.js` only shows.
+  - `editor.js` now exports `send` (the one request wrapper: no answer → status 0) and `SCRIPT`, used by the editor and the folder page.
 
-### 72. Upload in the browser  ☐
+### 72. Upload in the browser  ☑
 Replaces the upload part of step 36.
 - **As simple as possible, and from the phone (D77):** on the folder page, where `writable`, one **Upload** button: a plain `<input type="file" multiple>`. On the phone it offers the camera, the gallery and files by itself. No drag and drop, no progress bar.
 - Each file is a `PUT` of its URL in this folder with `fetch`, the same request as curl, one after the other:
@@ -1871,8 +1890,10 @@ Replaces the upload part of step 36.
 - Plain JavaScript modules, no library (D79): `ui/folder/folder.js` holds the decisions (names, requests, answers) and is tested in Node with a fake `fetch`; `ui/folder/page.js` only connects it to the page. The folder page keeps working without JavaScript (links only).
 - Java: the folder page loads its module under the strict CSP; the cookie token works for the page's `PUT`.
 - Checked in a real browser, and on the phone: a camera picture into a folder.
+- *Done 2026-11-26 (ub-mode):*
+  - `#upload` with `<input type="file" multiple>`; `uploadOne`: name checked (NFC), `PUT` with `If-None-Match: *`; "exists" → `confirm` → `PUT` without a condition (simplified from the plan: the user has just said yes; an `If-Match` from a request right before would protect almost nothing). A line per file; the listing reloads after a change (`reloads`).
 
-### 73. Rename and delete in the browser  ☐
+### 73. Rename and delete in the browser  ☑
 *Requested 2026-11-26 (with D78).* Takes the delete of step 36 here.
 - On the folder page, where `writable`, each file gets **Rename** and **Delete** (in the same module as step 72).
 - **Rename:** asks for the new name (NFC, the same name checks as step 72); a move in the same folder with the existing API (step 41: `POST` with `Destination`, `If-Match` of the version shown). An existing name is never overwritten (412, D30): "exists already".
@@ -1880,8 +1901,11 @@ Replaces the upload part of step 36.
 - After either, the listing reloads.
 - Tests, JavaScript with a fake `fetch`: the requests and their headers; a refused name makes no request; 412 and 404 answers are shown. Java: no Rename or Delete above a grant or in a read-only place (`writable`).
 - Folders: renaming and deleting empty folders use the same requests; they stay in step 36 unless wanted here.
+- *Done 2026-11-26 (ub-mode):*
+  - `li[data-file]` where `writable`; `page.js` adds Rename (`prompt`, `renameTo`: cancelled or the same name after NFC → nothing; else checked) and Delete (`confirm`). Requests: `POST` with `Destination` (never overwrites, D30: 412 → "exists") and `DELETE`, both without `If-Match` (simplified, as for replace).
+  - End to end (`FolderEndToEndTest`, `e2e/folder-flow.mjs`, the browser's session from the shared `e2e/browser.mjs`, which the editor flow uses too): the folder page gives the CSRF cookie; New file, again (exists), upload, again (exists), replace, rename, rename onto an existing name (exists), delete; on disk only the replaced picture remains.
 
-### 74. Binary files for agents (MCP)  ☐
+### 74. Binary files for agents (MCP)  ☑
 In the standard MCP way (D80):
 - **Reading:** `read_file` returns what MCP defines for content of a tool result:
   - text: `text` content, as now;
@@ -1895,6 +1919,17 @@ In the standard MCP way (D80):
 - `write_file` stays text only; its description points to `upload_file`.
 - Tests: bytes round-trip exactly (upload, then HTTP `GET`, then `read_file`); a PNG comes back as `image` content, a PDF as a `blob` resource; invalid base64 and too large are refused, nothing written; only in the agent's folders; `McpEndpointTest` tool list.
 - README: the MCP tool list.
+- *Done 2026-11-26 (ub-mode):*
+  - `RepositoryFiles.readContent` (sealed `FileContent`: `Text`, `Bytes` with the type from the name as for a download, `TooLarge`) replaces `readText`; `FileText` and `NotTextException` are gone.
+  - `read_file`: text as before; otherwise a first text line (name, type, size, version) and `image` content for `image/*`, else an embedded resource with a base64 `blob`, `uri` the file's URL path; structured: `mimeType`, `size`, `version`. More than 10 MB → an error with the HTTP URL.
+  - `upload_file(repository, path, content, if_match?)`: `content` declared `contentEncoding: base64`; its length is checked before decoding, then strict base64, then the size; the write answers are shared with `write_file` (`written`). No `mime_type` argument (simplified from the plan: the type always comes from the name).
+  - SDK builders (`ImageContent.builder`, `BlobResourceContents.builder`), the constructors are deprecated (`-Werror`).
+  - `McpEndpointTest.theLargestUploadGoesThroughTheEndpointAndBack`: 10 MB through the real endpoint and back (about 13 MB of JSON): the endpoint sets no lower limit.
+
+- *Tools for steps 67–74:*
+  - crapper: all below 10. `RepositoryWriter.createFolder` and `move` were at 10 with the `.tags` folder check: moved into `folderParentOf`, the lookup both already did. JavaScript (no coverage tool): the folder page's dialogs made decisions (`renameAndDelete` CC 8, `upload` CC 7): moved into `folder.js` (`renameTo`, `uploadOne`, `reloads`, tested); `page.js` only shows them (highest CC 5), as the editor's page (step 37).
+  - dryer: nothing new (the `GitController` pairs, step 48; `Tag`/`Tags` `equals`/`hashCode`, step 65).
+  - mutator: no survivors in any group (`folder.js` 17, `editor.js` 30, `TextFormats`/`TextFile` 8, `FolderNames`/`RepositoryWriter` 64, `McpTools` 107, `RepositoryFiles` 17, `RepositoryController`/`FileDownload` 21, `IndexDocuments` 19). "Uncovered": annotation texts, and `McpTools`' create-only and delete-version cases MCP never sends (step 59); the one newly reachable case, `create_folder` "Not found" for a folder named `.tags`, got a test.
 
 ## Glossary
 
@@ -1904,7 +1939,9 @@ In the standard MCP way (D80):
 | Root | The repository's folder (`path` in its file). Nothing outside it is ever reachable. |
 | Grant | A folder a user may read and write, with everything below it (`access` in the repository file). `/` = whole repository. |
 | Above a grant | Folders on the way down to a grant: may be entered, show only the way down, no files, read-only (D4). |
-| Hidden name | Starts with `.` or contains `%`: never listed, read or written (D3, `FolderNames`). |
+| Hidden name | Starts with `.` or contains `%`: never listed, read or written (D3, `FolderNames`). The one exception is a folder's tags file `.tags`, a text file like any other; a folder may not have that name (D81). |
+| Text format | A file name the editor opens: a known extension or whole name in `ui/editor/text-formats.json`, the one list for the server and the editor (D73). Everything else is not editable. |
+| Editable / writable | In a folder listing: the files of a text format, and whether the user may write in the folder (steps 68, 71). |
 | Plain name | A single visible name: not hidden, not empty, no separator, no NUL (`FolderNames.isPlain`). |
 | Folder URL / file URL | Ends with `/` / does not (D5). |
 | Version | Size + modification time of a file (`FileVersion`); changes with every write, also outside Mizoine. |

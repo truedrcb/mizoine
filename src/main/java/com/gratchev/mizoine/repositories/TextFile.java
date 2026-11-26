@@ -9,13 +9,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
+import com.gratchev.mizoine.files.TextFormats;
+
 /**
  * A file read as text (D21): valid UTF-8, no NUL byte, and not larger than 2 MB. For the rendered Markdown page and for agents
  * reading files; anything else is given only as bytes (file download).
  */
 public final class TextFile {
 
-	public static final long MAX_BYTES = 2L * 1024 * 1024;
+	/** 2 MB, from the list of text formats, which the editor reads too (step 69). */
+	public static final long MAX_BYTES = TextFormats.STANDARD.maxBytes();
 
 	private TextFile() {
 	}

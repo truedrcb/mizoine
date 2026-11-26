@@ -17,8 +17,23 @@
 			th:each="tag : ${listing.folderTags.getOrDefault(link.name, {})}"> <span class="tag" th:text="${tag}">project</span></th:block></li>
 	</ul>
 	<ul th:unless="${fileLinks.isEmpty()}">
-		<li th:each="link : ${fileLinks}"><a th:href="${link.href}" th:text="${link.name}">file</a></li>
+		<li th:each="link : ${fileLinks}" th:data-file="${listing.writable} ? ${link.name}"><a th:href="${link.href}" th:text="${link.name}">file</a><th:block
+			th:if="${link.edit}"> <a class="edit" th:href="${link.edit}">Edit</a></th:block></li>
 	</ul>
 	<p th:if="${links.isEmpty() and listing.files.isEmpty()}">Empty folder.</p>
+	<th:block th:if="${listing.writable}">
+		<!-- step 71 (D76): a new file only by this explicit action; shown by the script, nothing without it -->
+		<form id="new-file" hidden th:data-folder="${folderUrl}">
+			<input name="name" aria-label="Name of the new text file" placeholder="name.md" required>
+			<button type="submit">New file</button>
+			<span class="status" role="status"></span>
+		</form>
+		<!-- step 72 (D77): the browser's file picker; on the phone it offers the camera and the gallery -->
+		<form id="upload" hidden>
+			<label>Upload <input type="file" name="files" multiple></label>
+			<ul class="uploads" role="status"></ul>
+		</form>
+		<script type="module" src="/ui/folder/page.js"></script>
+	</th:block>
 </body>
 </html>

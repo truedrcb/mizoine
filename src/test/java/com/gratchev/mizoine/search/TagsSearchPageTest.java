@@ -5,6 +5,7 @@ import static com.gratchev.mizoine.TestUsers.GUEST;
 import static com.gratchev.mizoine.TestUsers.loggedInAs;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -40,6 +41,7 @@ class TagsSearchPageTest {
 			.file("notes/public/kitchen/plan.md", "Garden kitchen plan.")
 			.file("notes/private/secret/.tags", "secret")
 			.folder("notes/public/later")
+			.folder("notes/private/written")
 			.folder("other/x")
 			.repository("notes", "path: notes\naccess:\n  artem: [\"/\"]\n  guest: [public]\n")
 			.repository("other", "path: other\naccess:\n  artem: [\"/\"]\n");
@@ -100,6 +102,21 @@ class TagsSearchPageTest {
 		json(GUEST, "/notes/.tags/").andExpect(jsonPath("$.tags[?(@.tag == 'status:waiting')].count", contains(1)));
 	}
 
+	/** Step 70: the tags file written as a file is found at once, and is no search result of its own. */
+	@Test
+	void aTagsFileWrittenAsAFileIsFoundAtOnce() throws Exception {
+		mockMvc.perform(put("/notes/private/written/.tags").with(loggedInAs(ARTEM)).content("status:later"))
+				.andExpect(status().is2xxSuccessful());
+
+		search(ARTEM, "#status:later").andExpect(jsonPath("$.hits[*].path", contains("private/written/")));
+		search(ARTEM, "tags").andExpect(jsonPath("$.hits[*].path", org.hamcrest.Matchers.not(
+				org.hamcrest.Matchers.hasItem(org.hamcrest.Matchers.endsWith(".tags")))));
+
+		// deleted as a file: the folder has no tags at once (and the other tests see the tags in use as before)
+		mockMvc.perform(delete("/notes/private/written/.tags").with(loggedInAs(ARTEM))).andExpect(status().isNoContent());
+		search(ARTEM, "#status:later").andExpect(jsonPath("$.hits", org.hamcrest.Matchers.empty()));
+	}
+
 	@Test
 	void theTagsInUse() throws Exception {
 		json(GUEST, "/notes/.tags/")
@@ -126,7 +143,7 @@ class TagsSearchPageTest {
 		json(ARTEM, "/other/.tags/").andExpect(status().isServiceUnavailable())
 				.andExpect(jsonPath("$.indexes[0].status").value("not-indexed"));
 		json(GUEST, "/other/.tags/").andExpect(status().isNotFound());
-		// the hidden file of a folder is still no address
-		json(ARTEM, "/notes/public/garden/.tags").andExpect(status().isNotFound());
+		// step 70 (D81): the tags file is a file of its own address, not the tags in use
+		mockMvc.perform(get("/notes/public/garden/.tags").with(loggedInAs(ARTEM))).andExpect(status().isOk());
 	}
 }

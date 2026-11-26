@@ -2,6 +2,7 @@ package com.gratchev.mizoine.mcp;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -10,6 +11,7 @@ import java.util.function.BiFunction;
 import java.util.stream.Stream;
 
 import com.gratchev.mizoine.repositories.RepositoryFiles;
+import com.gratchev.mizoine.repositories.RepositoryFiles.FileContent;
 import com.gratchev.mizoine.repositories.RepositoryWriter.DeleteResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.FolderResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.MoveResult;
@@ -43,6 +45,10 @@ final class McpTools {
 	private static final String FROM = "from";
 	private static final String TO = "to";
 	static final String TAGS = "tags";
+	/** Step 74 (D80): the largest file read or uploaded as base64 through MCP; HTTP takes up to the file size limit. */
+	static final int MAX_BINARY_BYTES = 10 * 1024 * 1024;
+	/** Base64 of {@link #MAX_BINARY_BYTES}: a longer text is refused before it is decoded. */
+	private static final int MAX_BASE64 = (MAX_BINARY_BYTES + 2) / 3 * 4;
 	private static final String REVIEW = " Files are plain files in a Git working folder: a human reviews them with git diff "
 			+ "and commits; nothing is versioned until then.";
 
@@ -68,13 +74,19 @@ final class McpTools {
 				tool("list_repositories", "List the repositories you have access to.", schema(), this::listRepositories),
 				tool("list_folder", "List the subfolders and files of a folder you may see. Path '/' is the repository root.",
 						schema(REPOSITORY, PATH), this::listFolder),
-				tool("read_file", "Read a text file (UTF-8, up to 2 MB) exactly as stored. The structured result also "
-						+ "has its version: pass it as if_match when writing the file back.", schema(REPOSITORY, PATH),
-						this::readFile),
+				tool("read_file", "Read a file exactly as stored: a text file (UTF-8, up to 2 MB) as text; a picture as an "
+						+ "image; any other file (PDF, office document, …) as an embedded resource with its bytes in base64; "
+						+ "binary files up to 10 MB. The structured result also has its version: pass it as if_match when "
+						+ "writing the file back.", schema(REPOSITORY, PATH), this::readFile),
 				tool("write_file", "Create or replace a text file with exactly this content. The folder must exist "
 						+ "(create_folder). With if_match (the version from read_file, or from an earlier write_file), the "
-						+ "file is written only if nobody changed it since: always pass it when changing a file you read." + REVIEW,
+						+ "file is written only if nobody changed it since: always pass it when changing a file you read. "
+						+ "For pictures, PDFs and other binary files use upload_file." + REVIEW,
 						schema(REPOSITORY, PATH, CONTENT, IF_MATCH), this::writeFile),
+				tool("upload_file", "Create or replace a binary file (a picture, PDF, office document, …) with exactly these "
+						+ "bytes, given in base64; at most 10 MB. Its type comes from its name (photo.jpg, report.pdf). The "
+						+ "folder must exist (create_folder); if_match as for write_file. For text use write_file." + REVIEW,
+						uploadSchema(), this::uploadFile),
 				tool("create_folder", "Create a folder; its parent folder must exist." + REVIEW, schema(REPOSITORY, PATH),
 						this::createFolder),
 				tool("delete", "Delete a file, or an empty folder (path ending with '/'). Folders with content are not "
@@ -134,21 +146,63 @@ final class McpTools {
 	}
 
 	/** The text as content (for every client), and text with version as structured content (step 42). */
+	/** Step 74 (D80): text as text; otherwise MCP's own content types, a picture as an image, else a base64 blob. */
 	private CallToolResult readFile(final String user, final Map<String, Object> arguments) {
-		final RepositoryFiles.FileText file = files.readText(user, text(arguments, REPOSITORY),
-				RepositoryFiles.segments(text(arguments, PATH)));
-		return CallToolResult.builder()
-				.addTextContent(file.content())
-				.structuredContent(Map.of("text", file.content(), "version", file.version()))
-				.isError(false)
-				.build();
+		final String path = text(arguments, PATH);
+		return switch (files.readContent(user, text(arguments, REPOSITORY), RepositoryFiles.segments(path),
+				MAX_BINARY_BYTES)) {
+			case FileContent.Text file -> CallToolResult.builder()
+					.addTextContent(file.content())
+					.structuredContent(Map.of("text", file.content(), "version", file.version()))
+					.isError(false)
+					.build();
+			case FileContent.Bytes file -> {
+				final String data = Base64.getEncoder().encodeToString(file.content());
+				yield CallToolResult.builder()
+						.addTextContent(where(arguments) + ": " + file.mimeType() + ", " + file.content().length
+								+ " bytes, version " + file.version())
+						.addContent(file.mimeType().startsWith("image/")
+								? McpSchema.ImageContent.builder(data, file.mimeType()).build()
+								: McpSchema.EmbeddedResource.builder(McpSchema.BlobResourceContents.builder(url(arguments), data)
+										.mimeType(file.mimeType()).build()).build())
+						.structuredContent(Map.of("mimeType", file.mimeType(), "size", file.content().length,
+								"version", file.version()))
+						.isError(false)
+						.build();
+			}
+			case FileContent.TooLarge large -> error("Not read: " + where(arguments) + " has " + large.size()
+					+ " bytes, more than 10 MB through MCP. Download it over HTTP: " + url(arguments));
+		};
 	}
 
 	private CallToolResult writeFile(final String user, final Map<String, Object> arguments) {
-		final String where = where(arguments);
-		final Result result = files.write(user, text(arguments, REPOSITORY), RepositoryFiles.segments(text(arguments, PATH)),
+		return written(arguments, files.write(user, text(arguments, REPOSITORY), RepositoryFiles.segments(text(arguments, PATH)),
 				new ByteArrayInputStream(text(arguments, CONTENT).getBytes(StandardCharsets.UTF_8)), maxFileSize,
-				new Precondition(version(arguments), false));
+				new Precondition(version(arguments), false)));
+	}
+
+	/** Step 74 (D80): base64 checked where it comes in, its length before it is decoded; nothing written otherwise. */
+	private CallToolResult uploadFile(final String user, final Map<String, Object> arguments) {
+		final String content = text(arguments, CONTENT);
+		if (content.length() > MAX_BASE64) {
+			return error("Not written: more than 10 MB through MCP. Upload it over HTTP (PUT on the file's URL).");
+		}
+		final byte[] bytes;
+		try {
+			bytes = Base64.getDecoder().decode(content);
+		} catch (final IllegalArgumentException e) {
+			return error("Not written: content is no base64 (RFC 4648, no line breaks).");
+		}
+		if (bytes.length > MAX_BINARY_BYTES) {
+			return error("Not written: more than 10 MB through MCP. Upload it over HTTP (PUT on the file's URL).");
+		}
+		return written(arguments, files.write(user, text(arguments, REPOSITORY),
+				RepositoryFiles.segments(text(arguments, PATH)), new ByteArrayInputStream(bytes), maxFileSize,
+				new Precondition(version(arguments), false)));
+	}
+
+	private CallToolResult written(final Map<String, Object> arguments, final Result result) {
+		final String where = where(arguments);
 		return switch (result) {
 			case Result.Created created -> ok("Created " + where + ", version " + created.etag());
 			case Result.Replaced replaced -> ok("Replaced " + where + ", version " + replaced.etag());
@@ -222,8 +276,7 @@ final class McpTools {
 					} catch (final RepositoryFiles.NotVisibleException e) {
 						// the path as the agent wrote it, as in the tools' own "Not found"
 						return error("Not found: " + where(arguments));
-					} catch (final RepositoryFiles.MisconfiguredException | RepositoryFiles.NotTextException
-							| IllegalArgumentException e) {
+					} catch (final RepositoryFiles.MisconfiguredException | IllegalArgumentException e) {
 						return error(e.getMessage());
 					}
 				})
@@ -239,6 +292,17 @@ final class McpTools {
 			TO, "Its new path, e.g. knowledge/note.md; the folder it goes into must exist");
 
 	/** JSON schema of the arguments; all but {@code if_match} are required. */
+	/** The arguments of upload_file: the content declared as base64 (JSON Schema {@code contentEncoding}). */
+	private static Map<String, Object> uploadSchema() {
+		final Map<String, Object> properties = new LinkedHashMap<>();
+		properties.put(REPOSITORY, Map.of("type", "string", "description", DESCRIPTIONS.get(REPOSITORY)));
+		properties.put(PATH, Map.of("type", "string", "description", DESCRIPTIONS.get(PATH)));
+		properties.put(CONTENT, Map.of("type", "string", "contentEncoding", "base64",
+				"description", "The complete new content of the file, its bytes in base64 (RFC 4648)"));
+		properties.put(IF_MATCH, Map.of("type", "string", "description", DESCRIPTIONS.get(IF_MATCH)));
+		return Map.of("type", "object", "properties", properties, "required", List.of(REPOSITORY, PATH, CONTENT));
+	}
+
 	private static Map<String, Object> schema(final String... arguments) {
 		final Map<String, Object> properties = new LinkedHashMap<>();
 		for (final String argument : arguments) {
@@ -270,7 +334,12 @@ final class McpTools {
 		return where(arguments, arguments.containsKey(FROM) ? FROM : PATH);
 	}
 
-	private static String where(final Map<String, Object> arguments, final String path) {
+	/** The file's URL path on this server, encoded, as for HTTP (step 74). */
+	private static String url(final Map<String, Object> arguments) {
+		return RepositoryFiles.url(text(arguments, REPOSITORY), RepositoryFiles.segments(text(arguments, PATH)), false);
+	}
+
+		private static String where(final Map<String, Object> arguments, final String path) {
 		return text(arguments, REPOSITORY) + "/" + text(arguments, path).replaceFirst("^/", "");
 	}
 

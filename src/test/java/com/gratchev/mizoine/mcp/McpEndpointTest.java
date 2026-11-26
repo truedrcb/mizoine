@@ -12,6 +12,7 @@ import static com.gratchev.mizoine.mcp.TestMcp.call;
 import static com.gratchev.mizoine.mcp.TestMcp.text;
 
 import java.nio.file.Files;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
@@ -77,7 +78,8 @@ class McpEndpointTest {
 			final List<McpSchema.Tool> tools = client.listTools().tools();
 
 			assertThat(tools).extracting(McpSchema.Tool::name).containsExactlyInAnyOrder(
-					"list_repositories", "list_folder", "read_file", "write_file", "create_folder", "delete", "move", "search", "set_tags", "list_tags");
+					"list_repositories", "list_folder", "read_file", "write_file", "upload_file", "create_folder", "delete", "move",
+					"search", "set_tags", "list_tags");
 			assertThat(tools).allSatisfy(tool -> assertThat(tool.description()).isNotBlank());
 			assertThat(tools).filteredOn(tool -> tool.name().equals("write_file")).singleElement()
 					.satisfies(tool -> assertThat(tool.description()).contains("git"));
@@ -118,6 +120,25 @@ class McpEndpointTest {
 			assertThat(Files.readString(REPOSITORIES.path("tree/inbox/note.md"))).isEqualTo("# Notiz ü\n");
 			assertThat(text(call(client, "read_file", Map.of("repository", "tree", "path", "inbox/note.md"))))
 					.isEqualTo("# Notiz ü\n");
+		}
+	}
+
+	/** Step 74 (D80): the largest binary file, 10 MB as base64 (about 13 MB of JSON), through the real endpoint. */
+	@Test
+	void theLargestUploadGoesThroughTheEndpointAndBack() throws IOException {
+		final byte[] bytes = new byte[McpTools.MAX_BINARY_BYTES];
+		for (int i = 0; i < bytes.length; i++) {
+			bytes[i] = (byte) (i * 31);
+		}
+		try (McpSyncClient client = client(GUEST)) {
+			final CallToolResult uploaded = call(client, "upload_file", Map.of("repository", "tree", "path", "inbox/scan.pdf",
+					"content", Base64.getEncoder().encodeToString(bytes)));
+
+			assertThat(text(uploaded)).startsWith("Created tree/inbox/scan.pdf");
+			assertThat(Files.readAllBytes(REPOSITORIES.path("tree/inbox/scan.pdf"))).isEqualTo(bytes);
+			final CallToolResult read = call(client, "read_file", Map.of("repository", "tree", "path", "inbox/scan.pdf"));
+			assertThat(Base64.getDecoder().decode(((McpSchema.BlobResourceContents)
+					((McpSchema.EmbeddedResource) read.content().get(1)).resource()).blob())).isEqualTo(bytes);
 		}
 	}
 

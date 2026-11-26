@@ -2,8 +2,13 @@
 // Run: node --test src/test/js/   (also part of mvn verify)
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
-import { parseFileParam, csrfToken, restoreLineEndings, FileSession, languageFor } from '../../main/resources/ui/editor/editor.js';
+import { parseFileParam, csrfToken, restoreLineEndings, FileSession, textFormat } from '../../main/resources/ui/editor/editor.js';
+
+/** Step 68: the one list of text formats, as the page fetches it from /ui/editor/text-formats.json. */
+const FORMATS = JSON.parse(readFileSync(new URL('../../main/resources/ui/editor/text-formats.json', import.meta.url), 'utf8'));
+const newSession = (url, fetch) => new FileSession(url, fetch, FORMATS.maxBytes);
 
 /** Every request of every test in this file: none may create a file (step 66). */
 const allCalls = [];
@@ -21,6 +26,7 @@ function fakeFetch(...responses) {
 			ok: next.status >= 200 && next.status < 300,
 			headers: new Headers(next.headers ?? {}),
 			text: async () => next.body ?? '',
+			arrayBuffer: async () => (next.bytes ?? new TextEncoder().encode(next.body ?? '')).buffer,
 		};
 	};
 	fetch.calls = calls;
@@ -78,7 +84,7 @@ test('mixed line endings are kept as LF', () => {
 
 test('load is a GET of the file URL asking for the raw file', async () => {
 	const fetch = fakeFetch({ status: 200, body: '# Мой дом\r\n', headers: { ETag: '"v1"' } });
-	const session = new FileSession('/notes/plan.md', fetch);
+	const session = newSession('/notes/plan.md', fetch);
 
 	assert.deepEqual(await session.load(), { state: 'loaded', text: '# Мой дом\n' });
 	assert.equal(fetch.calls[0].url, '/notes/plan.md');
@@ -91,7 +97,7 @@ test('load is a GET of the file URL asking for the raw file', async () => {
 
 test('a missing file is shown as missing, and Save sends nothing', async () => {
 	const fetch = fakeFetch({ status: 404 });
-	const session = new FileSession('/notes/run.sh', fetch);
+	const session = newSession('/notes/run.sh', fetch);
 
 	assert.deepEqual(await session.load(), { state: 'missing' });
 	assert.deepEqual(await session.save('echo hi', 't'), { state: 'not-loaded' });
@@ -103,7 +109,7 @@ for (const failed of [{ status: 401 }, { status: 500 }, null]) {
 	test(`after a load that failed (${failed?.status ?? 'no answer'}), Save sends nothing`, async () => {
 		const fetch = failed ? fakeFetch(failed) : async () => { throw new TypeError('network'); };
 		const calls = [];
-		const session = new FileSession('/notes/plan.md', async (url, options) => {
+		const session = newSession('/notes/plan.md', async (url, options) => {
 			calls.push(options);
 			return fetch(url, options);
 		});
@@ -117,7 +123,7 @@ for (const failed of [{ status: 401 }, { status: 500 }, null]) {
 
 test('a file deleted elsewhere is not created again by Save', async () => {
 	const fetch = fakeFetch({ status: 200, body: 'a', headers: { ETag: '"v1"' } }, { status: 412 }, { status: 404 });
-	const session = new FileSession('/notes/plan.md', fetch);
+	const session = newSession('/notes/plan.md', fetch);
 	await session.load();
 
 	// the server refuses an If-Match on a missing file; Reload then shows it missing, with no Save
@@ -133,7 +139,7 @@ after(() => {
 });
 
 test('not logged in while loading', async () => {
-	const session = new FileSession('/notes/plan.md', fakeFetch({ status: 401 }));
+	const session = newSession('/notes/plan.md', fakeFetch({ status: 401 }));
 	assert.deepEqual(await session.load(), { state: 'login' });
 });
 
@@ -142,7 +148,7 @@ test('not logged in while loading', async () => {
 test('save is a PUT of the same URL with If-Match, the CSRF header and the text', async () => {
 	const fetch = fakeFetch({ status: 200, body: 'old\r\n', headers: { ETag: '"v1"' } },
 		{ status: 204, headers: { ETag: '"v2"' } });
-	const session = new FileSession('/notes/plan.md', fetch);
+	const session = newSession('/notes/plan.md', fetch);
 	await session.load();
 
 	assert.deepEqual(await session.save('new\n', 'token'), { state: 'saved' });
@@ -159,7 +165,7 @@ test('save is a PUT of the same URL with If-Match, the CSRF header and the text'
 test('the next save uses the new ETag', async () => {
 	const fetch = fakeFetch({ status: 200, body: 'a', headers: { ETag: '"v1"' } },
 		{ status: 204, headers: { ETag: '"v2"' } }, { status: 204, headers: { ETag: '"v3"' } });
-	const session = new FileSession('/notes/plan.md', fetch);
+	const session = newSession('/notes/plan.md', fetch);
 	await session.load();
 	await session.save('b', 't');
 	await session.save('c', 't');
@@ -168,7 +174,7 @@ test('the next save uses the new ETag', async () => {
 });
 
 test('changed elsewhere: conflict, and the text is kept for the user', async () => {
-	const session = new FileSession('/notes/plan.md', fakeFetch({ status: 200, body: 'a', headers: { ETag: '"v1"' } },
+	const session = newSession('/notes/plan.md', fakeFetch({ status: 200, body: 'a', headers: { ETag: '"v1"' } },
 		{ status: 412 }));
 	await session.load();
 
@@ -178,7 +184,7 @@ test('changed elsewhere: conflict, and the text is kept for the user', async () 
 
 for (const [status, state] of [[401, 'login'], [403, 'login'], [413, 'too-large'], [500, 'error']]) {
 	test(`save answered with ${status} is ${state}`, async () => {
-		const session = new FileSession('/notes/plan.md', fakeFetch({ status: 200, body: 'a', headers: { ETag: '"v1"' } },
+		const session = newSession('/notes/plan.md', fakeFetch({ status: 200, body: 'a', headers: { ETag: '"v1"' } },
 			{ status }));
 		await session.load();
 		const result = await session.save('b', 't');
@@ -189,7 +195,7 @@ for (const [status, state] of [[401, 'login'], [403, 'login'], [413, 'too-large'
 // changed or not: Save is only offered when there is something to save
 
 test('unchanged text is not a change, also for CRLF files', async () => {
-	const session = new FileSession('/notes/plan.md', fakeFetch({ status: 200, body: 'a\r\nb', headers: { ETag: '"v1"' } },
+	const session = newSession('/notes/plan.md', fakeFetch({ status: 200, body: 'a\r\nb', headers: { ETag: '"v1"' } },
 		{ status: 204, headers: { ETag: '"v2"' } }));
 	await session.load();
 
@@ -203,32 +209,72 @@ test('text round-trips: non-ASCII and line endings unchanged', async () => {
 	const original = 'Über\r\nмой дом\r\n😀\r\n';
 	const fetch = fakeFetch({ status: 200, body: original, headers: { ETag: '"v1"' } },
 		{ status: 204, headers: { ETag: '"v2"' } });
-	const session = new FileSession('/notes/plan.md', fetch);
+	const session = newSession('/notes/plan.md', fetch);
 	const { text } = await session.load();
 	await session.save(text, 't');
 
 	assert.equal(fetch.calls[1].body, original);
 });
 
-// step 39: the language for syntax highlighting comes from the file name
+// step 69 (D73, D75): only known text formats open, from the one list; their highlighting comes from it too
 
 for (const [name, language] of [['plan.md', 'markdown'], ['README.markdown', 'markdown'], ['data.json', 'json'],
 	['config.yaml', 'yaml'], ['config.yml', 'yaml'], ['page.html', 'html'], ['page.htm', 'html'], ['style.css', 'css'],
-	['app.js', 'javascript'], ['app.mjs', 'javascript'], ['app.ts', 'javascript'], ['pom.xml', 'xml'],
-	['icon.svg', 'xml'], ['Main.java', 'java'], ['app.properties', 'properties'], ['run.sh', 'shell'],
-	['PLAN.MD', 'markdown'], ['a.md', 'markdown'], ['notes.txt', 'text'], ['Makefile', 'text'], ['.hidden', 'text'],
-	['.md', 'text']]) {
-	test(`${name} is highlighted as ${language}`, () => {
-		assert.equal(languageFor(name), language);
+	['app.js', 'javascript'], ['app.mjs', 'javascript'], ['app.cjs', 'javascript'], ['app.ts', 'javascript'],
+	['pom.xml', 'xml'], ['icon.svg', 'xml'], ['schema.xsd', 'xml'], ['style.xslt', 'xml'], ['Main.java', 'java'],
+	['app.properties', 'properties'], ['run.sh', 'shell'], ['run.bash', 'shell'], ['PLAN.MD', 'markdown'],
+	['a.md', 'markdown'], ['notes.txt', 'text'], ['run.bat', 'text'], ['app.py', 'text'], ['Makefile', 'text'],
+	['Dockerfile', 'text'], ['.tags', 'text']]) {
+	test(`${name} opens, highlighted as ${language}`, () => {
+		assert.equal(textFormat(FORMATS, name), language);
 	});
 }
+
+for (const name of ['photo.png', 'doc.pdf', 'data.bin', 'LICENSE', 'makefile', '.hidden', '.md', 'plan.', '']) {
+	test(`${JSON.stringify(name)} is no text format: the editor does not open it`, () => {
+		assert.equal(textFormat(FORMATS, name), null);
+	});
+}
+
+// a guard, not a second rule: a file with a text name that does not hold text is never saved over
+
+for (const [what, bytes] of [['not UTF-8', [0x89, 0x50, 0x4e, 0x47, 0xff, 0xfe]], ['a NUL byte', [0x61, 0x00, 0x62]]]) {
+	test(`a file with ${what} loads as not-text, and Save sends nothing`, async () => {
+		const fetch = fakeFetch({ status: 200, bytes: new Uint8Array(bytes), headers: { ETag: '"v1"' } });
+		const session = newSession('/notes/photo.txt', fetch);
+
+		assert.deepEqual(await session.load(), { state: 'not-text' });
+		assert.deepEqual(await session.save('x', 't'), { state: 'not-loaded' });
+		assert.equal(session.isChanged('x'), false);
+		assert.equal(fetch.calls.length, 1);
+	});
+}
+
+test('a file larger than the list allows loads as not-text', async () => {
+	const big = new Uint8Array(FORMATS.maxBytes + 1).fill(0x61);
+	const session = newSession('/notes/big.txt', fakeFetch({ status: 200, bytes: big, headers: { ETag: '"v1"' } }));
+	assert.deepEqual(await session.load(), { state: 'not-text' });
+	const fits = new Uint8Array(FORMATS.maxBytes).fill(0x61);
+	const fitting = newSession('/notes/big.txt', fakeFetch({ status: 200, bytes: fits, headers: { ETag: '"v1"' } }));
+	assert.equal((await fitting.load()).state, 'loaded');
+});
+
+test('a byte order mark is kept exactly', async () => {
+	const fetch = fakeFetch({ status: 200, bytes: new Uint8Array([0xef, 0xbb, 0xbf, 0x61]), headers: { ETag: '"v1"' } },
+		{ status: 204, headers: { ETag: '"v2"' } });
+	const session = newSession('/notes/bom.txt', fetch);
+	const { text } = await session.load();
+	await session.save(text, 't');
+
+	assert.equal(fetch.calls[1].body, '\uFEFFa');
+});
 
 // no answer at all (network down, server stopped): an error, never a silent failure, and the text stays
 
 const unreachable = async () => { throw new TypeError('Failed to fetch'); };
 
 test('load without an answer is an error', async () => {
-	const session = new FileSession('/notes/plan.md', unreachable);
+	const session = newSession('/notes/plan.md', unreachable);
 	assert.deepEqual(await session.load(), { state: 'error', status: 0 });
 });
 
@@ -238,9 +284,9 @@ test('save without an answer is an error and the text is still unsaved', async (
 		if (answers++ > 0) {
 			throw new TypeError('Failed to fetch');
 		}
-		return { status: 200, ok: true, headers: new Headers({ ETag: '"v1"' }), text: async () => 'a' };
+		return { status: 200, ok: true, headers: new Headers({ ETag: '"v1"' }), arrayBuffer: async () => new TextEncoder().encode('a').buffer };
 	};
-	const session = new FileSession('/notes/plan.md', fetch);
+	const session = newSession('/notes/plan.md', fetch);
 	await session.load();
 
 	assert.deepEqual(await session.save('b', 't'), { state: 'error', status: 0 });

@@ -6,6 +6,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -21,6 +23,7 @@ import com.gratchev.mizoine.repositories.RepositoryWriter;
 import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpStatelessServerFeatures.SyncToolSpecification;
+import io.modelcontextprotocol.spec.McpSchema;
 import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -31,6 +34,8 @@ import tools.jackson.databind.json.JsonMapper;
 class McpToolsTest {
 
 	private static final long LIMIT = 10;
+	private static final byte[] PNG = {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
+	private static final byte[] PDF = {'%', 'P', 'D', 'F', '-', '1', '.', '7', (byte) 0xe2};
 
 	private final Path base;
 	private final List<SyncToolSpecification> tools;
@@ -41,6 +46,8 @@ class McpToolsTest {
 		Files.writeString(base.resolve("tree/inbox/full/kept.md"), "x");
 		Files.writeString(base.resolve("tree/inbox/note.md"), "old");
 		Files.write(base.resolve("tree/inbox/binary.bin"), new byte[] {(byte) 0xff, (byte) 0xfe});
+		Files.write(base.resolve("tree/inbox/photo.png"), PNG);
+		Files.write(base.resolve("tree/inbox/doc.pdf"), PDF);
 		Files.createDirectories(base.resolve("tree/knowledge"));
 		Files.createDirectories(base.resolve("tree/private"));
 		Files.writeString(base.resolve("tree.yaml"), "path: tree\naccess:\n  agent: [inbox, knowledge]\n");
@@ -124,6 +131,9 @@ class McpToolsTest {
 				+ "does not exist.");
 		assertThat(call("create_folder", "inbox/note.md/")).isEqualTo("error: Not created: a file is at tree/inbox/note.md/");
 		assertThat(call("create_folder", "other/")).isEqualTo("error: Not found: tree/other/");
+		// step 70 (D81): a folder may not have the name of the tags file
+		assertThat(call("create_folder", "inbox/.tags/")).isEqualTo("error: Not found: tree/inbox/.tags/");
+		assertThat(base.resolve("tree/inbox/.tags")).doesNotExist();
 	}
 
 	// delete
@@ -138,9 +148,95 @@ class McpToolsTest {
 
 	// read_file, list_folder, arguments
 
+	// step 74 (D80): binary files the standard MCP way: pictures as images, others as base64 resources
+
 	@Test
-	void notTextIsSaid() {
-		assertThat(call("read_file", "inbox/binary.bin")).isEqualTo("error: Not a text file (UTF-8, up to 2 MB): tree/inbox/binary.bin");
+	void aPictureIsReadAsAnImage() {
+		final CallToolResult result = call("read_file", Map.of("repository", "tree", "path", "inbox/photo.png"));
+
+		assertThat(result.isError()).isFalse();
+		assertThat(TestMcp.text(result)).startsWith("tree/inbox/photo.png: image/png, 8 bytes, version ");
+		final McpSchema.ImageContent image = (McpSchema.ImageContent) result.content().get(1);
+		assertThat(image.mimeType()).isEqualTo("image/png");
+		assertThat(Base64.getDecoder().decode(image.data())).isEqualTo(PNG);
+		assertThat(structured(result)).containsEntry("mimeType", "image/png").containsEntry("size", 8)
+				.containsKey("version");
+	}
+
+	@Test
+	void otherFilesAreReadAsBase64Resources() {
+		for (final String[] file : new String[][] {{"inbox/doc.pdf", "application/pdf"},
+			{"inbox/binary.bin", "application/octet-stream"}}) {
+			final CallToolResult result = call("read_file", Map.of("repository", "tree", "path", file[0]));
+
+			final McpSchema.BlobResourceContents blob = (McpSchema.BlobResourceContents)
+					((McpSchema.EmbeddedResource) result.content().get(1)).resource();
+			assertThat(blob.uri()).isEqualTo("/tree/" + file[0]);
+			assertThat(blob.mimeType()).isEqualTo(file[1]);
+		}
+		final CallToolResult pdf = call("read_file", Map.of("repository", "tree", "path", "inbox/doc.pdf"));
+		assertThat(Base64.getDecoder().decode(((McpSchema.BlobResourceContents)
+				((McpSchema.EmbeddedResource) pdf.content().get(1)).resource()).blob())).isEqualTo(PDF);
+	}
+
+	@Test
+	void largerThanTenMegabytesIsNotReadThroughMcp() throws IOException {
+		Files.write(base.resolve("tree/inbox/big.png"), new byte[McpTools.MAX_BINARY_BYTES + 1]);
+
+		assertThat(call("read_file", "inbox/big.png")).isEqualTo("error: Not read: tree/inbox/big.png has "
+				+ (McpTools.MAX_BINARY_BYTES + 1) + " bytes, more than 10 MB through MCP. Download it over HTTP: "
+				+ "/tree/inbox/big.png");
+	}
+
+	@Test
+	void uploadedBytesArriveExactly() throws IOException {
+		final byte[] bytes = {0, 1, (byte) 0x89, (byte) 0xff, '\r', '\n'};
+		assertThat(upload("knowledge/scan.png", Base64.getEncoder().encodeToString(bytes), null))
+				.startsWith("Created tree/knowledge/scan.png, version ");
+		assertThat(Files.readAllBytes(base.resolve("tree/knowledge/scan.png"))).isEqualTo(bytes);
+
+		final CallToolResult read = call("read_file", Map.of("repository", "tree", "path", "knowledge/scan.png"));
+		assertThat(Base64.getDecoder().decode(((McpSchema.ImageContent) read.content().get(1)).data())).isEqualTo(bytes);
+		// replaced only from the version it has
+		final String version = (String) structured(read).get("version");
+		assertThat(upload("knowledge/scan.png", "AA==", "\"old\"")).startsWith("error: Not written");
+		assertThat(upload("knowledge/scan.png", "AA==", version)).startsWith("Replaced tree/knowledge/scan.png");
+	}
+
+	@Test
+	void anUploadIsCheckedBeforeAnythingIsWritten() {
+		assertThat(upload("knowledge/bad.png", "not base64!", null)).isEqualTo("error: Not written: content is no "
+				+ "base64 (RFC 4648, no line breaks).");
+		final String tooLarge = Base64.getEncoder().encodeToString(new byte[McpTools.MAX_BINARY_BYTES + 1]);
+		assertThat(upload("knowledge/big.png", tooLarge, null)).isEqualTo("error: Not written: more than 10 MB through MCP. "
+				+ "Upload it over HTTP (PUT on the file's URL).");
+		assertThat(base.resolve("tree/knowledge/bad.png")).doesNotExist();
+		assertThat(base.resolve("tree/knowledge/big.png")).doesNotExist();
+		// only in the agent's folders
+		assertThat(upload("private/x.png", "AA==", null)).isEqualTo("error: Not found: tree/private/x.png");
+	}
+
+	@Test
+	void theUploadToolDeclaresItsContentAsBase64() {
+		final McpSchema.Tool tool = tools.stream().map(spec -> spec.tool()).filter(t -> t.name().equals("upload_file"))
+				.findFirst().orElseThrow();
+		assertThat(tool.inputSchema().toString()).contains("contentEncoding=base64");
+		assertThat(tools.stream().map(spec -> spec.tool()).filter(t -> t.name().equals("write_file")).findFirst()
+				.orElseThrow().description()).contains("upload_file");
+	}
+
+	private String upload(final String path, final String content, final String ifMatch) {
+		final Map<String, Object> arguments = new HashMap<>(Map.of("repository", "tree", "path", path,
+				"content", content));
+		if (ifMatch != null) {
+			arguments.put("if_match", ifMatch);
+		}
+		return TestMcp.text(call("upload_file", arguments));
+	}
+
+	@SuppressWarnings("unchecked")
+	private static Map<String, Object> structured(final CallToolResult result) {
+		return (Map<String, Object>) result.structuredContent();
 	}
 
 	@Test

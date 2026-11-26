@@ -107,14 +107,14 @@ class FolderTagsTest {
 	}
 
 	@Test
-	void notVisibleFilesAndTheTagsFileItself() throws Exception {
+	void notVisibleFoldersAndFiles() throws Exception {
 		json(GUEST, "/notes/private/?tags").andExpect(status().isNotFound());
 		json(GUEST, "/notes/missing/?tags").andExpect(status().isNotFound());
 		json(GUEST, "/notes/projects/shared/plan.md?tags")
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.message").value("Tags are for folders: a folder's path ends with '/'."));
-		json(ARTEM, "/notes/projects/shared/.tags").andExpect(status().isNotFound());
-		mockMvc.perform(get("/notes/projects/shared/.tags").with(loggedInAs(ARTEM))).andExpect(status().isNotFound());
+		// step 70 (D81): the tags file itself is a text file like any other, no longer hidden
+		mockMvc.perform(get("/notes/projects/shared/.tags").with(loggedInAs(ARTEM))).andExpect(status().isOk());
 	}
 
 	@Test

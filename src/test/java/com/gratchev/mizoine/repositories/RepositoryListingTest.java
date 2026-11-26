@@ -137,6 +137,51 @@ class RepositoryListingTest {
 				.andExpect(content().string(not(containsString("Empty folder."))));
 	}
 
+	/** Step 71: an Edit link for each editable file where the user may write (D74), to the editor (D28). */
+	@Test
+	void htmlHasAnEditLinkForTextFilesOnly() throws Exception {
+		mockMvc.perform(folder("/tree/projects/shared/", "guest"))
+				.andExpect(content().string(containsString(
+						"<a class=\"edit\" href=\"/ui/editor.html?file=/tree/projects/shared/notes.md\">Edit</a>")))
+				// the file's URL is encoded once as a path, then as the parameter (as the document page's Edit)
+				.andExpect(content().string(containsString(
+						"href=\"/ui/editor.html?file=/tree/projects/shared/a%2520%253Cb%253E.md\"")));
+		// not a text format: no Edit
+		mockMvc.perform(folder("/tree/public/", "guest"))
+				.andExpect(content().string(not(containsString("class=\"edit\""))));
+	}
+
+	/** Step 71 (D76): a new file only by an explicit action, where the user may write; done by the folder's script. */
+	@Test
+	void htmlHasNewFileWhereTheUserMayWrite() throws Exception {
+		mockMvc.perform(folder("/tree/projects/shared/", "guest"))
+				.andExpect(content().string(containsString("<form id=\"new-file\" hidden data-folder=\"/tree/projects/shared/\">")))
+				.andExpect(content().string(containsString("<script type=\"module\" src=\"/ui/folder/page.js\"></script>")));
+		// above guest's grants (D4): nothing to write
+		mockMvc.perform(folder("/tree/projects/", "guest"))
+				.andExpect(content().string(not(containsString("id=\"new-file\""))))
+				.andExpect(content().string(not(containsString("id=\"upload\""))))
+				.andExpect(content().string(not(containsString("<script"))));
+	}
+
+	/** Steps 72–73: upload into the folder, rename and delete its files, where the user may write. */
+	@Test
+	void htmlHasUploadAndTheFilesForRenameAndDelete() throws Exception {
+		mockMvc.perform(folder("/tree/projects/shared/", "guest"))
+				.andExpect(content().string(containsString("<form id=\"upload\" hidden>")))
+				.andExpect(content().string(containsString("<input type=\"file\" name=\"files\" multiple>")))
+				.andExpect(content().string(containsString("<li data-file=\"notes.md\">")))
+				.andExpect(content().string(containsString("<li data-file=\"a &lt;b&gt;.md\">")));
+	}
+
+	/** The folder page's scripts are public static files, like the editor's. */
+	@Test
+	void theFolderScriptsLoadWithoutLogin() throws Exception {
+		mockMvc.perform(get("/ui/folder/page.js")).andExpect(status().isOk());
+		mockMvc.perform(get("/ui/folder/folder.js")).andExpect(status().isOk())
+				.andExpect(content().contentTypeCompatibleWith("text/javascript"));
+	}
+
 	@Test
 	void nonAsciiFileNamesStayAsTheyAreOnDisk() throws Exception {
 		mockMvc.perform(json("/tree/public/", "artem"))
@@ -153,6 +198,26 @@ class RepositoryListingTest {
 	}
 
 	// 4. only what the user may see (D4), never hidden folders (D3)
+
+	/** Step 68: which files open in the editor (by name, D73), and whether the user may write in the folder. */
+	@Test
+	void theListingSaysWhatIsEditableAndWhereTheUserMayWrite() throws Exception {
+		mockMvc.perform(json("/tree/public/", "guest"))
+				.andExpect(jsonPath("$.files", contains("Rücksendeportal.pdf")))
+				.andExpect(jsonPath("$.editable", empty()))
+				.andExpect(jsonPath("$.writable").value(true));
+		mockMvc.perform(json("/tree/projects/shared/", "guest"))
+				.andExpect(jsonPath("$.editable", contains("a <b>.md", "notes.md")))
+				.andExpect(jsonPath("$.writable").value(true));
+		// above guest's grants: no files, read-only (D4)
+		mockMvc.perform(json("/tree/projects/", "guest"))
+				.andExpect(jsonPath("$.editable", empty()))
+				.andExpect(jsonPath("$.writable").value(false));
+		mockMvc.perform(json("/tree/", "guest")).andExpect(jsonPath("$.writable").value(false));
+		mockMvc.perform(json("/tree/", "artem"))
+				.andExpect(jsonPath("$.editable", contains("file.txt")))
+				.andExpect(jsonPath("$.writable").value(true));
+	}
 
 	@Test
 	void partialUserSeesOnlyTheWayToTheGrantedFolders() throws Exception {

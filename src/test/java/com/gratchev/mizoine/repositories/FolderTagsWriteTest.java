@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -54,6 +55,10 @@ class FolderTagsWriteTest {
 			.file("notes/tags-and-file/.tags", "old")
 			.file("notes/tags-and-file/note.md", "x")
 			.file("notes/projects/shared/plan.md", "# Plan")
+			.file("notes/edit/.tags", "project\n")
+			.file("notes/projects/.tags", "above-guests-grant")
+			.folder("notes/movable")
+			.folder("notes/no-tags-folder")
 			.repository("notes", "path: notes\naccess:\n  artem: [\"/\"]\n  guest: [projects/shared]\n");
 
 	@DynamicPropertySource
@@ -170,6 +175,54 @@ class FolderTagsWriteTest {
 
 		mockMvc.perform(delete("/notes/tags-and-file/").with(loggedInAs(ARTEM))).andExpect(status().isConflict());
 		assertThat(file("tags-and-file")).exists();
+	}
+
+	/** Step 70, D81: {@code .tags} is a text file like any other: listed, read, edited, deleted. */
+	@Test
+	void theTagsFileIsEditedLikeAnyTextFile() throws Exception {
+		mockMvc.perform(get("/notes/edit/").with(loggedInAs(ARTEM)).accept(MediaType.APPLICATION_JSON))
+				.andExpect(jsonPath("$.files", contains(".tags")))
+				.andExpect(jsonPath("$.editable", contains(".tags")));
+		final String etag = mockMvc.perform(get("/notes/edit/.tags").with(loggedInAs(ARTEM)))
+				.andExpect(status().isOk())
+				.andExpect(header().string("Content-Type", "text/plain;charset=UTF-8"))
+				.andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.startsWith("inline")))
+				.andExpect(content().string("project\n"))
+				.andReturn().getResponse().getHeader("ETag");
+
+		// edited by hand in the editor: stored as written; a word that is no tag is left out when read (D65)
+		mockMvc.perform(put("/notes/edit/.tags").with(loggedInAs(ARTEM)).header("If-Match", etag)
+				.content("project status:open two%words\n")).andExpect(status().isNoContent());
+		assertThat(Files.readString(file("edit"))).isEqualTo("project status:open two%words\n");
+		tags(ARTEM, "/notes/edit/").andExpect(jsonPath("$.tags", contains("project", "status:open")));
+		// an old version is refused, as for any file
+		mockMvc.perform(put("/notes/edit/.tags").with(loggedInAs(ARTEM)).header("If-Match", etag).content("x"))
+				.andExpect(status().isPreconditionFailed());
+
+		mockMvc.perform(delete("/notes/edit/.tags").with(loggedInAs(ARTEM))).andExpect(status().isNoContent());
+		tags(ARTEM, "/notes/edit/").andExpect(jsonPath("$.tags", empty()));
+	}
+
+	@Test
+	void theTagsFileIsReadAndWrittenOnlyWhereAnyFileIs() throws Exception {
+		// above guest's grant no files are shown (D4), so no tags file either
+		mockMvc.perform(get("/notes/projects/").with(loggedInAs(GUEST)).accept(MediaType.APPLICATION_JSON))
+				.andExpect(jsonPath("$.files", empty()));
+		mockMvc.perform(get("/notes/projects/.tags").with(loggedInAs(GUEST))).andExpect(status().isNotFound());
+		mockMvc.perform(put("/notes/projects/.tags").with(loggedInAs(GUEST)).content("mine"))
+				.andExpect(status().isNotFound());
+		assertThat(Files.readString(REPOSITORIES.path("notes/projects/.tags"))).isEqualTo("above-guests-grant");
+		// other names starting with "." stay hidden (D3)
+		mockMvc.perform(put("/notes/edit/.Tags").with(loggedInAs(ARTEM)).content("x")).andExpect(status().isNotFound());
+	}
+
+	@Test
+	void aFolderMayNotBeNamedLikeTheTagsFile() throws Exception {
+		mockMvc.perform(put("/notes/no-tags-folder/.tags/").with(loggedInAs(ARTEM))).andExpect(status().isNotFound());
+		mockMvc.perform(post("/notes/movable/").with(loggedInAs(ARTEM)).header("Destination", "/notes/no-tags-folder/.tags/"))
+				.andExpect(status().isNotFound());
+		assertThat(REPOSITORIES.path("notes/no-tags-folder/.tags")).doesNotExist();
+		assertThat(REPOSITORIES.path("notes/movable")).isDirectory();
 	}
 
 	@Test

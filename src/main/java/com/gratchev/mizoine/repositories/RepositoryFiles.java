@@ -1,6 +1,8 @@
 package com.gratchev.mizoine.repositories;
 
+import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
 import com.gratchev.mizoine.files.FileVersion;
+import com.gratchev.mizoine.files.TextFormats;
 
 import com.gratchev.mizoine.repositories.RepositoryWriter.DeleteResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.FolderResult;
@@ -47,14 +50,6 @@ public class RepositoryFiles {
 
 		MisconfiguredException(final String repository) {
 			super("Repository " + repository + " is configured wrongly; see its repository file");
-		}
-	}
-
-	/** Readable, but not as text (D21: not UTF-8, or larger than 2 MB). */
-	public static final class NotTextException extends RuntimeException {
-
-		NotTextException(final String repository, final List<String> segments) {
-			super("Not a text file (UTF-8, up to 2 MB): " + repository + "/" + String.join("/", segments));
 		}
 	}
 
@@ -217,19 +212,48 @@ public class RepositoryFiles {
 				.orElseThrow(() -> new NotVisibleException(repository, segments));
 	}
 
-	/** A text file's content with the version it was read at (step 42): what an agent needs to write back safely. */
-	public record FileText(String content, String version) {
+	/**
+	 * A file's content with the version it was read at (step 42): what an agent needs to write back safely; as text
+	 * (D21), else as its bytes with its type, the same as for a download (step 74).
+	 */
+	public sealed interface FileContent {
+
+		record Text(String content, String version) implements FileContent {
+		}
+
+		/** @param mimeType from the file's name, as a download's {@code Content-Type} */
+		record Bytes(byte[] content, String mimeType, String version) implements FileContent {
+		}
+
+		/** Not text, and larger than the caller takes as bytes. */
+		record TooLarge(long size) implements FileContent {
+		}
 	}
 
 	/**
 	 * The version is read before the content: if the file changes in between, the version is the older one, and a
 	 * write back with it is refused (412) instead of overwriting the change.
+	 *
+	 * @param maxBytes the largest file given as bytes; text is at most 2 MB anyway (D21)
 	 */
-	public FileText readText(final String user, final String repository, final List<String> segments) {
+	public FileContent readContent(final String user, final String repository, final List<String> segments,
+			final long maxBytes) {
 		final Path file = readableFile(user, repository, segments);
-		final String version = FileVersion.of(file).orElseThrow(() -> new NotVisibleException(repository, segments)).etag();
-		return TextFile.read(file).map(content -> new FileText(content, version))
-				.orElseThrow(() -> new NotTextException(repository, segments));
+		final FileVersion version = FileVersion.of(file).orElseThrow(() -> new NotVisibleException(repository, segments));
+		final Optional<String> text = TextFile.read(file);
+		if (text.isPresent()) {
+			return new FileContent.Text(text.get(), version.etag());
+		}
+		if (version.size() > maxBytes) {
+			return new FileContent.TooLarge(version.size());
+		}
+		try {
+			return new FileContent.Bytes(Files.readAllBytes(file), FileDownload.type(segments.getLast()).toString(),
+					version.etag());
+		} catch (final IOException e) {
+			// removed or unreadable since it was resolved
+			throw new NotVisibleException(repository, segments);
+		}
 	}
 
 	public Result write(final String user, final String repository, final List<String> segments, final InputStream body,
@@ -336,7 +360,8 @@ public class RepositoryFiles {
 
 	/**
 	 * The subfolders and files the user may see in a folder already checked, with the tags of the folder and of its
-	 * subfolders where the user may read inside them (step 62).
+	 * subfolders where the user may read inside them (step 62), which files are editable, and whether the user may
+	 * write in it (step 68).
 	 */
 	static FolderListing listing(final RepositoryConfig config, final RepositoryAccess access, final List<String> segments) {
 		final Path root = config.root();
@@ -346,10 +371,11 @@ public class RepositoryFiles {
 		final Map<String, List<String>> folderTags = new LinkedHashMap<>();
 		folders.forEach(name -> tags(config, access, child(segments, name))
 				.filter(tags -> !tags.isEmpty()).ifPresent(tags -> folderTags.put(name, tags.texts())));
-		return new FolderListing(config.name(), path, folders,
-				access.visibleFiles(segments, RepositoryPaths.childFiles(root, segments)).stream()
-						.filter(name -> readable(config, access, child(segments, name)).isPresent()).toList(),
-				tags(config, access, segments).map(Tags::texts).orElse(List.of()), folderTags);
+		final List<String> files = access.visibleFiles(segments, RepositoryPaths.childFiles(root, segments)).stream()
+				.filter(name -> readable(config, access, child(segments, name)).isPresent()).toList();
+		return new FolderListing(config.name(), path, folders, files,
+				tags(config, access, segments).map(Tags::texts).orElse(List.of()), folderTags,
+				files.stream().filter(TextFormats.STANDARD::isEditable).toList(), access.canWriteIn(segments));
 	}
 
 	private static Optional<Tags> tags(final RepositoryConfig config, final RepositoryAccess access,
@@ -394,7 +420,7 @@ public class RepositoryFiles {
 		return granted.access().isGrantedFolder(requested) || granted.access().isGrantedFolder(real);
 	}
 
-	private static List<String> child(final List<String> segments, final String name) {
+	static List<String> child(final List<String> segments, final String name) {
 		return Stream.concat(segments.stream(), Stream.of(name)).toList();
 	}
 

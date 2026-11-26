@@ -102,6 +102,36 @@ class FileWriteTest {
 		assertThat(Files.readString(REPOSITORIES.path("tree/public/" + name))).isEqualTo("a=b&c=d\r\n# Plan");
 	}
 
+	/** Step 67: any file can be uploaded, not only text: every byte value round-trips exactly. */
+	@Test
+	void binaryContentIsStoredAndReadExactly() throws Exception {
+		final byte[] bytes = new byte[512];
+		for (int i = 0; i < bytes.length; i++) {
+			bytes[i] = (byte) i;
+		}
+		mockMvc.perform(put(URI.create("/tree/public/all-bytes.bin")).with(loggedInAs(ARTEM)).content(bytes))
+				.andExpect(status().isCreated());
+
+		assertThat(Files.readAllBytes(REPOSITORIES.path("tree/public/all-bytes.bin"))).isEqualTo(bytes);
+		mockMvc.perform(get(URI.create("/tree/public/all-bytes.bin")).with(loggedInAs(ARTEM)))
+				.andExpect(content().bytes(bytes));
+	}
+
+	/** Step 67: a picture is stored as sent and served by its name's type, whatever the request said it was. */
+	@ParameterizedTest
+	@ValueSource(strings = {"image/png", "multipart/form-data; boundary=x", ""})
+	void aPictureIsServedByItsNamesType(final String contentType) throws Exception {
+		final byte[] png = {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, 0, 0, 0x0d, 'I', 'H', 'D', 'R'};
+		final String url = "/tree/public/picture-" + Math.abs(contentType.hashCode()) + ".png";
+		final MockHttpServletRequestBuilder upload = put(URI.create(url)).with(loggedInAs(ARTEM)).content(png);
+		mockMvc.perform(contentType.isEmpty() ? upload : upload.contentType(contentType)).andExpect(status().isCreated());
+
+		mockMvc.perform(get(URI.create(url)).with(loggedInAs(ARTEM)))
+				.andExpect(status().isOk())
+				.andExpect(content().contentType("image/png"))
+				.andExpect(content().bytes(png));
+	}
+
 	@Test
 	void theEtagOfTheAnswerIsTheEtagOfTheFile() throws Exception {
 		final String written = mockMvc.perform(write("/tree/public/tagged.md", ARTEM, "x"))

@@ -1,0 +1,23 @@
+{
+	"description": "Step 68, D73: the files that can be edited in the browser, by name only; read by the server (folder listing) and by the editor. The value is the editor's highlighting (D75): markdown, json, yaml, html, css, javascript, xml, java, properties, shell, or text for none. maxBytes: the largest text file (2 MB, D21).",
+	"maxBytes": 2097152,
+	"extensions": {
+		"md": "markdown", "markdown": "markdown",
+		"json": "json",
+		"yaml": "yaml", "yml": "yaml",
+		"html": "html", "htm": "html",
+		"css": "css",
+		"js": "javascript", "mjs": "javascript", "cjs": "javascript", "ts": "javascript",
+		"xml": "xml", "svg": "xml", "xsd": "xml", "xsl": "xml", "xslt": "xml", "xhtml": "xml",
+		"java": "java",
+		"properties": "properties",
+		"sh": "shell", "bash": "shell",
+		"txt": "text", "csv": "text", "tsv": "text", "log": "text", "adoc": "text", "rst": "text",
+		"bat": "text", "cmd": "text", "ps1": "text", "py": "text", "toml": "text", "ini": "text", "cfg": "text",
+		"conf": "text", "sql": "text", "c": "text", "h": "text", "cpp": "text", "cs": "text", "kt": "text",
+		"gradle": "text", "go": "text", "rs": "text", "rb": "text", "tex": "text"
+	},
+	"names": {
+		".tags": "text", "Dockerfile": "text", "Makefile": "text"
+	}
+}

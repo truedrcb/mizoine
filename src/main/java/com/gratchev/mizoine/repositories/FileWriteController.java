@@ -60,7 +60,9 @@ class FileWriteController {
 	@PutMapping("/{repository}/{*path}")
 	@Operation(summary = "Create or replace a file, or create a folder",
 			description = "A folder URL (ending with '/', empty body) creates the folder; it exists already → 204. "
-					+ "A file URL: the request body is the new content, stored exactly as sent. Atomic: readers see the old "
+					+ "A file URL: the request body is the new content, any file, text or binary (pictures, PDFs, "
+					+ "documents), stored exactly as sent; its Content-Type is not used, the file's type comes from its "
+					+ "name when it is read. Atomic: readers see the old "
 					+ "or the new content, never a part. The folder must exist (folders are created explicitly). "
 					+ "If-Match: <ETag> writes only if the file is unchanged since it was read; If-None-Match: * "
 					+ "creates only. API clients with an Authorization header need no CSRF token; the browser UI "
