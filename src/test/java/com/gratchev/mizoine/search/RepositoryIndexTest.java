@@ -155,6 +155,18 @@ class RepositoryIndexTest {
 	}
 
 	@Test
+	void theTagsOfAHiddenFolderAreNotIndexed() throws IOException {
+		write(".trash/old/.tags", "thrown-away");
+		final RepositoryIndex index = indexed();
+
+		// also when told that they changed
+		index.changed(root, List.of(".trash", "old", ".tags"));
+
+		assertThat(found(index, SearchAnalysis.TAG, "thrown-away")).isEmpty();
+		assertThat(found(index, SearchAnalysis.NAME, "old")).isEmpty();
+	}
+
+	@Test
 	void linksAreNotFollowed() throws IOException {
 		final Path outside = Files.createDirectories(root.getParent().resolve("outside"));
 		Files.writeString(outside.resolve("other.md"), "elsewhere");

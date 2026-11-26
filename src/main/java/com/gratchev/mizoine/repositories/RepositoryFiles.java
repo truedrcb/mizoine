@@ -21,7 +21,6 @@ import com.gratchev.mizoine.repositories.RepositoryWriter.FolderResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.MoveResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.Precondition;
 import com.gratchev.mizoine.repositories.RepositoryWriter.Result;
-import com.gratchev.mizoine.tags.Tag;
 import com.gratchev.mizoine.tags.Tags;
 import com.gratchev.mizoine.tags.TagsFile;
 
@@ -182,11 +181,13 @@ public class RepositoryFiles {
 	}
 
 	/**
-	 * Step 62: a folder's own tags (D64, D68), with the version of its {@code .tags} file, if there is one.
+	 * Step 62: a folder's own tags (D64, D68), with the version of its {@code .tags} file, if there is one; also
+	 * what a change of them wrote (step 63).
 	 *
-	 * @param version the ETag of the {@code .tags} file; empty if it does not exist, or the folder shows no tags
+	 * @param version the ETag of the {@code .tags} file; empty if it does not exist (also after a change to no tags),
+	 *                or the folder shows no tags
 	 */
-	public record FolderTags(Tags tags, Optional<String> version) {
+	public record FolderTags(Tags tags, Optional<String> version) implements TagsResult {
 	}
 
 	/**
@@ -289,12 +290,8 @@ public class RepositoryFiles {
 		changes.accept(new RepositoryChange(granted.config().name(), granted.config().root(), real));
 	}
 
-	/** What changing a folder's tags did (step 63). */
+	/** What changing a folder's tags did (step 63): the new tags ({@link FolderTags}), or nothing changed. */
 	public sealed interface TagsResult {
-
-		/** @param version the ETag of the new {@code .tags} file; empty when no tags are left (the file is gone) */
-		record Written(Tags tags, Optional<String> version) implements TagsResult {
-		}
 
 		/** {@code If-Match} names another version, or there is no tags file yet. */
 		record PreconditionFailed() implements TagsResult {
@@ -323,14 +320,14 @@ public class RepositoryFiles {
 	private TagsResult removeTags(final Path root, final List<String> folder, final Optional<String> ifMatch) {
 		return writer.deleteTags(root, folder, ifMatch) instanceof DeleteResult.PreconditionFailed
 				? new TagsResult.PreconditionFailed()
-				: new TagsResult.Written(Tags.NONE, Optional.empty());
+				: new FolderTags(Tags.NONE, Optional.empty());
 	}
 
 	private TagsResult writeTags(final String repository, final Path root, final List<String> folder, final Tags tags,
 			final Optional<String> ifMatch) {
 		return switch (writer.writeTags(root, folder, tags.format(), new Precondition(ifMatch, false))) {
-			case Result.Created created -> new TagsResult.Written(tags, Optional.of(created.etag()));
-			case Result.Replaced replaced -> new TagsResult.Written(tags, Optional.of(replaced.etag()));
+			case Result.Created created -> new FolderTags(tags, Optional.of(created.etag()));
+			case Result.Replaced replaced -> new FolderTags(tags, Optional.of(replaced.etag()));
 			case Result.PreconditionFailed failed -> new TagsResult.PreconditionFailed();
 			// a folder named .tags, or a link in its place: no tags file of this folder
 			default -> throw new NotVisibleException(repository, folder);
@@ -348,20 +345,16 @@ public class RepositoryFiles {
 				.filter(name -> mayEnter(config, access, child(segments, name))).toList();
 		final Map<String, List<String>> folderTags = new LinkedHashMap<>();
 		folders.forEach(name -> tags(config, access, child(segments, name))
-				.filter(tags -> !tags.isEmpty()).ifPresent(tags -> folderTags.put(name, texts(tags))));
+				.filter(tags -> !tags.isEmpty()).ifPresent(tags -> folderTags.put(name, tags.texts())));
 		return new FolderListing(config.name(), path, folders,
 				access.visibleFiles(segments, RepositoryPaths.childFiles(root, segments)).stream()
 						.filter(name -> readable(config, access, child(segments, name)).isPresent()).toList(),
-				tags(config, access, segments).map(RepositoryFiles::texts).orElse(List.of()), folderTags);
+				tags(config, access, segments).map(Tags::texts).orElse(List.of()), folderTags);
 	}
 
 	private static Optional<Tags> tags(final RepositoryConfig config, final RepositoryAccess access,
 			final List<String> folder) {
 		return readableFolder(config, access, folder).map(TagsFile::read);
-	}
-
-	private static List<String> texts(final Tags tags) {
-		return tags.list().stream().map(Tag::text).toList();
 	}
 
 	/** An existing folder the user may read in: inside a grant, also where it really is (links followed). */

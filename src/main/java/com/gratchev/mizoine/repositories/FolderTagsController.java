@@ -8,16 +8,15 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 
-import com.gratchev.mizoine.tags.Tag;
 import com.gratchev.mizoine.tags.Tags;
 import com.gratchev.mizoine.tags.TagsFile;
 
@@ -56,10 +55,7 @@ class FolderTagsController {
 		if (!RepositoryFiles.isFolder(path)) {
 			return json(HttpStatus.BAD_REQUEST).body(new Refusal(TagsFile.FOLDERS_ONLY));
 		}
-		final RepositoryFiles.FolderTags tags = files.folderTags(principal.getName(), repository, RepositoryFiles.segments(path));
-		final ResponseEntity.BodyBuilder answer = json(HttpStatus.OK);
-		tags.version().ifPresent(etag -> answer.header(HttpHeaders.ETAG, etag));
-		return answer.body(new TagList(tags.tags().list().stream().map(Tag::text).toList()));
+		return tagList(files.folderTags(principal.getName(), repository, RepositoryFiles.segments(path)));
 	}
 
 	@PutMapping(value = "/{repository}/{*path}", params = "tags", consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -79,11 +75,7 @@ class FolderTagsController {
 		}
 		return switch (files.setFolderTags(principal.getName(), repository, RepositoryFiles.segments(path), checked,
 				Optional.ofNullable(ifMatch))) {
-			case RepositoryFiles.TagsResult.Written written -> {
-				final ResponseEntity.BodyBuilder answer = json(HttpStatus.OK);
-				written.version().ifPresent(etag -> answer.header(HttpHeaders.ETAG, etag));
-				yield answer.body(new TagList(written.tags().list().stream().map(Tag::text).toList()));
-			}
+			case RepositoryFiles.FolderTags written -> tagList(written);
 			case RepositoryFiles.TagsResult.PreconditionFailed failed -> ResponseEntity.status(HttpStatus.PRECONDITION_FAILED).build();
 		};
 	}
@@ -93,6 +85,13 @@ class FolderTagsController {
 	ResponseEntity<Object> unreadable(final HttpMessageNotReadableException e) {
 		return json(HttpStatus.BAD_REQUEST).body(new Refusal(
 				"The body must be a JSON list of tags, e.g. [\"project\", \"status:open\"]."));
+	}
+
+	/** The tags, with their version as ETag for the next change. */
+	private static ResponseEntity<Object> tagList(final RepositoryFiles.FolderTags tags) {
+		final ResponseEntity.BodyBuilder answer = json(HttpStatus.OK);
+		tags.version().ifPresent(etag -> answer.header(HttpHeaders.ETAG, etag));
+		return answer.body(new TagList(tags.tags().texts()));
 	}
 
 	private static ResponseEntity.BodyBuilder json(final HttpStatus status) {

@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.gratchev.mizoine.repositories.RepositoryFiles;
@@ -17,7 +16,6 @@ import com.gratchev.mizoine.repositories.RepositoryWriter.MoveResult;
 import com.gratchev.mizoine.repositories.RepositoryWriter.Precondition;
 import com.gratchev.mizoine.repositories.RepositoryWriter.Result;
 import com.gratchev.mizoine.search.Search;
-import com.gratchev.mizoine.tags.Tag;
 import com.gratchev.mizoine.tags.Tags;
 import com.gratchev.mizoine.tags.TagsFile;
 
@@ -101,8 +99,8 @@ final class McpTools {
 		final String where = where(arguments);
 		return switch (files.setFolderTags(user, text(arguments, REPOSITORY), RepositoryFiles.segments(path),
 				Tags.of(texts(arguments, TAGS)), version(arguments))) {
-			case RepositoryFiles.TagsResult.Written written -> ok("Tags of " + where + ": " + (written.tags().isEmpty()
-					? "none" : written.tags().list().stream().map(Tag::text).collect(Collectors.joining(", "))
+			case RepositoryFiles.FolderTags written -> ok("Tags of " + where + ": " + (written.tags().isEmpty()
+					? "none" : String.join(", ", written.tags().texts())
 							+ written.version().map(version -> " (version " + version + ")").orElse("")));
 			case RepositoryFiles.TagsResult.PreconditionFailed failed -> error("Not changed: the tags of " + where
 					+ " were changed since that version. Read them again first (list_folder).");

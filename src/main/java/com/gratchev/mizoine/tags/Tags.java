@@ -72,6 +72,11 @@ public final class Tags {
 		return list;
 	}
 
+	/** The tags as written, in their order. */
+	public List<String> texts() {
+		return list.stream().map(Tag::text).toList();
+	}
+
 	public List<String> problems() {
 		return problems;
 	}

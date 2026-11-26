@@ -10,10 +10,6 @@ import org.junit.jupiter.api.Test;
 /** Step 61, D65–D67: what a tag may be, and a folder's set of tags. */
 class TagsTest {
 
-	private static List<String> texts(final Tags tags) {
-		return tags.list().stream().map(Tag::text).toList();
-	}
-
 	@Test
 	void aTagIsAWordOfAnyAlphabet() {
 		assertThat(Tag.of("project").text()).isEqualTo("project");
@@ -54,13 +50,13 @@ class TagsTest {
 
 	@Test
 	void oneValuePerKeyTheLaterWins() {
-		assertThat(texts(Tags.of(List.of("status:open", "project", "status:done")))).containsExactly("project", "status:done");
-		assertThat(texts(Tags.of(List.of("Status:open", "status:Done")))).containsExactly("status:Done");
+		assertThat(Tags.of(List.of("status:open", "project", "status:done")).texts()).containsExactly("project", "status:done");
+		assertThat(Tags.of(List.of("Status:open", "status:Done")).texts()).containsExactly("status:Done");
 	}
 
 	@Test
 	void eachTagOnceTheFirstSpellingKept() {
-		assertThat(texts(Tags.of(List.of("Projekt", "projekt", "#PROJEKT")))).containsExactly("Projekt");
+		assertThat(Tags.of(List.of("Projekt", "projekt", "#PROJEKT")).texts()).containsExactly("Projekt");
 	}
 
 	@Test
@@ -76,7 +72,7 @@ class TagsTest {
 	void theFileFormatSpacesCommasLinesAndHashes() {
 		final Tags read = Tags.read("project  status:active,\n#prio:high\r\n\n , urgent");
 
-		assertThat(texts(read)).containsExactly("project", "status:active", "prio:high", "urgent");
+		assertThat(read.texts()).containsExactly("project", "status:active", "prio:high", "urgent");
 		assertThat(Tags.read("").list()).isEmpty();
 		assertThat(read.format()).isEqualTo("project\nstatus:active\nprio:high\nurgent\n");
 		assertThat(Tags.read(read.format())).isEqualTo(read);
@@ -87,7 +83,7 @@ class TagsTest {
 	void aHandEditedFileKeepsItsGoodTagsAndSaysWhichAreNot() {
 		final Tags read = Tags.read("project two:colons:here ok");
 
-		assertThat(texts(read)).containsExactly("project", "ok");
+		assertThat(read.texts()).containsExactly("project", "ok");
 		assertThat(read.problems()).containsExactly("Not a tag: \"two:colons:here\" (letters, digits, -, _, / and one : only).");
 		assertThat(Tags.of(List.of("project")).problems()).isEmpty();
 	}

@@ -92,8 +92,13 @@ public class Search {
 					.add(SearchQueries.readable(searched), Occur.FILTER).build();
 			final Map<String, Integer> counts = new TreeMap<>();
 			for (final ScoreDoc hit : searcher.search(tagged, Math.max(1, searcher.getIndexReader().maxDoc())).scoreDocs) {
-				for (final String tag : searcher.storedFields().document(hit.doc).getValues(IndexDocuments.TAGS)) {
-					counts.merge(Tag.of(tag).folded(), 1, Integer::sum);
+				final Document folder = searcher.storedFields().document(hit.doc);
+				// as for a search hit: the index may be older than the files, count only what the user may read now
+				if (files.findable(user, repository, RepositoryFiles.segments(folder.get(IndexDocuments.PATH)), true)
+						.isPresent()) {
+					for (final String tag : folder.getValues(IndexDocuments.TAGS)) {
+						counts.merge(Tag.of(tag).folded(), 1, Integer::sum);
+					}
 				}
 			}
 			return new Vocabulary(repository, counts.entrySet().stream()

@@ -313,6 +313,17 @@ class SearchTest {
 	}
 
 	@Test
+	void theTagsInUseOnlyOfFoldersTheUserMayReadNow() throws IOException {
+		tags("notes/public/garden", "project");
+		tags("notes/public/moved", "secret-plan");
+		reindex("notes");
+		// by hand, out of guest's folder: the index still has it there until an update, as for a search hit
+		Files.move(repositories.resolve("notes/public/moved"), repositories.resolve("notes/private/moved"));
+
+		assertThat(search.vocabulary("guest", "notes").tags()).containsExactly(new TagCount("project", 1));
+	}
+
+	@Test
 	void theVocabularyOfAnEmptyRepository() throws IOException {
 		repository("empty", "path: empty\naccess:\n  guest: [\"/\"]\n");
 		Files.createDirectories(repositories.resolve("empty"));
