@@ -450,7 +450,8 @@ Files are given raw; the agent's writes are plain files that you review with `gi
      (If Claude's connector settings show a different callback URL, use that one.)
    - on claude.ai: Settings → Connectors → add a custom connector with `https://mizoine.example.org/mcp`; under
      the advanced settings enter the client ID `claude` and the secret itself; then **Connect**. Mizoine's login
-     page opens: log in as the agent user. The connector then also works in the Claude mobile app.
+     page opens: log in as the agent user; a short "Logged in. Continue" page leads back to Claude. The connector
+     then also works in the Claude mobile app.
 
 Before pressing Connect, check from outside that the chat app can reach Mizoine (through Cloudflare and nginx):
 
@@ -468,7 +469,7 @@ Notes:
   documentation names it). Removing an entry shuts that app out; the others keep working. Several agents through
   the same app need no extra client: each Connect logs in as its own agent user.
 - Access tokens last an hour and are renewed automatically. They are kept in memory: after a restart of Mizoine,
-  press Connect again.
+  press Connect again and log in once more as the agent user (one login, no need to open Mizoine first).
 - Behind Cloudflare: its bot protection must not block the requests of Anthropic's servers to `/mcp`, `/oauth2/*`
   and `/.well-known/*`. nginx needs nothing special (it passes the `Authorization` header).
 

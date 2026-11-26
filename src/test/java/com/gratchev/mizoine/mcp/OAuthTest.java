@@ -151,22 +151,23 @@ class OAuthTest {
 
 	// the flow
 
-	/** @return the access token for {@code user}, after the whole authorization code flow with PKCE */
 	/**
-	 * Browsers apply the login page's form-action to every redirect after the form is sent: login → authorize → the
-	 * app's callback. With {@code 'self'} alone, the last step was blocked on the first Connect (found live, step 35).
-	 * The test's HTTP client does not enforce CSP, so the policy itself is checked.
+	 * Browsers apply the login page's form-action to every redirect after the form is sent. The login form therefore
+	 * leads to Mizoine's own page, which continues as a plain navigation (see {@link #tokens}), so the policy stays
+	 * {@code 'self'} whatever a chat app's callback redirects to (found live twice, step 35). The test's HTTP client
+	 * does not enforce CSP, so the policy itself is checked.
 	 */
 	@Test
-	void theLoginFormMayLeadOnToEachAppsCallback() throws Exception {
+	void formsPostOnlyToMizoineItself() throws Exception {
 		final String policy = get(browser, "/login").headers().firstValue("Content-Security-Policy").orElseThrow();
 		final List<String> formAction = Stream.of(policy.split(";")).map(String::trim)
 				.filter(directive -> directive.startsWith("form-action ")).findFirst().map(directive -> List.of(directive.split(" ")))
 				.orElseThrow();
 
-		assertThat(formAction).contains("'self'", "https://claude.ai", "https://other.example");
+		assertThat(formAction).containsExactly("form-action", "'self'");
 	}
 
+	/** @return the access token for {@code user}, after the whole authorization code flow with PKCE */
 	private String connect(final String user) throws Exception {
 		return field(tokens(user, CLAUDE), "access_token");
 	}
@@ -198,8 +199,16 @@ class OAuthTest {
 				.header("Content-Type", "application/x-www-form-urlencoded")
 				.POST(HttpRequest.BodyPublishers.ofString(form(Map.of("username", user, "password", TestUsers.password(user),
 						"_csrf", hidden.group(1))))).build(), HttpResponse.BodyHandlers.ofString());
-		final String back = loggedIn.headers().firstValue("Location").orElseThrow();
-		final HttpResponse<String> toCallback = get(browser, back.startsWith("http") ? back : url(back));
+		// no redirect away from the form: Mizoine's own page continues there as a plain navigation (CSP form-action)
+		assertThat(loggedIn.statusCode()).isEqualTo(200);
+		assertThat(loggedIn.headers().firstValue("Location")).isEmpty();
+		final Matcher refresh = Pattern.compile("<meta http-equiv=\"refresh\" content=\"0; url=([^\"]+)\">")
+				.matcher(loggedIn.body());
+		assertThat(refresh.find()).as(loggedIn.body()).isTrue();
+		final String back = refresh.group(1).replace("&amp;", "&");
+		assertThat(back).startsWith("/oauth2/authorize?");
+		assertThat(loggedIn.body()).contains("<a href=\"" + refresh.group(1) + "\">Continue</a>");
+		final HttpResponse<String> toCallback = get(browser, url(back));
 		final String callback = toCallback.headers().firstValue("Location").orElseThrow();
 		assertThat(callback).startsWith(app.callback());
 		assertThat(query(callback, "state")).isEqualTo("s1");

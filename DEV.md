@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-27): steps 0–34, 37–48, 55–77 done (1171 Java and 118 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor, search with index state and reindexing on request, folder tags and statuses, uploads and editable files, upload links). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 49–54 (stable URLs, postponed), 78 (upload links live on the phone). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-27): steps 0–34, 37–48, 55–78 done (1169 Java and 118 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor, search with index state and reindexing on request, folder tags and statuses, uploads and editable files, upload links). Step 35: works from the phone; first Connect fixed at the root (the login ends on its own page, CSP form-action 'self' only, 2026-11-27), live re-check open; planned: 36 (browser UI), 49–54 (stable URLs, postponed). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -742,6 +742,12 @@ What Claude's "custom connector" (and other chat apps) need to log in.
   - Fix: `form-action` also allows the origins of the configured `redirect-uris` (`SecurityConfig.contentSecurityPolicy`). Without OAuth the policy is unchanged.
   - Tests: `OAuthTest.theLoginFormMayLeadOnToEachAppsCallback`, `ContentSecurityPolicyTest`.
   - **Open: re-check live after deploying.** Remove the connector, add it again, and Connect without logging in to the UI first. Then tick the step.
+- *2026-11-27, live: the same symptom after a restart of Mizoine.* claude.ai had to connect anew (tokens in memory, D18, as expected); the Connect only finished after logging in to Mizoine in the browser first.
+  - **Cause, again `form-action`:** the 2026-11-24 fix allowed the origins of the configured callbacks. But browsers check every redirect after the form, also the ones the chat app's callback makes itself (to an address not in the list), so the chain could still be blocked. Allowing origins chases the app's own redirects.
+  - **Fix at the root:** after the login form, a saved OAuth authorization is no redirect any more: `LoginSuccessHandler` answers with Mizoine's own small page ("Logged in. Continue"), which goes on with `<meta http-equiv="refresh">` (and a link) as a plain navigation; `form-action` covers only form submissions and their redirects. Every other login redirects as before (302, relative). The CSP is one constant again, `form-action 'self'`, without the callbacks' origins; `ContentSecurityPolicyTest` (which tested the list of origins) is removed.
+  - Tests (red first): `OAuthTest.tokens` (the login answers 200 with the continue page and no `Location`; the page leads to `/oauth2/authorize?…`; from there to the callback), `OAuthTest.formsPostOnlyToMizoineItself` (`form-action 'self'` only).
+  - Tools: crapper all below 10 (`LoginSuccessHandler.onAuthenticationSuccess` 4); dryer nothing new; mutator 25 of 26 killed in the group's tests; the survivor (the editor's script requests are no page to return to, step 37) is killed by `EditorPageTest`, checked by hand.
+  - **Open: re-check live after deploying** (as above).
 - *2026-11-24, review after commit 61d9852:*
   - **Two more ways around the grants through links, found and fixed.**
     - Writing to a link to a file wrote through to that file, while only the link's folder was checked: `granted/link-secret` → `private/secret.md` was overwritten.
@@ -1982,9 +1988,10 @@ The same link takes `curl -T photo.jpg <link>photo.jpg`, for any program that ha
   - The URL from `mizoine.public-url` (trailing `/` removed); without it 409 / an error saying so.
   - The tool was written test first together with its code (not run red on its own).
 
-### 78. Live check on the phone  ☐
+### 78. Live check on the phone  ☑
 - Claude on the phone, connected to Mizoine (step 35): "save this receipt in …", tap the link, take a photo, the agent finds it with `list_folder` and reads it. Notes in this step.
-- *Open (2026-11-27): to be done on the phone by the user.* Covered without the phone: the end-to-end flow on the real server (link as the agent's tool makes it, upload without login, never overwrite). To check: `mizoine.public-url` set on the server; reconnect the connector if Claude does not list `create_upload_link`; the camera picker on the phone; the photo found and shown by the agent.
+- *Done 2026-11-27 (by the user, live):* files uploaded from the phone through a temporary link. The reconnect after a restart showed the Connect problem of step 35 again: fixed there (2026-11-27).
+- *Before (2026-11-27): to be done on the phone by the user.* Covered without the phone: the end-to-end flow on the real server (link as the agent's tool makes it, upload without login, never overwrite). To check: `mizoine.public-url` set on the server; reconnect the connector if Claude does not list `create_upload_link`; the camera picker on the phone; the photo found and shown by the agent.
 - *Tools for steps 75–77:*
   - crapper: all below 10. `UploadLinkService.write` was 13.7 (CC 11, 72 %): the impossible results under one `default`, the name rule in `takes`, two tests (a folder in the way, the folder gone): now 8, 100 %.
   - dryer: nothing new.
