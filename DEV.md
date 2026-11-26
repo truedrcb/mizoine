@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-26): steps 0–34, 37–48 and 55–65 done (1050 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor, search with index state and reindexing on request, folder tags and statuses). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 49–54 (stable URLs, postponed). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-26): steps 0–34, 37–48 and 55–65 done (1050 Java and 51 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor, search with index state and reindexing on request, folder tags and statuses). Step 35: works from the phone; first Connect fixed (CSP form-action), live re-check open; planned: 36 (browser UI), 49–54 (stable URLs, postponed), 66–73 (uploads and editable files, first the editor's security fix; D73–D80 decided). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -763,6 +763,7 @@ What Claude's "custom connector" (and other chat apps) need to log in.
 
 
 ### 36. Browser UI for files  ☐
+*Changed 2026-11-26:* the upload is planned as step 71, delete and rename of files as step 72, no UI library (D79); create folder stays here.
 T3 decided: a small library without build, Preact + htm or Lit (D26), copied into `src/main/resources/ui/vendor/` with a note of its version and source; the application's code as plain JavaScript modules in `src/main/resources/ui/`.
 - upload (with progress), delete and create folder in the listing;
 - the CSRF token from the page;
@@ -774,7 +775,7 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
 - **The editor only uses the public file API** (requested 2026-11-19): it reads with `GET`, creates and saves with `PUT` on the file's URL (steps 28 and 30), the same requests as curl and the MCP tools use. There is no editor-specific endpoint, and the server knows nothing about the editor: the editor is a static file under `/ui/`.
 - Open from the listing: text files up to a size limit (D21) open in the editor, others download.
 - Save = `PUT` with `If-Match` (D20). On 412 the editor offers to reload or to keep its text; nothing is overwritten silently.
-- New file: name + empty editor, saved with `If-None-Match: *`.
+- New file: name + empty editor, saved with `If-None-Match: *`. *Changed in step 66 (D76): the editor no longer creates files; New file is a separate action on the folder page.*
 - Content stays exactly UTF-8, line endings unchanged.
 - **Red:**
   1. JavaScript tests (Node test runner, with a fake `fetch`): loading is a `GET` of the file URL; saving is a `PUT` of the same URL with `If-Match` and the text as body; a new file is a `PUT` with `If-None-Match: *`; 412 leads to the conflict choice; text round-trips without changes to line endings or non-ASCII.
@@ -867,7 +868,7 @@ T3 decided: a small library without build, Preact + htm or Lit (D26), copied int
 - It uses only the existing file API:
   - load with `GET` of that path (`Accept: text/markdown` or `*/*`, so never the rendered page);
   - save with `PUT` and `If-Match`;
-  - a missing file opens empty and is created with `If-None-Match: *`.
+  - a missing file opens empty and is created with `If-None-Match: *`. *Changed in step 66 (D76): a missing file is shown as missing, without Save.*
 - It sends `X-Requested-With: XMLHttpRequest`. Without login, Spring Security then answers 401 without the Basic challenge, so the browser shows no login dialog of its own. The page shows a "Log in" link instead and keeps the text.
 - CSRF: the page reads the token from Spring Security's CSRF cookie and sends it as a header (D27).
 - `file` must be a path on this server: starting with `/`, not with `//`, no scheme. Anything else is rejected before any request.
@@ -1744,6 +1745,122 @@ Builds on steps 55–60: the search index knows the tags, so the vocabulary is o
     - **Mutator:** the survivor `IndexDocuments.folder` `&& → ||` is killed: a hidden folder is not indexed also when the index is told that its `.tags` changed (`theTagsOfAHiddenFolderAreNotIndexed`). All changed files: no survivors. "Uncovered": the `required = false` of an annotation (no code), and in `McpTools` the cases the exhaustive switch needs that MCP cannot reach (no version sent, no create-only).
     - crapper: all below 10. dryer: nothing new (the `GitController` pairs, step 48; `Tag`/`Tags` `equals`/`hashCode`, above).
 
+## Uploads and editable files (planned 2026-11-26)
+*Requested 2026-11-26:*
+- MCP and the HTTP API upload pictures, documents and other files of any kind.
+- The browser UI uploads files to the current folder.
+- *Added 2026-11-26:* the browser UI renames and deletes files; uploading works from the phone; agents use MCP's standard way for binary content.
+- Every text file can be edited in the browser (XML, HTML, SVG, Java, sh, bat, YAML, properties, …).
+- The folder page has an **Edit** button for such files. It opens the editor, with syntax highlighting where there is a highlighter for the file's type.
+
+**What there is already (checked 2026-11-26):**
+- **HTTP:** `PUT /{repository}/{path}` already stores any bytes (step 30): streamed, atomic, up to `mizoine.max-file-size` (100 MB), whatever the `Content-Type`. Uploading over the API works; it is only not described as such.
+- **MCP:** `write_file` takes text only (a JSON string); `read_file` gives text only.
+- **Editor:** it opens whatever `?file=` names and never checks that it is text. **A picture opened in the editor and saved is destroyed** (decoded as UTF-8, written back with replacement characters).
+- **Folder page:** no Edit anywhere. Only the rendered Markdown page has one. A click on a text file's name downloads it (D10: HTML, SVG, XML, JavaScript, unknown types such as `.java`, `.sh`) or shows it as plain text.
+- **Highlighting:** Markdown, JSON, YAML, HTML, CSS, JavaScript/TypeScript, XML/SVG, Java, properties and shell (step 39). The installed `@codemirror/legacy-modes` also has PowerShell, Python, TOML, SQL, Dockerfile, diff, C/C++/C#/Kotlin/Scala (`clike`), Groovy, Go, Rust, Ruby, Perl, Lua, nginx and LaTeX. **No mode for Windows batch** (`.bat`, `.cmd`).
+
+**Principles kept (BACKLOG):** plain files, nothing besides them; one way to write (`PUT` on the file's URL) for curl, the editor, the upload and the MCP tools; the same access, names and size rules for every way in.
+
+### 66. The editor never creates a file (security)  ☐
+*Requested 2026-11-26 (D76):* the editor must not be able to create a file that does not exist; creating a file is a separate, explicit action (step 70).
+- **Why:** checked 2026-11-26, today the editor opens a missing file empty ("New file: not saved yet") and its Save creates it (`PUT` with `If-None-Match: *`; pinned by `editor.test.mjs`, "missing file opens empty, as new" and "a new file is created only if it still does not exist"). So a link from anywhere, e.g. `/ui/editor.html?file=/notes/projects/run.sh`, opens a logged-in user's editor at a path someone else chose, and one Save puts a file there.
+- **Change:**
+  - a missing file (404) shows "This file does not exist", with a link to its folder, and no Save; the text field stays read-only;
+  - the editor has no request that creates: every Save is a `PUT` with `If-Match` of the version it loaded. The code path with `If-None-Match: *` is removed;
+  - the page's texts and the "new file" state are removed.
+- **Red first:**
+  1. JavaScript (fake `fetch`): a 404 on load → "does not exist", Save disabled, and `save()` sends no request at all; the two tests above are replaced by these.
+  2. JavaScript: no request the editor sends has `If-None-Match` (checked over all tests' requests).
+  3. **End to end** (`EditorEndToEndTest`, the real `editor.js` in Node against the real server, logged in with a browser's session and CSRF header):
+     - open the editor on a path that does not exist and try to save → no `PUT` is sent, **the file does not exist on disk afterwards**;
+     - open an existing file, delete it on the server, then Save → 412 and **the file is not created again** (an `If-Match` on a missing file never creates; checked against `RepositoryWriter`, with a Java test if it is not already pinned).
+  4. Java: a `PUT` with `If-Match` on a missing path → 412, nothing written.
+- Docs: steps 37 and 39 get a note "changed in step 66"; README (editor section) says how files are created.
+
+### 67. Uploads over HTTP: pinned and described  ☐
+- Tests pin what step 30 gives for binary content:
+  - all 256 byte values round-trip exactly;
+  - a picture (PNG bytes) is stored as sent and downloaded with `image/png`;
+  - the request's `Content-Type` changes nothing (`image/png`, `multipart/form-data`, none);
+  - over the limit → 413; a new file with `If-None-Match: *` over an existing one → 412.
+- OpenAPI and README: the `PUT` creates or replaces "any file, text or binary"; a curl example for a picture (`curl -T photo.jpg …`).
+- No production change is expected. If a test turns red, that is a bug found, fixed test-first.
+
+### 68. Text or not: one rule  ☐
+- **By name only (D73, decided):** a file is editable when its name is a known text format; all others are not, and are never read to decide.
+- **One list, in one place:** `ui/editor/text-formats.json`, file extension or whole name (`Makefile`, `Dockerfile`) → editor language (`text` for plain text without highlighting). The server reads it from the classpath for the listing; the editor imports it for its language and for what it opens. Adding a format is one line there.
+- The folder listing (JSON and page) gains:
+  - `editable`: the visible files with a known text format;
+  - `writable`: whether the user may write in this folder (D74).
+  - Both are new fields; `files` stays as it is.
+- Plain unit tests for the rule:
+  - known extensions, in any case (`Plan.MD`), and known whole names (`Makefile`);
+  - unknown or missing extensions are not editable (`photo.png`, `data.bin`, `LICENSE` unless listed);
+  - the last extension counts (`archive.tar.gz` is not, `config.yaml.example` only if `example` is listed);
+  - no file is read: the rule is a function of the name.
+- Permission tests: `writable` false above a grant (D4) and for read-only places.
+
+### 69. The editor: only text formats  ☐
+- **The editor opens only known text formats** (red first, JavaScript tests with a fake `fetch`):
+  - a name not in `text-formats.json` makes no request: "not a text format: download it", with a link;
+  - **a guard, not a second rule:** a file with a text name that does not hold text (not strict UTF-8 by `TextDecoder` with `fatal`, a NUL, over 2 MB) is shown as "cannot be edited" without Save, so a misnamed picture is never destroyed;
+  - a Java test checks that the listing and the editor read the same list (both from `text-formats.json`).
+- **The formats and their highlighting** (in `text-formats.json`, D75, decided: simple):
+  - **highlighted**, with the highlighters the editor already has (step 39), no new ones and no rebuild of the bundle:
+    - `md`, `json`, `yaml`/`yml`, `html`/`htm`, `css`, `js`/`mjs`/`ts`, `xml`, `svg`, `java`, `properties`, `sh`;
+    - the same highlighters for close relatives: `xsd`, `xsl`, `xslt`, `xhtml` → XML; `cjs` → JavaScript; `bash` → shell;
+  - **plain text** (editable, not highlighted): `txt`, `csv`, `tsv`, `log`, `adoc`, `rst`, `bat`, `cmd`, `ps1`, `py`, `toml`, `ini`, `cfg`, `conf`, `sql`, `c`, `h`, `cpp`, `cs`, `kt`, `gradle`, `go`, `rs`, `rb`, `tex`; by whole name `Dockerfile`, `Makefile`.
+- The editor still works for a file without a mode: plain text.
+
+### 70. Edit on the folder page  ☐
+- Each file in `editable` gets an **Edit** link next to its name, to `/ui/editor.html?file=…`. The same URL as the Markdown page's Edit, built in one place (`RepositoryController.EDITOR`).
+- A click on the name stays as it is: rendered Markdown, inline or download (D10).
+- Only where `writable` (D74): a file that is not editable, or in a place the user may not write, gets no editor link. Viewing is opening the file itself, as is (the click on its name).
+- **New file, an explicit action (D76):** in a writable folder, a field for the name and a **Create** button.
+  - It sends one `PUT` of the new file's URL with an empty body and `If-None-Match: *` (an existing name → "exists already", nothing changed); then it opens the editor on the file, which now exists.
+  - Only names of a known text format (D73); others are refused before any request, with the reason. Hidden names, `%`, `/` as for uploads.
+  - The CSRF token is required, as for every browser write (D27); it is on Mizoine's own page, so no link from elsewhere can create a file.
+  - Tests: a file is created only by Create; an existing name is not overwritten; a name of an unknown format and a hidden name are refused; no Create above a grant.
+- Tests: the page has Edit for text files only, with the right encoded URL (non-ASCII and spaces in names); none for pictures; none above a grant.
+
+### 71. Upload in the browser  ☐
+Replaces the upload part of step 36.
+- **As simple as possible, and from the phone (D77):** on the folder page, where `writable`, one **Upload** button: a plain `<input type="file" multiple>`. On the phone it offers the camera, the gallery and files by itself. No drag and drop, no progress bar.
+- Each file is a `PUT` of its URL in this folder with `fetch`, the same request as curl, one after the other:
+  - `If-None-Match: *`: nothing is overwritten silently; a name that exists → "Replace?"; yes → `PUT` with the `If-Match` of the current version;
+  - the CSRF header from the cookie (D27);
+  - a line per file: "uploading", "done", or the error; when all are done, the listing reloads.
+- **Names (D78):** normalised to NFC, then checked before any request, with the reason shown: hidden (`.…`), `%`, `/`, empty. The server checks them again anyway.
+- Errors per file: 413 (too large, with the limit), 409 (folder gone), 404 (no access), 0 (no answer); the other files go on.
+- Plain JavaScript modules, no library (D79): `ui/folder/folder.js` holds the decisions (names, requests, answers) and is tested in Node with a fake `fetch`; `ui/folder/page.js` only connects it to the page. The folder page keeps working without JavaScript (links only).
+- Java: the folder page loads its module under the strict CSP; the cookie token works for the page's `PUT`.
+- Checked in a real browser, and on the phone: a camera picture into a folder.
+
+### 72. Rename and delete in the browser  ☐
+*Requested 2026-11-26 (with D78).* Takes the delete of step 36 here.
+- On the folder page, where `writable`, each file gets **Rename** and **Delete** (in the same module as step 71).
+- **Rename:** asks for the new name (NFC, the same name checks as step 71); a move in the same folder with the existing API (step 41: `POST` with `Destination`, `If-Match` of the version shown). An existing name is never overwritten (412, D30): "exists already".
+- **Delete:** asks first ("Delete plan.md?"); `DELETE` with `If-Match` (step 32). Changed since the page was shown → 412: "changed meanwhile, reload".
+- After either, the listing reloads.
+- Tests, JavaScript with a fake `fetch`: the requests and their headers; a refused name makes no request; 412 and 404 answers are shown. Java: no Rename or Delete above a grant or in a read-only place (`writable`).
+- Folders: renaming and deleting empty folders use the same requests; they stay in step 36 unless wanted here.
+
+### 73. Binary files for agents (MCP)  ☐
+In the standard MCP way (D80):
+- **Reading:** `read_file` returns what MCP defines for content of a tool result:
+  - text: `text` content, as now;
+  - pictures: `image` content, base64 `data` with its `mimeType`, so that the model can look at them;
+  - any other file: an embedded `resource` with a base64 `blob`, its `uri` (the file's URL) and `mimeType`;
+  - the structured result keeps the version (`if_match`) and the size, as now.
+- **Writing:** a new tool `upload_file(repository, path, content, mime_type?, if_match?)`. MCP has no binary type for a tool's input, so `content` is a base64 string, declared in the input schema as `"contentEncoding": "base64"` (JSON Schema).
+  - The same rules as `write_file`: folder must exist, `if_match`, review note.
+  - At most 10 MB decoded, for reading and writing (D80); more → an error with the limit, and the HTTP URL to use instead. Checked where it comes in (valid base64, size), before anything is written.
+  - The description says when to use it ("pictures, PDFs, office documents; for text use write_file").
+- `write_file` stays text only; its description points to `upload_file`.
+- Tests: bytes round-trip exactly (upload, then HTTP `GET`, then `read_file`); a PNG comes back as `image` content, a PDF as a `blob` resource; invalid base64 and too large are refused, nothing written; only in the agent's folders; `McpEndpointTest` tool list.
+- README: the MCP tool list.
+
 ## Glossary
 
 | Term | Meaning |
@@ -1805,7 +1922,7 @@ Proposals; details in [docs/technology-decisions.md](docs/technology-decisions.m
 - **T1 — file API style:** **Decided 2026-11-19:** REST on the file URLs (GET / PUT / DELETE), a subset of WebDAV, so that WebDAV (`MOVE`, `PROPFIND`, …) can be added later on the same URLs. Not chosen: WebDAV now; own JSON operations.
 - **T2 — AI connection:** **Decided 2026-11-19:** remote MCP server in Mizoine (`/mcp`) with OAuth (steps 33–35). Requirement: Claude or another agent on the smartphone stores and retrieves knowledge as a technical agent user limited to a few folders, connected in the most standard and easy way. Only a remote MCP connector reaches smartphone chat apps, and the same connection serves Claude Code. Not chosen: REST + Skill, local MCP program, WebDAV mount.
 - **T3 — UI technology:** **Decided 2026-11-19:** a small library without build step, Preact + htm or Lit, copied into `ui/vendor/` (D26). Not chosen: plain JavaScript modules only; server pages only; htmx; SPA with a Node build.
-- **D26 — Preact + htm or Lit:** *To decide in step 36.* Preact + htm: React-style components and state, ~5 kB. Lit: web components, a browser standard, ~6 kB. Both run without build and under the strict CSP.
+- **D26 — Preact + htm or Lit:** **Closed 2026-11-26 by D79: no library.** (Was: to decide in step 36.) Preact + htm: React-style components and state, ~5 kB. Lit: web components, a browser standard, ~6 kB. Both run without build and under the strict CSP.
 - **D10 — showing files in the browser:** **Implemented 2026-11-23 as proposed (step 28):** inline only for types a browser does not execute (images, PDF, plain text, …), always with `CSP: sandbox` and `nosniff`; `attachment` for HTML, SVG, XML, JavaScript and unknown types. Alternative: a separate domain for downloads.
 - **D11 — CSRF for writes:** **Implemented 2026-11-23 as proposed (step 29), limited to PUT and DELETE:** token required for session-cookie requests (the UI), not for requests with an `Authorization` header (agents, curl). Cross-site forms cannot send PUT or DELETE, and there is no CORS. Alternative: a token endpoint that API clients must call first.
 - **D12 — maximum file size:** **Implemented 2026-11-23 as proposed (step 30):** `mizoine.max-file-size`, default 100 MB (nginx at the server has `client_max_body_size 100M`).
@@ -1889,5 +2006,16 @@ Details of T5 in [docs/technology-decisions.md](docs/technology-decisions.md).
 - **D70 — deleting a tagged folder:** **Decided 2026-11-25 as proposed:** a folder that holds only `.tags` counts as empty, and its `.tags` is deleted with it; otherwise tagging a folder would make it undeletable through Mizoine. Any other content still blocks the delete (D15). Moving needs nothing: `.tags` is inside.
 - **D71 — the vocabulary:** **Decided 2026-11-25 as proposed:** from the search index (step 65): it has every tag anyway, counted per user's readable folders in milliseconds. Without a usable index, 503 with the state, as search. Not chosen: reading all `.tags` files on each request (a walk of the whole repository); a list of allowed tags (a configuration of its own). Markdown front matter `tags:` (Obsidian) is not read; possible later as a read-only source.
 - **D72 — tags of files:** **Postponed 2026-11-25:** to plan later. Favourite: a sidecar file beside the file, `my_doc.md.tags`, in the same format as `.tags` (D65); maybe a hybrid. To think through then: how a sidecar moves and is deleted with its file (by Mizoine, and by hand), how it shows in folder listings and Git, and whether front matter counts too.
+
+### Uploads and editable files (steps 66–73) — decided 2026-11-26
+- **D73 — what counts as a text file for the editor:** **Decided 2026-11-26 (simplified on request):** by name only. Only known text formats are editable: a list of extensions and whole names (`Makefile`), in one file that the server and the editor share (step 68); all other files are not, and no file is read to decide. A text file with an unknown name is downloaded; adding its format is one line in the list. The editor's check on load (step 69) only guards against a misnamed file being destroyed. Not chosen: by name, else by the first 8 KB of content (finds unknown text files, but reads files for a listing and is a second rule).
+- **D74 — what the listing says, and read-only places:** **Decided 2026-11-26:** new fields `editable` (file names) and `writable` (this folder); `files` unchanged, so API clients keep working. An editor link only for editable files where the user may write; no link otherwise. Viewing needs no editor: the file opens as is from its name. Not chosen: a **View** link to the editor without Save.
+- **D75 — highlighting:** **Decided 2026-11-26 (simplified on request):** the editor's highlighters of step 39 for a limited list of types, also for their close relatives (`xsd`, `xslt` as XML, `bash` as shell, …); every other text format is edited as plain text. No new highlighters, no own mode for `.bat`, no rebuild of the bundle. Not chosen: more CodeMirror modes (legacy modes for Python, SQL, PowerShell, …), an own mode for `.bat`.
+- **D76 — creating files:** **Decided 2026-11-26 (on request, a security fix):** the editor never creates a file: a missing file is shown as missing, without Save, and every save needs the loaded version (`If-Match`), so a link from elsewhere cannot make a user create a file at a chosen path (step 66, tested end to end). A new file is created only by an explicit **New file** action on the folder page (name + Create, step 70), then edited. Not chosen: the editor creating a missing file on Save (step 37's behaviour until now).
+- **D77 — how the browser uploads:** **Decided 2026-11-26:** the simplest that works from the phone: one file picker (`<input type="file" multiple>`, which offers the camera and the gallery there), one `PUT` per file on its URL with `fetch`, never overwriting without asking ("Replace?"). No drag and drop, no progress bar. Not chosen: a `multipart/form-data` `POST` endpoint (a second way to write; `POST` on a URL is already the move, D29).
+- **D78 — file names from the browser:** **Decided 2026-11-26:** normalised to NFC before an upload or a rename; macOS may give decomposed names (`u` + `¨`), which on Linux would be another name than the same word typed. The server stores names as given, as now. **Also requested:** rename and delete files in the browser (step 72), with the existing move and delete requests.
+- **D79 — UI library (was D26):** **Decided 2026-11-26 as proposed:** none. Plain JavaScript modules, as the editor (step 37 showed that a page needs no library). This closes D26. Preact + htm stays the choice if a page ever needs components with state.
+- **D80 — binary files for agents:** **Decided 2026-11-26: the standard MCP way** (step 73). Reading: `read_file` returns MCP's own content types: `image` (base64 with `mimeType`) for pictures, an embedded resource with a base64 `blob` for other files. Writing: a tool `upload_file` with base64 `content`, declared `contentEncoding: base64` in its input schema; MCP has no binary input type, so base64 in the arguments is what MCP servers do. At most 10 MB decoded either way (base64 adds a third; chat apps limit a tool call's size anyway; HTTP stays 100 MB). Not chosen: an `encoding` parameter on `write_file` (one tool doing two things); Mizoine downloading a URL the agent names (it would reach addresses on the server's own network for whoever controls the agent); MCP resources (`resources/read`) for files (fewer clients support them than tools).
+  - Not chosen: an `encoding` parameter on `write_file` (one tool doing two things is easier to get wrong); Mizoine downloading a URL the agent names (Mizoine would reach addresses on the server's own network for whoever controls the agent).
 
 - **Later, not planned yet:** copy, live Markdown preview in the editor, Obsidian `[[wiki links]]`, links relative to the repository root (`/…`), syntax highlighting of code blocks in the page, per-grant read-only permissions.
