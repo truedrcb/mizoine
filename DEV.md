@@ -1,6 +1,6 @@
 # Mizoine 1.0 — Development Plan
 
-**Status** (updated: 2026-11-27): steps 0–34, 37–48, 55–78 done (1169 Java and 118 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor, search with index state and reindexing on request, folder tags and statuses, uploads and editable files, upload links). Step 35: works from the phone; first Connect fixed at the root (the login ends on its own page, CSP form-action 'self' only, 2026-11-27), live re-check open; planned: 36 (browser UI), 49–54 (stable URLs, postponed). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
+**Status** (updated: 2026-11-27): steps 0–34, 37–48, 55–78 done (1169 Java and 118 JavaScript tests green; file API, MCP for agents with OAuth, Markdown page, editor, search with index state and reindexing on request, folder tags and statuses, uploads and editable files, upload links). Step 35: works from the phone; first Connect fixed at the root (the login ends on its own page, CSP form-action 'self' only, 2026-11-27), live re-check open; planned: 36 (browser UI: one frame for all pages, 36a–36i; D90–D97 to decide), 49–54 (stable URLs, postponed). Decided: T1 REST (implemented), T2 remote MCP, T3 small library without build, T3.1 CodeMirror 6 (step 39, done), T3.2 (commonmark-java), D10–D15, D20–D25, D27, D28. Open: D26, see [docs/technology-decisions.md](docs/technology-decisions.md).
 
 This plan builds the first slice of the "minimal server" from [BACKLOG.md §7](BACKLOG.md):
 a web server that only configured users can access. Later features (file access, Git, AI roles)
@@ -768,12 +768,58 @@ What Claude's "custom connector" (and other chat apps) need to log in.
     - disk-error `catch` blocks.
 
 
-### 36. Browser UI for files  ☐
-*Changed 2026-11-26:* the upload is planned as step 72, delete and rename of files as step 73, no UI library (D79); create folder stays here.
-T3 decided: a small library without build, Preact + htm or Lit (D26), copied into `src/main/resources/ui/vendor/` with a note of its version and source; the application's code as plain JavaScript modules in `src/main/resources/ui/`.
-- upload (with progress), delete and create folder in the listing;
-- the CSRF token from the page;
-- JavaScript tests with Node's built-in test runner (needs Node.js for development only).
+### 36. Browser UI: one frame for all pages  ☐
+*Rewritten 2026-11-27, with what steps 37–77 built.* Upload (step 72), rename and delete of files (73), Edit and New file (71) are done; no UI library (D79): server pages (Thymeleaf) and small plain JavaScript modules, tested in Node.
+
+**What there is (each view its own URL, BACKLOG "Every object has an address"):**
+
+| URL | View | Actions |
+|---|---|---|
+| `/` | your repositories | search all |
+| `/{repo}/…/` | folder | subfolders and files, tags; where writable: Edit, New file, Upload, Rename, Delete; search; Up; Git (root only) |
+| `/{repo}/…/note.md` | Markdown page | Folder, Raw, Edit |
+| `/{repo}/…/other.ext` | the file itself | inline (pictures, PDF, text) or download (D10) |
+| `/ui/editor.html?file=…` | editor | Save, Reload; Page, Folder |
+| `/{repo}/.search?q=…`, `/.search?q=…` | search | tags as links, pages |
+| `/{repo}/.tags/` | tags in use | links to their search |
+| `/{repo}/.git/` | Git | stage, unstage, commit, pull, push |
+| `/{repo}/.search/index`, `/.search/index` | index state | reindex, update |
+| `/.upload/{token}/` | upload link | pick files (no login) |
+
+**What is missing for convenient work (found by going through the pages):**
+- No common frame: every page has its own few links; deep in a repository there is no way back to the start or the repository root but "Up" step by step; the file pages do not show where they are; **no logout anywhere**; no "logged in as".
+- Folders cannot be created, renamed or deleted in the browser (the API can: `PUT …/`, move, `DELETE …/`). Files cannot be moved to another folder, only renamed.
+- The listing shows names only: no size, no date, no kind; nothing tells a picture from a text file before clicking.
+- A Markdown page does not show its folder's tags; tags are edited only as the `.tags` file.
+- No "copy link" for the object on screen, though its URL is the permalink.
+- Upload links (step 75) can be made only by an agent or the API; from a computer to the phone would need a QR code.
+- The editor saves only with the button (no Ctrl+S); errors (404, 500) are Spring's plain pages without a way back.
+- The Git page is reachable only from the repository root, and nothing shows that there are uncommitted changes.
+
+**Rules for all of it (kept from BACKLOG and the decisions so far):**
+- **Every view has its own URL** and opens directly from a bookmark, a note or a chat; after a login it leads straight there (as now). Sorting, search terms, pages: in the query (`?sort=date`, `?q=`), never only in the browser.
+- **Windows are independent:** no state shared between tabs (no `localStorage` for content or navigation; BACKLOG: each window works on its own object); a dialog is no view and needs no URL; after an action the page shows the new state of its URL (reload), never an old picture.
+- **Nothing is overwritten unknowingly:** the editor's `If-Match` (D20), uploads and New file create-only, rename and move never overwrite (D30).
+- **Works without JavaScript for reading** (links, pages); the actions need it. On the phone first: the frame and the actions fit a narrow screen, buttons large enough to tap.
+- **The same API as curl and the agents:** the browser UI adds no endpoint of its own; what it does, the API can do (principle "automation is transparent").
+
+**Later input, not part of these parts (2026-11-27):** the display concept "a repository like a ticket system" in [BACKLOG.md](BACKLOG.md) §4: a folder shown with its `README.md` as description and its subfolders as comments or attachments, with no fixed levels. To plan on its own; the frame (36a) and the fuller listing (36e) should not stand in its way.
+
+**The parts, each one done and checked before the next (red first, as always):**
+- **36a. The frame (D90):** one Thymeleaf fragment for the server pages, the same markup in the editor and upload pages:
+  - a top bar: "Mizoine" (to `/`), the place as breadcrumbs (repository / folder / folder / file, each a link to its URL), a search field for this repository (all repositories on `/`), the user's name and **Log out** (a `POST /logout` form with the CSRF token);
+  - Git status where the user has Git access: a link "Git" with the number of changed files (from `GitStatus`, only for the root of the working tree, D33), on every page of the repository;
+  - **Copy link** for the object on screen (its URL, as is; `navigator.clipboard`, falls back to selecting the text).
+  - Tests: the frame's links on each page type (start, folder, Markdown, search, tags, Git, index, error); breadcrumbs encoded as the URLs are (non-ASCII, spaces, `#`); no Git link without Git access; logout logs out and needs the token.
+- **36b. Error pages (D91):** 404 and 500 in the frame, saying what is known without revealing more (D2: "not found or no access"), with links to the start and, if the repository is known and visible, its root. 403 for a missing CSRF token: "the page was open too long, reload it".
+- **36c. Folders in the browser:** **New folder** (as New file: a name, `PUT …/name/`, then that folder opens), **Rename** and **Delete** for subfolders (Delete only when empty, D15, with D70's `.tags` rule; a folder with content says so). In the same `folder.js`, tested in Node; end to end as step 73.
+- **36d. Move (D92):** Rename takes a path too: a plain name stays in the folder, `archive/plan.md` or `../done/` moves (step 41: `POST` with `Destination`, never overwriting). The path is shown resolved before it is sent ("Move to notes/archive/plan.md?").
+- **36e. A fuller listing (D93):** size, last change and kind (folder, text, picture, PDF, other) for each entry, from the listing JSON (new fields, nothing taken away); sorting by name, date or size with `?sort=`; on the phone a compact line per entry with the actions behind one "⋯" button.
+- **36f. Tags in the pages (D94):** the Markdown page shows its folder's tags (links to their search); the folder page edits its tags with a small field (add, remove, statuses as `key:value`), through `PUT ?tags` (checked, D65); the vocabulary of step 65 as suggestions where search is on.
+- **36g. Upload link from the browser (D95):** "Upload from phone" on the folder page makes a link (`POST ?upload-link`) and shows it with a **QR code** to scan with the phone's camera, its expiry and Copy link.
+- **36h. Small editor comforts (D96):** Ctrl+S / ⌘S saves (the same Save, `If-Match`); the frame's breadcrumbs instead of the two links; the title says when there are unsaved changes ("• plan.md").
+- **36i. Look (D97):** one stylesheet for all pages; light and dark by the system setting (`prefers-color-scheme`); no web fonts, no external resources (CSP `'self'`); readable on the phone first.
+- **Checked live** after each part on the phone and on a computer, as for steps 39 and 72.
 
 ### 37. Text editor in the browser (plain textarea)  ☑
 *Requested 2026-11-19:* edit text files in the browser; usable on the smartphone. T3.1 decided: CodeMirror 6 later (step 39). For now a plain `<textarea>`, so that everything except highlighting is built and tested here.
@@ -2071,7 +2117,7 @@ Proposals; details in [docs/technology-decisions.md](docs/technology-decisions.m
 - References for the folder API: WebDAV ([RFC 4918](https://www.rfc-editor.org/rfc/rfc4918)) and the [Solid Protocol](https://solidproject.org/TR/protocol). Mizoine takes from each the part that matches D14 and D15. `PUT …/` instead of WebDAV's own `MKCOL` method: Spring MVC and Spring Security's firewall accept only the standard HTTP methods, and OpenAPI 3.1 cannot describe others. `MKCOL` can be added as an alias when WebDAV comes.
 - **D16 — MCP library:** **Decided 2026-11-23 (step 33):** the official MCP Java SDK 2.2.0 directly (`mcp-core`, `mcp-json-jackson3`), stateless servlet transport. Not chosen: Spring AI 2.1 (a framework for one endpoint).
 - **D17 — OAuth clients:** **Decided 2026-11-23, changed 2026-11-24 (option 1, requested):** one client per chat app, configured as a list `mizoine.oauth.clients` (id, secret hash, redirect URIs): each app can be shut out on its own, no secret is shared between vendors. No open registration. Before: exactly one client. Not chosen: dynamic client registration (any app registers itself; an open endpoint to protect).
-- **D18 — token storage:** **Decided 2026-11-23 as proposed (step 34):** in memory, so no database (BACKLOG principle 1); after a restart the connector logs in again. Not chosen: a token file.
+- **D18 — token storage:** **Decided 2026-11-23 as proposed (step 34):** in memory, so no database (BACKLOG principle 1); after a restart the connector logs in again. Not chosen: a token file. **Confirmed 2026-11-27:** the login on reconnect after a restart is wanted, not a gap: each new Connect is evidence that the person still has the agent user's access (D19). Only one login, on Mizoine's page that Connect opens (step 35, 2026-11-27).
 - **D19 — who logs in during "Connect":** **Decided 2026-11-23 as proposed (step 34):** the agent user itself (its password is entered once in the phone's browser). Not chosen: the human logs in and picks which agent user the connector acts as (more code: a consent page with a choice).
 - **T3.1 — text editor:** **Decided 2026-11-19:** CodeMirror 6, bundled once into `ui/vendor/` (best on the phone; Markdown, JSON, YAML packages). For the moment it is more than needed: the editor starts as a plain `<textarea>` (step 37), and CodeMirror 6 replaces it when highlighting is wanted (step 39). Not chosen: Ace; Monaco (not supported on mobile browsers).
 - **D20 — saving from the editor:** **Decided 2026-11-23 as proposed:** always with `If-Match`; on 412 offer reload or keep. (D13 makes `If-Match` optional for API clients; the UI always uses it.)
@@ -2167,5 +2213,15 @@ Details of T5 in [docs/technology-decisions.md](docs/technology-decisions.md).
 - **D87 — who may make links:** **Decided 2026-11-26 as proposed:** any user, where that user may write; through MCP (`create_upload_link`) and HTTP (`POST …/?upload-link`). Alternative: MCP only. Note: a person can also hand a link to someone else (a drop box for 15 minutes); the limits of D84 hold.
 - **D88 — the token:** **Decided 2026-11-26 as proposed:** 256 random bits in base64url in the path (`/.upload/{token}/`); never written to logs (a short id instead); `Referrer-Policy: no-referrer`, `Cache-Control: no-store`. The link is in the chat's history: the short lifetime is what protects it.
 - **D89 — the link's address:** **Decided 2026-11-26 as proposed:** from `mizoine.public-url` (set already where OAuth is used); without it, no links (the tool says so). Not chosen: the request's host (behind a proxy it may be wrong, as for OAuth).
+
+### Browser UI (step 36) — to decide
+- **D90 — the frame:** *Proposal:* a top bar on every page: Mizoine, breadcrumbs, search, the user and Log out, the Git link with the number of changes, Copy link. Server-rendered (a Thymeleaf fragment), so it is there without JavaScript; only Copy link needs it. Alternative: no bar, links per page as now.
+- **D91 — error pages:** *Proposal:* own 404/500/403 pages in the frame, revealing nothing more than now (D2). Alternative: Spring's default pages.
+- **D92 — moving in the browser:** *Proposal:* Rename takes a path relative to the folder (or `/…` from the repository root), shown resolved before it is sent. Alternative: a folder picker (a tree to click through: more code, more requests).
+- **D93 — the listing's details:** *Proposal:* size, date, kind as new JSON fields and on the page; `?sort=name|date|size` (default name); folders first. On the phone the actions behind "⋯". Alternative: names only, as now.
+- **D94 — tags in the UI:** *Proposal:* the folder's tags editable on its page (checked through `?tags`), shown on its Markdown pages; suggestions from the vocabulary. Alternative: tags only through the `.tags` file (as now).
+- **D95 — QR code for upload links:** *Proposal:* yes, drawn in the browser by a small vendored library (MIT, no build, e.g. `qrcode-generator`, about 20 kB, in `ui/vendor/` with its license and version, as CodeMirror). Alternative: drawn on the server (a Java library, e.g. ZXing); no QR, only the link to copy.
+- **D96 — editor shortcuts:** *Proposal:* Ctrl+S / ⌘S only, nothing else (CodeMirror's own keys stay). Alternative: none.
+- **D97 — look:** *Proposal:* system fonts, light/dark by the system setting, no theme switch. Alternative: a switch kept per browser (would need `localStorage`; allowed only because the look is no content and no navigation).
 
 - **Later, not planned yet:** copy, live Markdown preview in the editor, Obsidian `[[wiki links]]`, links relative to the repository root (`/…`), syntax highlighting of code blocks in the page, per-grant read-only permissions.

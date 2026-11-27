@@ -90,6 +90,39 @@ Rules:
   - **HTML → Markdown** (see the current first step)
 - Automatic **naming** of folders/files (short ID based on date and time, as in the current mizoine version). Easy to sort and quick to type by hand.
 - Convenient **display**: not just a single `.md` file, but also related markdown files (comments, additional notes, etc.) — as mizoine already partially does.
+
+### Display concept: a repository like a ticket system *(idea, 2026-11-27)*
+
+Think of a repository as a support or project-planning ticket system (for example Jira), made of plain folders:
+
+- **A folder can be anything, depending on where it is and what it holds:**
+  - a **topic** (a project, a backlog), whose subfolders are its issues or backlog items;
+  - an **issue**, whose subfolders are its comments and attachments;
+  - a single **comment**, **attachment** or **email**.
+- **Rendering a folder** shows:
+  - its **description**: its `README.md`;
+  - then, depending on the structure of its subfolders, its **comments** (each subfolder's `README.md`), or its
+    **attachments** (e.g. pictures) where a subfolder is recognized as such.
+- **Flexibility first:** no fixed schema, no limits and no hard-coded number of levels. The same folder can be
+  an issue in one place and a comment elsewhere; what it is follows from its place and content, not from a type
+  that must be declared up front.
+
+This keeps the principles: the files stay plain (a `README.md` per folder, subfolders, attachments as files), Git
+versions all of it, and the view is only a view (principle "display is only a view, not storage").
+
+Open questions (to be planned, nothing decided):
+- How a folder's role is recognized: by its content alone (a `README.md`; only pictures or files → attachments; an
+  `.eml` → an email), by a name convention, or by an explicit hint where wanted (e.g. a tag such as `kind:comment`
+  in `.tags`, D67), with content as the default.
+- Which file is the description: `README.md` only, or also `index.md` or the folder's only Markdown file.
+- The order of comments: by name (the date-and-time names of "automatic naming" sort by time), by date, or by a
+  value in the file.
+- How deep one page renders: the folder and its direct subfolders (comments, attachments), deeper levels as links,
+  or expandable.
+- How to add a comment or an attachment from the page: a new subfolder with a `README.md` (automatically named),
+  or a file; the same through the API and MCP, so agents can comment too.
+- How it relates to search, tags and statuses (an issue's `status:open` as its folder's tag, step 61) and to the
+  listing (step 36e).
 - **Restricted space for AI** *(new requirement, 2026-11-15)*:
   - AI can be allowed to work in a restricted space (one or several folders) without exposing the rest.
   - In this space the AI can maintain and save a **knowledge base** — plain Markdown files, just like everything else.
