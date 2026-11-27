@@ -90,6 +90,13 @@ Rules:
   - **HTML → Markdown** (see the current first step)
 - Automatic **naming** of folders/files (short ID based on date and time, as in the current mizoine version). Easy to sort and quick to type by hand.
 - Convenient **display**: not just a single `.md` file, but also related markdown files (comments, additional notes, etc.) — as mizoine already partially does.
+- **Restricted space for AI** *(new requirement, 2026-11-15)*:
+  - AI can be allowed to work in a restricted space (one or several folders) without exposing the rest.
+  - In this space the AI can maintain and save a **knowledge base** — plain Markdown files, just like everything else.
+  - This base is covered by the **general ability to save everything to Git**: the AI space is part of the shared storage, not separate from it; commit and push are done by a human using the same mechanism as for other files.
+  - A possible implementation is section 7 (HTTPS access is not mandatory for this).
+- Good search.
+- Ability to add capabilities gradually.
 
 ### Display concept: a repository like a ticket system *(idea, 2026-11-27)*
 
@@ -99,10 +106,8 @@ Think of a repository as a support or project-planning ticket system (for exampl
   - a **topic** (a project, a backlog), whose subfolders are its issues or backlog items;
   - an **issue**, whose subfolders are its comments and attachments;
   - a single **comment**, **attachment** or **email**.
-- **Rendering a folder** shows:
-  - its **description**: its `README.md`;
-  - then, depending on the structure of its subfolders, its **comments** (each subfolder's `README.md`), or its
-    **attachments** (e.g. pictures) where a subfolder is recognized as such.
+- **Rendering a folder** shows its **description** (its `README.md`), then, depending on the structure of its
+  subfolders, its **comments** (each subfolder's `README.md`) or its **attachments** (e.g. pictures).
 - **Flexibility first:** no fixed schema, no limits and no hard-coded number of levels. The same folder can be
   an issue in one place and a comment elsewhere; what it is follows from its place and content, not from a type
   that must be declared up front.
@@ -110,115 +115,65 @@ Think of a repository as a support or project-planning ticket system (for exampl
 This keeps the principles: the files stay plain (a `README.md` per folder, subfolders, attachments as files), Git
 versions all of it, and the view is only a view (principle "display is only a view, not storage").
 
-#### Folder page layout *(idea, 2026-11-27)*
+#### Layouts *(decided 2026-11-27)*
 
 - **A default layout** for any folder, used when nothing else is specified.
-- **Special layouts**, chosen by the **folder's own tags or status** (its `.tags`), not by those of its subfolders
-  or anything else: e.g. an issue with `status:open` may be shown differently from a topic.
-- **The layout tag is `layout:…`** *(decided 2026-11-27)*: e.g. `layout:issue`, `layout:topic`. A `key:value` tag,
-  so a folder has at most one layout (one value per key, D67); without it the default layout, except the root's
-  own one. Other tags and statuses (`status:open`) may still change details within a layout.
+- **Special layouts**, chosen only by the **folder's own `layout:…` tag** (in its `.tags`; not by its subfolders'
+  tags or anything else): e.g. `layout:issue`, `layout:topic`. A `key:value` tag, so a folder has at most one layout
+  (one value per key, D67). Other tags and statuses (`status:open`) may change details within a layout.
+- **Layouts are defined in Mizoine's code**: a few fixed ones; they need not be customizable. An unknown
+  `layout:…` value shows the default layout.
+- **The repository's root** has its own layout (below). **The list of repositories** (the start page `/`) stays
+  simple: no layout, no tree. Layouts start at a repository's root.
+- **Order: by name**, for files and subfolders alike, in every layout. Where the date matters, it is in the name in
+  a sortable form (e.g. `2026-11-27 …` or the date-and-time names of "automatic naming"), so the order is plain to
+  see and the same in any file manager; no hidden date order.
+- **Folders and files are managed on the pages**, where the user may write, with the same API as everywhere:
+  - folders: create (New folder), delete (only empty ones, D15; a folder with only `.tags` counts as empty, D70),
+    rename and, rarely, move (one plain way is enough, step 36c/36d);
+  - files: delete (after asking, as the folder page does since step 73) and rename, in the previews (e.g. in a
+    document preview's title line, next to its refresh button) and in the root's tree.
+- **Moving out of an inbox** (sorting new items into their place) is the frequent case and a special case, to be
+  planned separately.
 
-Default layout (draft):
+Default layout:
 
 ```
 title / menu
 ------------------------------------------------------------
 main description: README.md rendered to HTML
 ------------------------------------------------------------
-previews of the other Markdown files (.md) in the folder: their first lines (sorted by file name)
+previews of the other Markdown files (.md) in the folder (by name)
 ------------------------------------------------------------
-previews of images, documents and subfolders
+previews of pictures, documents and subfolders
 ```
 
-**The list of repositories** (the start page `/`) stays simple: no layout, no tree *(decided 2026-11-27)*. Layouts
-start at a repository's root.
+- The Markdown part has only **Markdown files** (`.md`) besides `README.md`, each as a **preview, not a bare link**:
+  the file name as its title, its first **3–5 lines rendered** (as the Markdown page renders them), linking to the
+  file.
+- **Other layouts may render more** on the same page: **all Markdown files** of the folder, one after the other
+  (e.g. a topic made of several notes); and also the **`README.md` of each subfolder**, e.g. the comments of a ticket
+  (`layout:issue`), each with a link to its subfolder.
 
-**What a layout may render on the folder page** *(idea, 2026-11-27)*: the default layout renders only `README.md` and
-shows previews (first lines) of the other Markdown files. Other layouts may render more on the same page:
-- **all Markdown files** of the folder, one after the other (e.g. a topic made of several notes);
-- also the **`README.md` of each subfolder**, e.g. the comments of a ticket (`layout:issue`), each with a link to
-  its subfolder.
-
-- **Order: by name** *(decided 2026-11-27)*, for files and subfolders alike. Where the date matters, it is in the
-  name in a sortable form (e.g. `2026-11-27 …` or the date-and-time names of "automatic naming"), so the order is
-  plain to see and the same in any file manager; no hidden date order.
-
-Open (nothing decided): how deep (only direct subfolders, or deeper too), and how a rendered part shows its own
-file (heading with the name, Edit link).
-
-Special layout for the **repository's root folder** (draft):
+Root layout:
 
 ```
 header / menu
 ------------------------------------------------------------
 README (README.md of the root, rendered)
 ------------------------------------------------------------
-expandable tree of folders and files, with move, delete and rename
+expandable tree of folders and files, with create, move, delete and rename
 ```
 
-Open questions (to be planned, nothing decided):
-- The tree: loaded level by level when a folder is expanded (the folder listing's JSON, as for any client), so a
-  large repository stays fast; what is expanded is no view of its own, so it needs no URL and is not shared
-  between windows (BACKLOG "every object has an address"; at most kept in the page's address after `#`).
-- Moving in the tree: dragging an entry onto a folder, or the Rename-with-a-path of step 36d, or both (on the phone
-  dragging is awkward); never overwriting (D30); delete only empty folders (D15, `.tags` rule D70).
-  **Moving folders is rare** *(2026-11-27)*: it need not be quick or prominent; one plain way is enough.
-- **Moving out of an inbox** (sorting new items into their place) is the frequent case and a **special case, to be
-  planned separately** *(2026-11-27)*.
+- The tree loads level by level when a folder is expanded (the folder listing's JSON, as for any client), so a
+  large repository stays fast. What is expanded is no view of its own: no URL, not shared between windows.
 - Where the user may not write (above a grant, D4), the tree shows the way down without actions.
-- **Layouts are defined in Mizoine's code** *(decided 2026-11-27)*: a few fixed ones, chosen by `layout:…`; they
-  need not be customizable. An unknown `layout:…` value shows the default layout.
-- **Preview of a document** *(decided 2026-11-27, proven in the first Mizoine version)*: medium-sized thumbnails of
-  **all its pages in a line**, wrapping at the page width, so the whole document is seen at a glance. Open: who
-  draws them (the server, e.g. PDFBox for PDF; office documents through a converter); very long documents.
-- **Thumbnails are pre-generated and cached on disk** *(decided 2026-11-27)*, outside the repository (a cache, as
-  the search index, not storage), never drawn while a page is shown:
-  - generating them is a **separate action that starts a background process**, as reindexing on request (no
-    automatic generation at startup or on a timer);
-  - a document **without thumbnails yet** shows a message saying so and a button to generate (or regenerate) its
-    preview;
-  - the folder page has a control to **update all preview thumbnails in the folder**.
 
-  Decided *(2026-11-27)*:
-  - **Cache location:** a folder of its own, set like the search index (`mizoine.search.index-dir`).
-  - **Changed files are not tracked exactly:** when in doubt, the user clicks "regenerate"; no check that a
-    thumbnail still matches its file.
-  - **The folder control** updates the folder's own previews and those of subfolders **only where they are shown
-    on that folder's page** (e.g. a subfolder of pictures shown as one document); nothing deeper.
-  - **Pictures get cached thumbnails too**, made the same way.
-  - **No MCP tools** for thumbnails (agents read the files themselves). **The HTTP API includes the thumbnail
-    operations** *(decided 2026-11-27)*: generate for a file or a folder (the background process), get a thumbnail
-    image, and a **status request** for a generation (running, done, failed; how far along), described in the API
-    description as every endpoint (AGENTS.md). The UI uses only these, as it uses the file API.
-  - **Several thumbnails per document or subfolder, in the API** *(proposal 2026-11-27, to decide)*:
-    - **One kind of thumbnail:** the image of **one page of one file**. A PDF or office document has one per page,
-      a picture one (page 1). A **subfolder of pictures** has none of its own: its preview is a document whose pages
-      are its pictures' thumbnails, in name order. So everything a preview shows is a list of pages.
-    - Addresses below the repository, as `.search` and `.tags` (technical names, never a repository path; each a
-      separate operation in the API description):
+#### Previews *(decided 2026-11-27)*
 
-      | Request | What |
-      |---|---|
-      | `GET /{repo}/.thumbnails/{file}` | the file's pages: `{"state": "missing" \| "ready" \| "partial", "pages": [{"page": 1, "image": "/{repo}/.thumbnail/1/{file}", "width": …, "height": …}, …]}` |
-      | `GET /{repo}/.thumbnails/{folder}/` | the previews of that folder's page, one per entry shown there (files, and subfolders shown as documents), each as above, by name: `{"entries": {"letter.pdf": {…}, "scans/": {"pages": [… "/{repo}/.thumbnail/1/scans/001.jpg" …]}}}` |
-      | `GET /{repo}/.thumbnail/{page}/{file}` | the image itself (JPEG); 404 when not generated |
-      | `POST /{repo}/.thumbnails/{file or folder/}` | start generating (the background process): a file's pages, or what the folder's page shows (D: only shown subfolders); 202 with the job's address |
-      | `GET /{repo}/.thumbnails/jobs/{id}` | the job's status: `{"state": "queued" \| "running" \| "done" \| "failed", "done": 3, "total": 12, "failed": ["broken.pdf"]}` |
-
-    - The page number comes before the path in the image's address, so any file name works (`{file}` is the rest
-      of the path).
-    - **Access as for the file:** whoever may read the file sees its thumbnails; anything else is 404, the same as
-      for the file (D2), checked on every request, so a removed grant hides them at once.
-    - The folder answer lets a folder page load all its previews with one request, then the images.
-    - Open (to decide): who may start a generation (read access, as it only fills a cache; or write access, as it is
-      costly); one job at a time per repository, queued; the image size (one medium size, a size parameter later);
-      JPEG (built into Java) or WebP; how the cache is laid out (by real path, so a moved file needs regenerating,
-      which "regenerate when in doubt" covers).
-  - **Progress** is shown from the status request; how detailed (a count of done files, or only running/done) is
-    nice to have. Nice to have too: **cleanup** of thumbnails of files that are gone, as an action of the
-    repository's UI.
-- **How a document's preview looks** *(sample, 2026-11-27)*:
+- **A document** (PDF; office documents such as `.doc`, `.ppt` later) is previewed as thumbnails of **all its
+  pages in a line**, wrapping at the page width, so the whole document is seen at a glance (proven in the first
+  Mizoine version):
 
   ```
   ------------------------------------------------------------
@@ -228,50 +183,73 @@ Open questions (to be planned, nothing decided):
   ------------------------------------------------------------
   ```
 
-  **Important** *(2026-11-27)*: each thumbnail keeps the **width-to-height ratio of its own page**, the whole page
-  shown, never stretched; pages of one document may differ (portrait and landscape, mixed sizes), and each
-  thumbnail follows its page. **All thumbnails have the same height** *(decided 2026-11-27, for the better look)*;
-  the width follows each page's ratio. The API gives each page's own `width` and `height`.
-  - *Very low priority:* in extreme cases (a very tall page, e.g. a long receipt or a web page printed as one page)
-    the thumbnail may show only a part of the page, so that it does not shrink to a thin strip.
-
-  The same for a subfolder of pictures (its name as title, its pictures as the pages) and for other document types
-  (office documents such as `.doc`, `.ppt`: to be planned later).
-- **A subfolder with several pictures** *(decided 2026-11-27)* is previewed the same way, as the pages of one
-  document: their thumbnails in a line, wrapping at the page width, in the order of their names (e.g. the scanned
-  pages of a letter, or the photos of a receipt). Open: when a subfolder counts as such (only pictures in it; or
-  pictures besides a `README.md`).
-- What a preview is otherwise: a picture as a thumbnail; a subfolder as its title (first heading of its
+- **A subfolder with several pictures** is previewed the same way, as the pages of one document: its name as
+  title, its pictures as the pages, in the order of their names (e.g. the scanned pages of a letter).
+- **A picture** is previewed by its thumbnail; **a subfolder** otherwise by its title (first heading of its
   `README.md`), first lines and tags, so that a folder of comments reads like a thread.
-- Only **Markdown files** (`.md`) are in that part, besides `README.md` *(decided 2026-11-27)*, each shown as a
-  **preview instead of a bare link** *(decided 2026-11-27)*: its first few lines, linking to the file: **3–5 lines,
-  rendered** (as the Markdown page renders them), with the **file name as its title** *(decided 2026-11-27)*. Open:
-  where the other files of the folder appear (other text files such as `.txt` or `.java`, documents): with the
-  previews, presumably.
-- Pictures: how large previews get, and whether they are made by the browser (the files as they are) or by the
-  server (small copies, which would be a cache, not storage).
-- What the folder page shows when there is no `README.md`: the folder's name as title, the rest as above.
-- How a folder without JavaScript looks (all of it server-rendered, as the pages now).
+- **Shape:** each thumbnail keeps the **width-to-height ratio of its own page**, the whole page shown, never
+  stretched; pages of one document may differ (portrait and landscape). **All thumbnails have the same height**,
+  the width follows each page's ratio. *Very low priority:* for an extreme page (very tall, e.g. a long receipt) the
+  thumbnail may show only a part of it, so that it does not shrink to a thin strip.
 
-Open questions about the concept as a whole (to be planned, nothing decided):
-- How a folder's role is recognized: by its content alone (a `README.md`; only pictures or files → attachments; an
-  `.eml` → an email), by a name convention, or by an explicit hint where wanted (e.g. a tag such as `kind:comment`
-  in `.tags`, D67), with content as the default.
-- Which file is the description: `README.md` only, or also `index.md` or the folder's only Markdown file.
-- ~~The order of comments~~: decided, by name (see "What a layout may render").
-- How deep one page renders: the folder and its direct subfolders (comments, attachments), deeper levels as links,
-  or expandable.
-- How to add a comment or an attachment from the page: a new subfolder with a `README.md` (automatically named),
-  or a file; the same through the API and MCP, so agents can comment too.
-- How it relates to search, tags and statuses (an issue's `status:open` as its folder's tag, step 61) and to the
-  listing (step 36e).
-- **Restricted space for AI** *(new requirement, 2026-11-15)*:
-  - AI can be allowed to work in a restricted space (one or several folders) without exposing the rest.
-  - In this space the AI can maintain and save a **knowledge base** — plain Markdown files, just like everything else.
-  - This base is covered by the **general ability to save everything to Git**: the AI space is part of the shared storage, not separate from it; commit and push are done by a human using the same mechanism as for other files.
-  - A possible implementation is section 7 (HTTPS access is not mandatory for this).
-- Good search.
-- Ability to add capabilities gradually.
+#### Thumbnails *(decided 2026-11-27)*
+
+- **Pre-generated on the server and cached on disk**, for documents and pictures alike, outside the repository (a
+  cache, not storage), in a folder of its own set like the search index (`mizoine.search.index-dir`); never drawn
+  while a page is shown.
+- **Generating is a separate action that starts a background process**, as reindexing on request: nothing at
+  startup or on a timer. A preview without thumbnails yet says so, with a button to generate them; the folder page
+  has a control to **update all previews in the folder**: its own and those of the subfolders shown on its page,
+  nothing deeper.
+- **Changed files are not tracked exactly:** when in doubt, the user clicks "regenerate".
+- **No MCP tools** (agents read the files themselves). **The HTTP API has the thumbnail operations** (generate,
+  the images, the status of a generation), in the API description as every endpoint (AGENTS.md); the UI uses only
+  these.
+- **Progress** is shown from the status request (how detailed: nice to have). Nice to have too: **cleanup** of
+  thumbnails of files that are gone, as an action of the repository's UI.
+
+API *(proposal, to decide)*:
+
+- **One kind of thumbnail:** the image of **one page of one file**: a document has one per page, a picture one
+  (page 1). A subfolder of pictures has none of its own: its preview is a list of its pictures' thumbnails. So
+  everything a preview shows is a list of pages.
+- Addresses below the repository, technical names as `.search` and `.tags` (each a separate operation in the API
+  description):
+
+  | Request | What |
+  |---|---|
+  | `GET /{repo}/.thumbnails/{file}` | the file's pages: `{"state": "missing" \| "ready" \| "partial", "pages": [{"page": 1, "image": "/{repo}/.thumbnail/1/{file}", "width": …, "height": …}, …]}` |
+  | `GET /{repo}/.thumbnails/{folder}/` | the previews of that folder's page, one per entry shown there (files, and subfolders shown as documents), by name: `{"entries": {"letter.pdf": {…}, "scans/": {"pages": [… "/{repo}/.thumbnail/1/scans/001.jpg" …]}}}` |
+  | `GET /{repo}/.thumbnail/{page}/{file}` | the image itself; 404 when not generated |
+  | `POST /{repo}/.thumbnails/{file or folder/}` | start generating in the background: a file's pages, or what the folder's page shows (its own previews and the subfolders shown there); 202 with the job's address |
+  | `GET /{repo}/.thumbnail-jobs/{id}` | the job's status: `{"state": "queued" \| "running" \| "done" \| "failed", "done": 3, "total": 12, "failed": ["broken.pdf"]}` (an address of its own, so that no folder named `jobs` is mistaken for it) |
+
+- The page number comes before the path in the image's address, so any file name works.
+- **Access as for the file:** whoever may read the file sees its thumbnails; anything else is 404, as for the file
+  (D2), checked on every request.
+- One request gives a folder page all its previews, then the images.
+
+#### Still open (nothing decided)
+
+- How a folder's role is recognized: by its content alone (a `README.md`; only pictures → a picture document; an
+  `.eml` → an email), by a name convention, or by an explicit hint where wanted (e.g. a tag `kind:comment`), with
+  content as the default. In particular: when a subfolder counts as a picture document (only pictures in it, or
+  pictures besides a `README.md`).
+- Which file is the description: `README.md` only, or also `index.md` or the folder's only Markdown file; what a
+  folder without one shows (its name as title, the rest as above).
+- Where the folder's other files appear (other text files such as `.txt` or `.java`, archives): with the previews,
+  presumably, as a name with size and kind.
+- How deep one page renders (direct subfolders only, deeper levels as links, or expandable), and how a rendered part
+  shows its own file (a heading with the name, an Edit link).
+- How to add a comment or an attachment from the page: a new subfolder with a `README.md` (automatically named), or
+  a file; the same through the API and MCP, so agents can comment too.
+- Moving in the root's tree: dragging, or the Rename-with-a-path of step 36d (on the phone dragging is awkward).
+- Whether the root may have a `layout:…` tag of its own, or always shows the root layout.
+- Thumbnails: who may start a generation (read access, as it only fills a cache; or write access, as it is
+  costly); one job at a time per repository, queued; the image height; JPEG (built into Java) or WebP; the library
+  for PDF (e.g. PDFBox) and a converter for office documents; how the cache is laid out (by real path: a moved
+  file needs regenerating, which "regenerate when in doubt" covers).
+- How all this relates to search and to the listing of step 36e.
 
 ---
 
